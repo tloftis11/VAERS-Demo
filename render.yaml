@@ -1,0 +1,56 @@
+# Render Blueprint for the VAERS modernization prototype.
+#
+# NOTE: this file has not been deployed/tested against live Render
+# infrastructure — Render's Blueprint spec has changed over time, so verify
+# field names (https://render.com/docs/blueprint-spec) before your first
+# deploy and adjust as needed. See README.md "Deploying to Render" for the
+# manual steps this assumes (first-deploy URL wiring, setting the Anthropic
+# key in the dashboard).
+
+databases:
+  - name: vaers-postgres
+    plan: free
+    databaseName: vaers
+    user: vaers
+
+services:
+  - type: web
+    name: vaers-api
+    runtime: node
+    plan: free
+    buildCommand: >
+      npm install &&
+      npx prisma generate --schema=server/prisma/schema.production.prisma &&
+      npx prisma db push --schema=server/prisma/schema.production.prisma --accept-data-loss
+    startCommand: npm run start --workspace=server
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vaers-postgres
+          property: connectionString
+      - key: DOWNLOAD_TOKEN_SECRET
+        generateValue: true
+      - key: UPLOAD_DIR
+        value: ./uploads
+      # TODO after first deploy: set this to the vaers-client service's
+      # actual Render URL (see README "Deploying to Render", step 2).
+      - key: CLIENT_ORIGIN
+        value: "https://REPLACE-WITH-CLIENT-URL.onrender.com"
+      # Secrets: not stored in this file. Render will prompt for these in the
+      # dashboard the first time this blueprint is applied.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: "claude-opus-5"
+
+  - type: web
+    name: vaers-client
+    runtime: static
+    buildCommand: npm install && npm run build --workspace=client
+    staticPublishPath: client/dist
+    envVars:
+      # TODO after first deploy: set this to the vaers-api service's actual
+      # Render URL, then trigger a redeploy of this static site so the build
+      # picks it up (Vite env vars are baked in at build time).
+      - key: VITE_API_URL
+        value: "https://REPLACE-WITH-API-URL.onrender.com"
