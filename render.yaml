@@ -8,10 +8,12 @@
 # key in the dashboard).
 
 databases:
-  # "starter" (paid) — Render allows only one free-tier Postgres per account,
-  # and this account already has one in use elsewhere.
+  # "basic-256mb" (paid, cheapest current tier) — Render replaced the legacy
+  # starter/standard/pro plan names; those can no longer be used for new
+  # databases. Also: this account already has the one free-tier Postgres
+  # slot in use elsewhere, so free isn't an option here either.
   - name: vaers-postgres
-    plan: starter
+    plan: basic-256mb
     databaseName: vaers
     user: vaers
 
