@@ -8,8 +8,10 @@
 # key in the dashboard).
 
 databases:
+  # "starter" (paid) — Render allows only one free-tier Postgres per account,
+  # and this account already has one in use elsewhere.
   - name: vaers-postgres
-    plan: free
+    plan: starter
     databaseName: vaers
     user: vaers
 
