@@ -114,11 +114,21 @@ the services exist — so:
 
 ### 3. Set the Anthropic API key
 
-`ANTHROPIC_API_KEY` is marked `sync: false` in `render.yaml`, so it's never
-committed — Render prompts for it in the dashboard the first time you apply
-the blueprint (Environment tab on the `vaers-api` service). Without it, the
-FAQ assistant and description-check features fail gracefully (a normal error
-response, not a crash) — everything else still works.
+`ANTHROPIC_API_KEY` is marked `sync: false` in `render.yaml` specifically so
+it's never committed to the repo — Render will prompt for it the first time
+you apply the blueprint, but that's not the only time you can set it. It's a
+normal environment variable on the `vaers-api` service, so you can add or
+change it whenever you want, with no blueprint re-apply needed:
+
+**`vaers-api` service → Environment tab → find/add `ANTHROPIC_API_KEY` → paste
+the key → Save Changes.** Saving triggers an automatic redeploy of just that
+service (`vaers-client` doesn't need touching — the key is server-only).
+
+Without it, the FAQ assistant and description-check features fail gracefully
+(a normal error response, not a crash) — everything else still works. If
+you've set it and it's still not working, the most common causes are a
+trailing space/newline pasted along with the key, or the key being pasted
+into the wrong service's Environment tab.
 
 ### 4. File uploads on Render
 
