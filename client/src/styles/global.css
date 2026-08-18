@@ -402,6 +402,16 @@ a {
   font-size: 1rem;
 }
 
+.suggestion-box--ai {
+  border-style: dashed;
+}
+
+.suggestion-box__ai-disclaimer {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
 .attachment-list {
   list-style: none;
   padding: 0;

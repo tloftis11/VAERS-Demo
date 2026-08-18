@@ -1,7 +1,12 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-import { answerFaqQuestion, flagDescriptionInconsistencies } from "../services/claudeClient.js";
+import { prisma } from "../db.js";
+import {
+  answerFaqQuestion,
+  flagDescriptionInconsistencies,
+  suggestDocumentsFromNarrative,
+} from "../services/claudeClient.js";
 
 export const assistantRouter = Router();
 
@@ -36,6 +41,40 @@ assistantRouter.post("/check-description", async (req, res) => {
   try {
     const issues = await flagDescriptionInconsistencies(parsed.data);
     res.json({ issues });
+  } catch (err) {
+    handleClaudeError(err, res);
+  }
+});
+
+const suggestDocsBodySchema = z.object({
+  reportId: z.string().min(1),
+});
+
+assistantRouter.post("/suggest-documents", async (req, res) => {
+  const parsed = suggestDocsBodySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ errors: parsed.error.issues });
+
+  try {
+    const report = await prisma.report.findUnique({
+      where: { id: parsed.data.reportId },
+      include: { vaccine: true, adverseEvent: true, errorDetail: true },
+    });
+    if (!report) return res.status(404).json({ error: "Report not found" });
+
+    const description = report.adverseEvent?.description || report.errorDetail?.errorDescription;
+    const vaccineType = report.vaccine?.vaccineType;
+    const reportCharacteristic = report.reportCharacteristic as "adverse_event" | "error_no_ae" | null;
+
+    if (!description || !vaccineType || !reportCharacteristic) {
+      return res.json({ suggestions: [] });
+    }
+
+    const suggestions = await suggestDocumentsFromNarrative({
+      description,
+      vaccineType,
+      reportCharacteristic,
+    });
+    res.json({ suggestions });
   } catch (err) {
     handleClaudeError(err, res);
   }
