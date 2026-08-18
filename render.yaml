@@ -43,10 +43,8 @@ services:
         generateValue: true
       - key: UPLOAD_DIR
         value: ./uploads
-      # TODO after first deploy: set this to the vaers-client service's
-      # actual Render URL (see README "Deploying to Render", step 2).
       - key: CLIENT_ORIGIN
-        value: "https://REPLACE-WITH-CLIENT-URL.onrender.com"
+        value: "https://vaers-client.onrender.com"
       # Secrets: not stored in this file. Render will prompt for these in the
       # dashboard the first time this blueprint is applied.
       - key: ANTHROPIC_API_KEY
@@ -60,8 +58,5 @@ services:
     buildCommand: npm install && npm run build --workspace=client
     staticPublishPath: client/dist
     envVars:
-      # TODO after first deploy: set this to the vaers-api service's actual
-      # Render URL, then trigger a redeploy of this static site so the build
-      # picks it up (Vite env vars are baked in at build time).
       - key: VITE_API_URL
-        value: "https://REPLACE-WITH-API-URL.onrender.com"
+        value: "https://vaers-api.onrender.com"
