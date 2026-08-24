@@ -75,6 +75,28 @@ export const OUTCOME_OPTIONS = [
   { value: "unknown", label: "Unknown" },
 ] as const;
 
+/** PUB-002: plain-language, CDC-approved framing for the patient's state of residence. */
+export const STATE_OPTIONS = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA",
+  "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM",
+  "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
+  "WV", "WI", "WY",
+].map((code) => ({ value: code, label: code }));
+
+/** PUB-003: quick-select symptom chips, complementing (not replacing) the free-text description. */
+export const SYMPTOM_OPTIONS = [
+  { value: "fever", label: "Fever" },
+  { value: "rash", label: "Rash" },
+  { value: "injection_site_swelling", label: "Swelling at injection site" },
+  { value: "fatigue", label: "Fatigue" },
+  { value: "headache", label: "Headache" },
+  { value: "nausea_vomiting", label: "Nausea or vomiting" },
+  { value: "dizziness", label: "Dizziness" },
+  { value: "allergic_reaction", label: "Allergic reaction" },
+  { value: "difficulty_breathing", label: "Difficulty breathing" },
+  { value: "other", label: "Other" },
+] as const;
+
 export const ERROR_TYPES = [
   { value: "wrong_vaccine", label: "Wrong vaccine administered" },
   { value: "wrong_dose", label: "Wrong dose (amount)" },
@@ -89,8 +111,12 @@ export const submitterTypeSchema = z.object({
   submitterType: z.enum(["public", "hcp"]),
 });
 
-export const reportCharacteristicSchema = z.object({
-  reportCharacteristic: z.enum(["adverse_event", "error_no_ae"]),
+export const administrationErrorSchema = z.object({
+  administrationError: z.boolean(),
+});
+
+export const adverseEventOccurredSchema = z.object({
+  adverseEventOccurred: z.boolean(),
 });
 
 export function aboutYouSchema(submitterType: SubmitterType) {
@@ -117,6 +143,7 @@ export function patientSchema(submitterType: SubmitterType) {
       "Date of birth cannot be in the future"
     ),
     patientSex: selectEnum(["female", "male", "unknown"], "Select the patient's sex"),
+    patientState: optionalString(),
     patientWeightKg: z
       .union([z.coerce.number().positive(), z.literal("")])
       .optional(),
@@ -172,6 +199,7 @@ export function adverseEventSchema(submitterType: SubmitterType) {
       10,
       "Please provide a bit more detail (at least 10 characters)"
     ),
+    symptoms: z.array(z.string()).optional().default([]),
     outcomes: z.array(z.enum(OUTCOME_OPTIONS.map((o) => o.value) as [string, ...string[]])).min(
       1,
       "Select at least one outcome"
@@ -211,8 +239,10 @@ export function getSchemaForStep(step: StepId, submitterType: SubmitterType) {
   switch (step) {
     case "submitter-type":
       return submitterTypeSchema;
-    case "report-characteristic":
-      return reportCharacteristicSchema;
+    case "administration-error":
+      return administrationErrorSchema;
+    case "adverse-event-occurred":
+      return adverseEventOccurredSchema;
     case "about-you":
       return aboutYouSchema(submitterType);
     case "patient":

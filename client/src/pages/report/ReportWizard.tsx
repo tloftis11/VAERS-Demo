@@ -8,12 +8,19 @@ import {
   STEP_IDS,
   type StepId,
 } from "../../../../shared/src/branchingRules";
-import { getReport, patchReport, submitReport, type ClientReport } from "../../api/client";
+import {
+  getReport,
+  patchReport,
+  submitReport,
+  type ClientReport,
+  type ValidationFinding,
+} from "../../api/client";
 import { branchingStateFromReport, firstIncompleteStep } from "../../reportProgress";
 import { StepIndicator } from "../../components/StepIndicator";
 import { FaqWidget } from "../../components/FaqWidget";
 import { SubmitterTypeStep } from "./SubmitterTypeStep";
-import { ReportCharacteristicStep } from "./ReportCharacteristicStep";
+import { BeforeYouStartStep } from "./BeforeYouStartStep";
+import { YesNoQuestionStep } from "./YesNoQuestionStep";
 import { AboutYouStep } from "./AboutYouStep";
 import { PatientStep } from "./PatientStep";
 import { VaccineStep } from "./VaccineStep";
@@ -85,8 +92,10 @@ export function ReportWizard() {
       await submitReport(reportId!);
       navigate(`/report/${reportId}/confirmation`);
     } catch (err) {
-      const e = err as Error & { incompleteSteps?: StepId[] };
-      if (e.incompleteSteps) return { incompleteSteps: e.incompleteSteps };
+      const e = err as Error & { incompleteSteps?: StepId[]; findings?: ValidationFinding[] };
+      if (e.incompleteSteps || e.findings) {
+        return { incompleteSteps: e.incompleteSteps, findings: e.findings };
+      }
       throw err;
     }
   }
@@ -101,11 +110,27 @@ export function ReportWizard() {
         />
       );
       break;
-    case "report-characteristic":
+    case "before-you-start":
+      stepContent = <BeforeYouStartStep onNext={() => handleNext({})} onBack={handleBack} />;
+      break;
+    case "administration-error":
       stepContent = (
-        <ReportCharacteristicStep
-          value={report.reportCharacteristic}
-          onSelect={(v) => handleSelectAndAdvance({ reportCharacteristic: v })}
+        <YesNoQuestionStep
+          title="Was there a vaccine administration error?"
+          description="For example: wrong dose, wrong vaccine, or wrong route — regardless of whether it caused a health problem. Answer no if the vaccine was given correctly."
+          value={report.administrationError}
+          onSelect={(v) => handleSelectAndAdvance({ administrationError: v })}
+          onBack={handleBack}
+        />
+      );
+      break;
+    case "adverse-event-occurred":
+      stepContent = (
+        <YesNoQuestionStep
+          title="Did the patient have an adverse event?"
+          description="An unexpected health problem after vaccination. This can be true whether or not there was also an administration error."
+          value={report.adverseEventOccurred}
+          onSelect={(v) => handleSelectAndAdvance({ adverseEventOccurred: v })}
           onBack={handleBack}
         />
       );

@@ -6,7 +6,7 @@ import {
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { AboutYouData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
-import { TextField, SelectField } from "../../components/Field";
+import { ConversationalStep, type FieldDescriptor } from "../../components/ConversationalStep";
 
 interface AboutYouStepProps {
   submitterType: SubmitterType;
@@ -25,6 +25,33 @@ export function AboutYouStep({ submitterType, initialData, onNext, onBack }: Abo
   const relationshipOptions =
     submitterType === "hcp" ? RELATIONSHIP_OPTIONS_HCP : RELATIONSHIP_OPTIONS_PUBLIC;
 
+  const descriptors: FieldDescriptor[] = [
+    { type: "text", name: "contactName", label: "Your name", required: true },
+    {
+      type: "text",
+      name: "contactEmail",
+      label: "Your email",
+      inputType: "email",
+      required: true,
+      hint: "Used only if we need to follow up about this report.",
+    },
+    { type: "text", name: "contactPhone", label: "Your phone (optional)" },
+    {
+      type: "select",
+      name: "relationship",
+      label: submitterType === "hcp" ? "Your role" : "Your relationship to the patient",
+      required: true,
+      options: relationshipOptions,
+    },
+  ];
+
+  function formatValue(name: string, value: unknown): string {
+    if (name === "relationship") {
+      return relationshipOptions.find((o) => o.value === value)?.label ?? "";
+    }
+    return value == null ? "" : String(value);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const result = validate();
@@ -34,39 +61,12 @@ export function AboutYouStep({ submitterType, initialData, onNext, onBack }: Abo
   return (
     <form className="step-form" onSubmit={handleSubmit}>
       <h1>About you</h1>
-      <TextField
-        id="contactName"
-        label="Your name"
-        required
-        value={values.contactName}
-        onChange={(v) => setValue("contactName", v)}
-        error={errors.contactName}
-      />
-      <TextField
-        id="contactEmail"
-        label="Your email"
-        type="email"
-        required
-        value={values.contactEmail}
-        onChange={(v) => setValue("contactEmail", v)}
-        error={errors.contactEmail}
-        hint="Used only if we need to follow up about this report."
-      />
-      <TextField
-        id="contactPhone"
-        label="Your phone (optional)"
-        value={values.contactPhone}
-        onChange={(v) => setValue("contactPhone", v)}
-        error={errors.contactPhone}
-      />
-      <SelectField
-        id="relationship"
-        label={submitterType === "hcp" ? "Your role" : "Your relationship to the patient"}
-        required
-        value={values.relationship}
-        onChange={(v) => setValue("relationship", v)}
-        options={relationshipOptions}
-        error={errors.relationship}
+      <ConversationalStep
+        descriptors={descriptors}
+        values={values}
+        setValue={setValue}
+        errors={errors}
+        formatValue={formatValue}
       />
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>

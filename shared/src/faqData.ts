@@ -38,7 +38,7 @@ export const FAQ_ENTRIES: FaqEntry[] = [
     answer:
       "An adverse event is an unexpected health problem after vaccination. An administration error means the vaccine itself was given incorrectly (wrong dose, wrong vaccine, wrong route) but the patient had no resulting health problem.",
     keywords: ["adverse event", "error", "difference", "no ae"],
-    steps: ["report-characteristic"],
+    steps: ["administration-error", "adverse-event-occurred"],
   },
   {
     id: "dont-know-lot-number",

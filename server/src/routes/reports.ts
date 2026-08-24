@@ -3,9 +3,11 @@ import { prisma } from "../db.js";
 import {
   getApplicableSteps,
   validateStep,
+  checkCrossFieldRules,
   type BranchingState,
   type StepId,
   type SubmitterType,
+  type ValidationFinding,
 } from "../rules.js";
 import { isLikelyDuplicate } from "../services/duplicateHeuristic.js";
 
@@ -13,11 +15,13 @@ export const reportsRouter = Router();
 
 function branchingStateFromReport(report: {
   submitterType: string | null;
-  reportCharacteristic: string | null;
+  administrationError: boolean | null;
+  adverseEventOccurred: boolean | null;
 }): BranchingState {
   return {
     submitterType: report.submitterType as SubmitterType | null,
-    reportCharacteristic: report.reportCharacteristic as BranchingState["reportCharacteristic"],
+    administrationError: report.administrationError,
+    adverseEventOccurred: report.adverseEventOccurred,
   };
 }
 
@@ -39,7 +43,8 @@ async function serializeReport(reportId: string) {
     id: report.id,
     status: report.status,
     submitterType: report.submitterType,
-    reportCharacteristic: report.reportCharacteristic,
+    administrationError: report.administrationError,
+    adverseEventOccurred: report.adverseEventOccurred,
     duplicateFlag: report.duplicateFlag,
     submittedAt: report.submittedAt,
     aboutYou: report.submitter
@@ -56,6 +61,7 @@ async function serializeReport(reportId: string) {
           patientLastName: report.patient.lastName ?? "",
           patientDateOfBirth: report.patient.dateOfBirth ?? "",
           patientSex: report.patient.sex ?? "",
+          patientState: report.patient.state ?? "",
           patientWeightKg: report.patient.weightKg ?? "",
           medicalRecordNumber: report.patient.medicalRecordNumber ?? "",
         }
@@ -76,6 +82,9 @@ async function serializeReport(reportId: string) {
       ? {
           onsetDate: report.adverseEvent.onsetDate ?? "",
           description: report.adverseEvent.description ?? "",
+          symptoms: report.adverseEvent.symptoms
+            ? (JSON.parse(report.adverseEvent.symptoms) as string[])
+            : [],
           outcomes: report.adverseEvent.outcomes
             ? (JSON.parse(report.adverseEvent.outcomes) as string[])
             : [],
@@ -144,10 +153,16 @@ reportsRouter.patch("/:id", async (req, res) => {
         data: { submitterType: validated.submitterType },
       });
       break;
-    case "report-characteristic":
+    case "administration-error":
       await prisma.report.update({
         where: { id },
-        data: { reportCharacteristic: validated.reportCharacteristic },
+        data: { administrationError: validated.administrationError },
+      });
+      break;
+    case "adverse-event-occurred":
+      await prisma.report.update({
+        where: { id },
+        data: { adverseEventOccurred: validated.adverseEventOccurred },
       });
       break;
     case "about-you":
@@ -157,28 +172,23 @@ reportsRouter.patch("/:id", async (req, res) => {
         update: { ...validated },
       });
       break;
-    case "patient":
+    case "patient": {
+      const patientFields = {
+        firstName: validated.patientFirstName,
+        lastName: validated.patientLastName,
+        dateOfBirth: validated.patientDateOfBirth,
+        sex: validated.patientSex,
+        state: validated.patientState || null,
+        weightKg: validated.patientWeightKg || null,
+        medicalRecordNumber: validated.medicalRecordNumber || null,
+      };
       await prisma.patient.upsert({
         where: { reportId: id },
-        create: {
-          reportId: id,
-          firstName: validated.patientFirstName,
-          lastName: validated.patientLastName,
-          dateOfBirth: validated.patientDateOfBirth,
-          sex: validated.patientSex,
-          weightKg: validated.patientWeightKg || null,
-          medicalRecordNumber: validated.medicalRecordNumber || null,
-        },
-        update: {
-          firstName: validated.patientFirstName,
-          lastName: validated.patientLastName,
-          dateOfBirth: validated.patientDateOfBirth,
-          sex: validated.patientSex,
-          weightKg: validated.patientWeightKg || null,
-          medicalRecordNumber: validated.medicalRecordNumber || null,
-        },
+        create: { reportId: id, ...patientFields },
+        update: patientFields,
       });
       break;
+    }
     case "vaccine":
       await prisma.vaccineAdministration.upsert({
         where: { reportId: id },
@@ -186,23 +196,23 @@ reportsRouter.patch("/:id", async (req, res) => {
         update: { ...validated },
       });
       break;
-    case "adverse-event":
-      await prisma.errorDetail.deleteMany({ where: { reportId: id } });
+    case "adverse-event": {
+      // administrationError and adverseEventOccurred are independent
+      // (PROV-002/003), so a report can have both an ErrorDetail and an
+      // AdverseEvent row — no longer deletes the other table.
+      const adverseEventFields = {
+        ...validated,
+        symptoms: JSON.stringify(validated.symptoms ?? []),
+        outcomes: JSON.stringify(validated.outcomes ?? []),
+      };
       await prisma.adverseEvent.upsert({
         where: { reportId: id },
-        create: {
-          reportId: id,
-          ...validated,
-          outcomes: JSON.stringify(validated.outcomes ?? []),
-        },
-        update: {
-          ...validated,
-          outcomes: JSON.stringify(validated.outcomes ?? []),
-        },
+        create: { reportId: id, ...adverseEventFields },
+        update: adverseEventFields,
       });
       break;
+    }
     case "error-detail":
-      await prisma.adverseEvent.deleteMany({ where: { reportId: id } });
       await prisma.errorDetail.upsert({
         where: { reportId: id },
         create: { reportId: id, ...validated },
@@ -237,9 +247,15 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   }
 
   const state = branchingStateFromReport(report);
-  const steps = getApplicableSteps(state).filter(
-    (s) => s !== "submitter-type" && s !== "report-characteristic" && s !== "documents" && s !== "review"
-  );
+  const gatingSteps: StepId[] = [
+    "submitter-type",
+    "before-you-start",
+    "administration-error",
+    "adverse-event-occurred",
+    "documents",
+    "review",
+  ];
+  const steps = getApplicableSteps(state).filter((s) => !gatingSteps.includes(s));
   const submitterType = report.submitterType as SubmitterType;
   const incompleteSteps: StepId[] = [];
 
@@ -255,6 +271,21 @@ reportsRouter.post("/:id/submit", async (req, res) => {
 
   if (incompleteSteps.length > 0) {
     return res.status(400).json({ error: "Report is incomplete", incompleteSteps });
+  }
+
+  // VAL-001/003: deterministic cross-field checks zod's per-step schemas
+  // can't express (they only ever see one step's fields at a time). ERROR
+  // severity blocks submission, same as a missing required field would.
+  const crossFieldFindings: ValidationFinding[] = checkCrossFieldRules({
+    vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate ?? "" } : null,
+    adverseEvent: report.adverseEvent ? { onsetDate: report.adverseEvent.onsetDate ?? "" } : null,
+    errorDetail: report.errorDetail
+      ? { errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "" }
+      : null,
+  });
+  const blockingFindings = crossFieldFindings.filter((f) => f.severity === "ERROR");
+  if (blockingFindings.length > 0) {
+    return res.status(400).json({ error: "Report has validation errors", findings: blockingFindings });
   }
 
   const duplicateFlag = await isLikelyDuplicate(id);
@@ -285,6 +316,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             patientLastName: report.patient.lastName ?? "",
             patientDateOfBirth: report.patient.dateOfBirth ?? "",
             patientSex: report.patient.sex ?? "",
+            patientState: report.patient.state ?? "",
             patientWeightKg: report.patient.weightKg ?? "",
             medicalRecordNumber: report.patient.medicalRecordNumber ?? "",
           }
@@ -307,6 +339,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
         ? {
             onsetDate: report.adverseEvent.onsetDate ?? "",
             description: report.adverseEvent.description ?? "",
+            symptoms: report.adverseEvent.symptoms ? JSON.parse(report.adverseEvent.symptoms) : [],
             outcomes: report.adverseEvent.outcomes ? JSON.parse(report.adverseEvent.outcomes) : [],
             hospitalizationDates: report.adverseEvent.hospitalizationDates ?? "",
             treatmentGiven: report.adverseEvent.treatmentGiven ?? "",

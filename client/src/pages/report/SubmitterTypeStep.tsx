@@ -3,30 +3,76 @@ interface SubmitterTypeStepProps {
   onSelect: (value: "public" | "hcp") => Promise<void>;
 }
 
-/** First branching decision (design doc §4.4): who is reporting. */
-export function SubmitterTypeStep({ value, onSelect }: SubmitterTypeStepProps) {
+/**
+ * First branching decision (FLOW-001/002): three selectable options in the
+ * UI, but exactly two underlying rule sets — Patient and Caregiver both map
+ * to submitterType "public" (the person/caregiver distinction is captured
+ * later by the "relationship" field on the About-You step), so no extra
+ * branching logic is introduced for a third path.
+ */
+export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
   return (
     <div className="choice-step">
-      <h1>Who is reporting?</h1>
-      <p>This helps us ask you only the questions that apply to your situation.</p>
+      <h1>Who is filling out this form?</h1>
+      <p>Choose the option that best matches your situation.</p>
       <div className="choice-cards">
-        <button
-          type="button"
-          className={`choice-card${value === "public" ? " choice-card--selected" : ""}`}
-          onClick={() => onSelect("public")}
-        >
-          <h2>I'm a patient, parent, or caregiver</h2>
-          <p>You're reporting on behalf of yourself or someone you care for.</p>
+        <button type="button" className="choice-card" onClick={() => onSelect("public")}>
+          <span className="choice-card__icon">
+            <PersonIcon />
+          </span>
+          <span>
+            <h2>Patient</h2>
+            <p>Reporting for yourself</p>
+          </span>
         </button>
-        <button
-          type="button"
-          className={`choice-card${value === "hcp" ? " choice-card--selected" : ""}`}
-          onClick={() => onSelect("hcp")}
-        >
-          <h2>I'm a healthcare provider</h2>
-          <p>Physician, nurse, pharmacist, or other clinician reporting professionally.</p>
+        <button type="button" className="choice-card" onClick={() => onSelect("public")}>
+          <span className="choice-card__icon">
+            <PeopleIcon />
+          </span>
+          <span>
+            <h2>Caregiver</h2>
+            <p>Reporting for a child, family, etc.</p>
+          </span>
+        </button>
+        <button type="button" className="choice-card" onClick={() => onSelect("hcp")}>
+          <span className="choice-card__icon">
+            <ClinicalIcon />
+          </span>
+          <span>
+            <h2>Healthcare Professional</h2>
+            <p>Reporting in a clinical role</p>
+          </span>
         </button>
       </div>
     </div>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" fill="currentColor" />
+      <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2" fill="currentColor" />
+      <circle cx="17" cy="9" r="2.6" fill="currentColor" opacity="0.6" />
+      <path d="M3 21c0-3.6 2.7-6.5 6-6.5s6 2.9 6 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M15 15c2.6.4 4.5 2.6 4.5 5.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
+    </svg>
+  );
+}
+
+function ClinicalIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }

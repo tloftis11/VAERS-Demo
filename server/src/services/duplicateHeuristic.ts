@@ -12,6 +12,17 @@
 import { prisma } from "../db.js";
 import { checkSemanticDuplicate } from "./claudeClient.js";
 
+/** A report can have both an AdverseEvent and an ErrorDetail narrative (PROV-002/003) — combine them when both exist rather than picking one arbitrarily. */
+function combinedNarrative(report: {
+  adverseEvent?: { description: string | null } | null;
+  errorDetail?: { errorDescription: string | null } | null;
+}): string | null {
+  const parts = [report.adverseEvent?.description, report.errorDetail?.errorDescription].filter(
+    (p): p is string => Boolean(p)
+  );
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
+
 export async function isLikelyDuplicate(reportId: string): Promise<boolean> {
   const report = await prisma.report.findUnique({
     where: { id: reportId },
@@ -50,7 +61,7 @@ async function isLikelySemanticDuplicate(
     where: { id: reportId },
     include: { adverseEvent: true, errorDetail: true },
   });
-  const description = report?.adverseEvent?.description || report?.errorDetail?.errorDescription;
+  const description = report ? combinedNarrative(report) : null;
   if (!description) return false;
 
   const candidates = await prisma.report.findMany({
@@ -66,7 +77,7 @@ async function isLikelySemanticDuplicate(
 
   const candidateInputs = candidates
     .map((c) => {
-      const desc = c.adverseEvent?.description || c.errorDetail?.errorDescription;
+      const desc = combinedNarrative(c);
       if (!desc || !c.vaccine?.vaccineType || !c.vaccine.administrationDate) return null;
       return {
         id: c.id,

@@ -30,6 +30,15 @@ export function Confirmation() {
       <p>
         Reference number: <strong>{reportId}</strong>
       </p>
+      <p>
+        CDC and FDA staff review submitted reports as part of ongoing vaccine-safety monitoring, and
+        may follow up with the contact on this report if more information is needed. You generally
+        won't receive an individual response otherwise.
+      </p>
+      <p>
+        Need to add more later? You can still attach medical records or other documents to this
+        report using the existing follow-up information tool — you don't need to submit a new report.
+      </p>
 
       {reportId && (
         <SurveyForm

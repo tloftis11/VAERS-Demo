@@ -14,17 +14,25 @@
  */
 
 export type SubmitterType = "public" | "hcp";
-export type ReportCharacteristic = "adverse_event" | "error_no_ae";
 
 export interface BranchingState {
   submitterType: SubmitterType | null;
-  /** Only meaningful when submitterType === "hcp"; public reports are always adverse_event-shaped. */
-  reportCharacteristic: ReportCharacteristic | null;
+  /**
+   * Both HCP-only, independent (PROV-002/003): a report can have an
+   * administration error, an adverse event, both, or neither — they are no
+   * longer mutually exclusive. Public reports never ask either question:
+   * administrationError is implicitly false and adverseEventOccurred is
+   * implicitly true.
+   */
+  administrationError: boolean | null;
+  adverseEventOccurred: boolean | null;
 }
 
 export const STEP_IDS = [
   "submitter-type",
-  "report-characteristic",
+  "before-you-start",
+  "administration-error",
+  "adverse-event-occurred",
   "about-you",
   "patient",
   "vaccine",
@@ -38,7 +46,9 @@ export type StepId = (typeof STEP_IDS)[number];
 
 export const STEP_LABELS: Record<StepId, string> = {
   "submitter-type": "Who is reporting?",
-  "report-characteristic": "What are you reporting?",
+  "before-you-start": "Before you start",
+  "administration-error": "Administration error?",
+  "adverse-event-occurred": "Adverse event?",
   "about-you": "About you",
   patient: "About the patient",
   vaccine: "Vaccine information",
@@ -55,21 +65,26 @@ export const STEP_LABELS: Record<StepId, string> = {
  * not-yet-available until their precondition is met (see isStepUnlocked).
  */
 export function getApplicableSteps(state: BranchingState): StepId[] {
-  const steps: StepId[] = ["submitter-type"];
+  const steps: StepId[] = ["submitter-type", "before-you-start"];
+  const isHcp = state.submitterType === "hcp";
 
-  if (state.submitterType === "hcp") {
-    steps.push("report-characteristic");
+  if (isHcp) {
+    steps.push("administration-error", "adverse-event-occurred");
   }
 
   steps.push("about-you", "patient", "vaccine");
 
-  const characteristic =
-    state.submitterType === "hcp" ? state.reportCharacteristic : "adverse_event";
+  const administrationError = isHcp ? state.administrationError : false;
+  // Public reports are always adverse-event-shaped. HCP reports default to
+  // showing the adverse-event step until the reporter explicitly answers
+  // "no" — this keeps the step list stable while the question is unanswered
+  // rather than having it appear/disappear.
+  const adverseEventOccurred = isHcp ? state.adverseEventOccurred !== false : true;
 
-  if (characteristic === "error_no_ae") {
+  if (administrationError === true) {
     steps.push("error-detail");
-  } else {
-    // Default/public path, and HCP explicitly reporting an adverse event.
+  }
+  if (adverseEventOccurred) {
     steps.push("adverse-event");
   }
 
@@ -81,9 +96,15 @@ export function getApplicableSteps(state: BranchingState): StepId[] {
 export function isStepUnlocked(step: StepId, state: BranchingState): boolean {
   if (step === "submitter-type") return true;
   if (state.submitterType === null) return false;
-  if (step === "report-characteristic") return state.submitterType === "hcp";
-  if (state.submitterType === "hcp" && state.reportCharacteristic === null) {
-    // HCP must answer the characteristic question before anything downstream.
+  if (step === "before-you-start") return true;
+  if (step === "administration-error" || step === "adverse-event-occurred") {
+    return state.submitterType === "hcp";
+  }
+  if (
+    state.submitterType === "hcp" &&
+    (state.administrationError === null || state.adverseEventOccurred === null)
+  ) {
+    // HCP must answer both gating questions before anything downstream.
     return false;
   }
   return true;

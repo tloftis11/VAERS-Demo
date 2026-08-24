@@ -1,8 +1,8 @@
-import { patientSchema, SEX_OPTIONS } from "../../../../shared/src/schemas";
+import { patientSchema, SEX_OPTIONS, STATE_OPTIONS } from "../../../../shared/src/schemas";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
-import { TextField, SelectField } from "../../components/Field";
+import { ConversationalStep, type FieldDescriptor } from "../../components/ConversationalStep";
 
 interface PatientStepProps {
   submitterType: SubmitterType;
@@ -16,6 +16,7 @@ const EMPTY: PatientData = {
   patientLastName: "",
   patientDateOfBirth: "",
   patientSex: "",
+  patientState: "",
   patientWeightKg: "",
   medicalRecordNumber: "",
 };
@@ -25,6 +26,44 @@ export function PatientStep({ submitterType, initialData, onNext, onBack }: Pati
     patientSchema(submitterType),
     initialData ?? EMPTY
   );
+  const isHcp = submitterType === "hcp";
+
+  const descriptors: FieldDescriptor[] = [
+    { type: "text", name: "patientFirstName", label: "Patient's first name", required: true },
+    { type: "text", name: "patientLastName", label: "Patient's last name", required: true },
+    { type: "text", name: "patientDateOfBirth", label: "Date of birth", inputType: "date", required: true },
+    { type: "select", name: "patientSex", label: "Sex", required: true, options: SEX_OPTIONS },
+    {
+      type: "select",
+      name: "patientState",
+      label: "What is the patient's state of residence? (optional)",
+      options: STATE_OPTIONS,
+    },
+    {
+      type: "text",
+      name: "patientWeightKg",
+      label: "Weight in kg (optional)",
+      inputType: "number",
+      hint: "Especially useful for pediatric reports.",
+    },
+    ...(isHcp
+      ? ([
+          {
+            type: "text",
+            name: "medicalRecordNumber",
+            label: "Medical record number",
+            required: true,
+            hint: "Helps link this report back to the source record if follow-up is needed.",
+          },
+        ] as FieldDescriptor[])
+      : []),
+  ];
+
+  function formatValue(name: string, value: unknown): string {
+    if (name === "patientSex") return SEX_OPTIONS.find((o) => o.value === value)?.label ?? "";
+    if (name === "patientState") return STATE_OPTIONS.find((o) => o.value === value)?.label ?? "";
+    return value == null ? "" : String(value);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,60 +74,13 @@ export function PatientStep({ submitterType, initialData, onNext, onBack }: Pati
   return (
     <form className="step-form" onSubmit={handleSubmit}>
       <h1>About the patient</h1>
-      <TextField
-        id="patientFirstName"
-        label="Patient's first name"
-        required
-        value={values.patientFirstName}
-        onChange={(v) => setValue("patientFirstName", v)}
-        error={errors.patientFirstName}
+      <ConversationalStep
+        descriptors={descriptors}
+        values={values}
+        setValue={setValue}
+        errors={errors}
+        formatValue={formatValue}
       />
-      <TextField
-        id="patientLastName"
-        label="Patient's last name"
-        required
-        value={values.patientLastName}
-        onChange={(v) => setValue("patientLastName", v)}
-        error={errors.patientLastName}
-      />
-      <TextField
-        id="patientDateOfBirth"
-        label="Date of birth"
-        type="date"
-        required
-        value={values.patientDateOfBirth}
-        onChange={(v) => setValue("patientDateOfBirth", v)}
-        error={errors.patientDateOfBirth}
-      />
-      <SelectField
-        id="patientSex"
-        label="Sex"
-        required
-        value={values.patientSex}
-        onChange={(v) => setValue("patientSex", v)}
-        options={SEX_OPTIONS}
-        error={errors.patientSex}
-      />
-      <TextField
-        id="patientWeightKg"
-        label="Weight in kg (optional)"
-        type="number"
-        value={String(values.patientWeightKg ?? "")}
-        onChange={(v) => setValue("patientWeightKg", v)}
-        error={errors.patientWeightKg}
-        hint="Especially useful for pediatric reports."
-      />
-      {submitterType === "hcp" && (
-        <TextField
-          id="medicalRecordNumber"
-          label="Medical record number"
-          required
-          value={values.medicalRecordNumber}
-          onChange={(v) => setValue("medicalRecordNumber", v)}
-          error={errors.medicalRecordNumber}
-          hint="Helps link this report back to the source record if follow-up is needed."
-        />
-      )}
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
           ← Back

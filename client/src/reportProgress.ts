@@ -2,7 +2,11 @@ import { getApplicableSteps, type BranchingState, type StepId } from "../../shar
 import type { ClientReport } from "./api/client";
 
 export function branchingStateFromReport(report: ClientReport): BranchingState {
-  return { submitterType: report.submitterType, reportCharacteristic: report.reportCharacteristic };
+  return {
+    submitterType: report.submitterType,
+    administrationError: report.administrationError,
+    adverseEventOccurred: report.adverseEventOccurred,
+  };
 }
 
 /** Where to resume a draft: the first step that still needs the user's attention. */
@@ -15,8 +19,14 @@ export function firstIncompleteStep(report: ClientReport): StepId {
       case "submitter-type":
         if (!report.submitterType) return step;
         break;
-      case "report-characteristic":
-        if (!report.reportCharacteristic) return step;
+      case "before-you-start":
+        // Purely informational — nothing to persist, so never blocks resume.
+        break;
+      case "administration-error":
+        if (report.administrationError === null) return step;
+        break;
+      case "adverse-event-occurred":
+        if (report.adverseEventOccurred === null) return step;
         break;
       case "about-you":
         if (!report.aboutYou) return step;
@@ -43,4 +53,43 @@ export function firstIncompleteStep(report: ClientReport): StepId {
     }
   }
   return "review";
+}
+
+/** All applicable steps still missing required data — for the Review page's proactive checklist (VAL-002). */
+export function missingRequiredSteps(report: ClientReport): StepId[] {
+  const state = branchingStateFromReport(report);
+  const steps = getApplicableSteps(state);
+  const missing: StepId[] = [];
+
+  for (const step of steps) {
+    switch (step) {
+      case "submitter-type":
+        if (!report.submitterType) missing.push(step);
+        break;
+      case "administration-error":
+        if (report.administrationError === null) missing.push(step);
+        break;
+      case "adverse-event-occurred":
+        if (report.adverseEventOccurred === null) missing.push(step);
+        break;
+      case "about-you":
+        if (!report.aboutYou) missing.push(step);
+        break;
+      case "patient":
+        if (!report.patient) missing.push(step);
+        break;
+      case "vaccine":
+        if (!report.vaccine) missing.push(step);
+        break;
+      case "adverse-event":
+        if (!report.adverseEvent) missing.push(step);
+        break;
+      case "error-detail":
+        if (!report.errorDetail) missing.push(step);
+        break;
+      default:
+        break;
+    }
+  }
+  return missing;
 }

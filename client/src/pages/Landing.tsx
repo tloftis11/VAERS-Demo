@@ -1,19 +1,30 @@
 import { Link } from "react-router-dom";
 
-/** Redesigned landing page (design doc §4.2). */
+/** Redesigned landing page, styled after the reference prototype (LAND-001). */
 export function Landing() {
   return (
     <div className="page page--landing">
-      <section className="hero">
-        <h1>Report a possible vaccine adverse event or administration error</h1>
-        <p>
-          VAERS (Vaccine Adverse Event Reporting System) is the national early-warning system for
-          vaccine safety. Reporting takes about 10 minutes, and the form adapts to who you are and
-          what happened so you're only asked what's relevant.
-        </p>
-        <Link to="/report" className="button button--primary button--large">
-          Report an Event
-        </Link>
+      <section className="hero hero--split">
+        <div className="hero__copy">
+          <h1>
+            Report vaccine adverse events with clarity and <span className="hero__highlight">confidence</span>
+          </h1>
+          <p>Your contribution helps monitor vaccine safety for everyone.</p>
+          <div className="hero__actions">
+            <Link to="/report" className="button button--primary button--large">
+              Start a Report
+            </Link>
+            <Link to="/about" className="button button--secondary button--large">
+              Learn More
+            </Link>
+          </div>
+        </div>
+        {/* Placeholder graphic — LAND-002 requires properly licensed/submission-safe
+            imagery, which isn't available here, so this is an abstract panel
+            rather than a stock photo standing in for one. */}
+        <div className="hero__art" aria-hidden="true">
+          <ShieldIcon />
+        </div>
       </section>
 
       <section className="tile-grid" aria-label="Other ways to get help">
@@ -42,5 +53,28 @@ export function Landing() {
         </div>
       </section>
     </div>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 200 200" width="100%" height="100%" role="presentation">
+      <rect width="200" height="200" rx="24" fill="var(--color-primary-deep)" />
+      <path
+        d="M100 40 L150 58 V95 C150 128 128 152 100 162 C72 152 50 128 50 95 V58 Z"
+        fill="none"
+        stroke="var(--color-primary-contrast)"
+        strokeWidth="4"
+        opacity="0.9"
+      />
+      <path
+        d="M78 100 L94 116 L124 82"
+        fill="none"
+        stroke="var(--color-primary-contrast)"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

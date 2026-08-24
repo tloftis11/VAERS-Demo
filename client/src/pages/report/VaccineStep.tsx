@@ -2,7 +2,7 @@ import { vaccineSchema, VACCINE_TYPES, ROUTE_OPTIONS } from "../../../../shared/
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { VaccineData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
-import { TextField, SelectField } from "../../components/Field";
+import { ConversationalStep, type FieldDescriptor } from "../../components/ConversationalStep";
 
 interface VaccineStepProps {
   submitterType: SubmitterType;
@@ -29,6 +29,56 @@ export function VaccineStep({ submitterType, initialData, onNext, onBack }: Vacc
   );
   const isHcp = submitterType === "hcp";
 
+  const descriptors: FieldDescriptor[] = [
+    { type: "select", name: "vaccineType", label: "Vaccine", required: true, options: VACCINE_TYPES },
+    {
+      type: "text",
+      name: "administrationDate",
+      label: "Date administered",
+      inputType: "date",
+      required: true,
+    },
+    { type: "text", name: "doseNumber", label: "Dose number (optional)", hint: "e.g. 1st, 2nd, booster" },
+    { type: "text", name: "manufacturer", label: "Manufacturer", required: isHcp },
+    {
+      type: "text",
+      name: "lotNumber",
+      label: "Lot number",
+      required: isHcp,
+      hint: !isHcp ? "Check your vaccination card if you have it — otherwise leave blank." : undefined,
+    },
+    ...(isHcp
+      ? ([
+          {
+            type: "select",
+            name: "route",
+            label: "Route of administration",
+            required: true,
+            options: ROUTE_OPTIONS,
+          },
+        ] as FieldDescriptor[])
+      : []),
+    {
+      type: "text",
+      name: "bodySite",
+      label: "Administration site",
+      required: isHcp,
+      hint: "e.g. left deltoid",
+    },
+    {
+      type: "text",
+      name: "administeringFacility",
+      label: isHcp ? "Administering facility" : "Where was it given? (optional)",
+      required: isHcp,
+    },
+  ];
+
+  function formatValue(name: string, value: unknown): string {
+    if (name === "vaccineType") return VACCINE_TYPES.find((o) => o.value === value)?.label ?? "";
+    if (name === "route") return ROUTE_OPTIONS.find((o) => o.value === value)?.label ?? "";
+    return value == null ? "" : String(value);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const result = validate();
@@ -38,76 +88,12 @@ export function VaccineStep({ submitterType, initialData, onNext, onBack }: Vacc
   return (
     <form className="step-form" onSubmit={handleSubmit}>
       <h1>Vaccine information</h1>
-      <SelectField
-        id="vaccineType"
-        label="Vaccine"
-        required
-        value={values.vaccineType}
-        onChange={(v) => setValue("vaccineType", v)}
-        options={VACCINE_TYPES}
-        error={errors.vaccineType}
-      />
-      <TextField
-        id="administrationDate"
-        label="Date administered"
-        type="date"
-        required
-        value={values.administrationDate}
-        onChange={(v) => setValue("administrationDate", v)}
-        error={errors.administrationDate}
-      />
-      <TextField
-        id="doseNumber"
-        label="Dose number (optional)"
-        value={values.doseNumber}
-        onChange={(v) => setValue("doseNumber", v)}
-        error={errors.doseNumber}
-        hint="e.g. 1st, 2nd, booster"
-      />
-      <TextField
-        id="manufacturer"
-        label="Manufacturer"
-        required={isHcp}
-        value={values.manufacturer}
-        onChange={(v) => setValue("manufacturer", v)}
-        error={errors.manufacturer}
-      />
-      <TextField
-        id="lotNumber"
-        label="Lot number"
-        required={isHcp}
-        value={values.lotNumber}
-        onChange={(v) => setValue("lotNumber", v)}
-        error={errors.lotNumber}
-        hint={!isHcp ? "Check your vaccination card if you have it — otherwise leave blank." : undefined}
-      />
-      {isHcp && (
-        <SelectField
-          id="route"
-          label="Route of administration"
-          required
-          value={values.route}
-          onChange={(v) => setValue("route", v)}
-          options={ROUTE_OPTIONS}
-          error={errors.route}
-        />
-      )}
-      <TextField
-        id="bodySite"
-        label="Administration site"
-        required={isHcp}
-        value={values.bodySite}
-        onChange={(v) => setValue("bodySite", v)}
-        error={errors.bodySite}
-        hint="e.g. left deltoid"
-      />
-      <TextField
-        id="administeringFacility"
-        label={isHcp ? "Administering facility" : "Where was it given? (optional)"}
-        required={isHcp}
-        value={values.administeringFacility}
-        onChange={(v) => setValue("administeringFacility", v)}
-        error={errors.administeringFacility}
+      <ConversationalStep
+        descriptors={descriptors}
+        values={values}
+        setValue={setValue}
+        errors={errors}
+        formatValue={formatValue}
       />
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>

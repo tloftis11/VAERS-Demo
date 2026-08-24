@@ -1,13 +1,14 @@
 /**
  * Server-side only — the Anthropic API key never reaches the browser.
- * Powers two assist features on top of the deterministic rules engine
- * (shared/src/*): a natural-language FAQ assistant, and a structured
- * consistency check on the free-text adverse-event description. Neither
- * replaces the branching/validation logic in shared/src — those stay the
- * source of truth for what's required to submit.
+ * Powers assist features on top of the deterministic rules engine
+ * (shared/src/*): a structured consistency check on the free-text
+ * adverse-event description, semantic duplicate detection, and narrative
+ * document suggestions. FAQ help is deterministic/keyword-only (HELP-002) —
+ * there is no free-text AI assistant here. None of this replaces the
+ * branching/validation logic in shared/src — those stay the source of
+ * truth for what's required to submit.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { FAQ_ENTRIES } from "../../../shared/src/faqData.js";
 
 const client = new Anthropic();
 
@@ -15,40 +16,6 @@ const client = new Anthropic();
 // extraction) is a reasonable fit for a cheaper/faster model — set
 // CLAUDE_MODEL=claude-haiku-4-5 in .env to try that tradeoff.
 const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5";
-
-export async function answerFaqQuestion(question: string, step?: string): Promise<string> {
-  const groundingFaq = FAQ_ENTRIES.map((e) => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n");
-
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 500,
-    output_config: { effort: "low" },
-    system:
-      "You are a help assistant embedded in the VAERS (Vaccine Adverse Event Reporting System) " +
-      "public reporting form. Answer questions about how to use the form, what information is " +
-      "needed, privacy, and the reporting process. Keep answers short (2-4 sentences) and in " +
-      "plain language. If the question asks for medical advice, a diagnosis, or whether a " +
-      "specific symptom was caused by a vaccine, decline and suggest they contact a healthcare " +
-      "provider or the VAERS support line instead — you are not a clinician. If you don't know " +
-      "the answer from the reference FAQ, say so plainly rather than guessing.",
-    messages: [
-      {
-        role: "user",
-        content:
-          `Reference FAQ (for grounding — not necessarily exhaustive):\n${groundingFaq}\n\n` +
-          `Current form step: ${step ?? "unknown"}\n\n` +
-          `User question: ${question}`,
-      },
-    ],
-  });
-
-  if (response.stop_reason === "refusal") {
-    return "I'm not able to help with that question. Please check the FAQ page or contact support.";
-  }
-
-  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-  return textBlock?.text ?? "Sorry, I couldn't come up with an answer. Please check the FAQ page.";
-}
 
 export interface ConsistencyIssue {
   field: "description" | "outcomes" | "hospitalizationDates";
@@ -217,8 +184,15 @@ export interface AiDocumentSuggestion {
 export async function suggestDocumentsFromNarrative(input: {
   description: string;
   vaccineType: string;
-  reportCharacteristic: "adverse_event" | "error_no_ae";
+  administrationError: boolean;
+  adverseEventOccurred: boolean;
 }): Promise<AiDocumentSuggestion[]> {
+  const reportType = [
+    input.administrationError && "administration error",
+    input.adverseEventOccurred && "adverse event",
+  ]
+    .filter(Boolean)
+    .join(" + ");
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 500,
@@ -234,7 +208,7 @@ export async function suggestDocumentsFromNarrative(input: {
       {
         role: "user",
         content:
-          `Vaccine: ${input.vaccineType}\nReport type: ${input.reportCharacteristic}\n\n` +
+          `Vaccine: ${input.vaccineType}\nReport type: ${reportType}\n\n` +
           `Description:\n"""\n${input.description}\n"""`,
       },
     ],

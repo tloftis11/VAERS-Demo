@@ -3,11 +3,12 @@
  * Re-validating here (in addition to the client) is the "defense in depth"
  * behavior called for in design doc §3.6 — a client bug or a direct API
  * call can never persist a report with fields inconsistent with the
- * submitter-type/report-characteristic rules.
+ * submitter-type/administration-error/adverse-event-occurred rules.
  */
 export * from "../../shared/src/branchingRules.js";
 export * from "../../shared/src/schemas.js";
 export * from "../../shared/src/documentSuggestions.js";
+export * from "../../shared/src/validationRules.js";
 export * from "../../shared/src/faqData.js";
 
 import type { StepId, SubmitterType } from "../../shared/src/branchingRules.js";

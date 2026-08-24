@@ -1,5 +1,5 @@
-export type { FaqEntry, DocumentSuggestion } from "../../../shared/src";
-import type { FaqEntry, DocumentSuggestion } from "../../../shared/src";
+export type { FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
+import type { FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
 
 const API_ROOT = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
 
@@ -15,6 +15,7 @@ export interface PatientData {
   patientLastName: string;
   patientDateOfBirth: string;
   patientSex: string;
+  patientState: string;
   patientWeightKg: number | string;
   medicalRecordNumber: string;
 }
@@ -33,6 +34,7 @@ export interface VaccineData {
 export interface AdverseEventData {
   onsetDate: string;
   description: string;
+  symptoms: string[];
   outcomes: string[];
   hospitalizationDates: string;
   treatmentGiven: string;
@@ -58,7 +60,8 @@ export interface ClientReport {
   id: string;
   status: "draft" | "submitted";
   submitterType: "public" | "hcp" | null;
-  reportCharacteristic: "adverse_event" | "error_no_ae" | null;
+  administrationError: boolean | null;
+  adverseEventOccurred: boolean | null;
   duplicateFlag: boolean;
   submittedAt: string | null;
   aboutYou: AboutYouData | null;
@@ -81,10 +84,12 @@ async function asJson<T>(res: Response): Promise<T> {
     const error = new Error(body.error ?? "Request failed") as Error & {
       errors?: FieldError[];
       incompleteSteps?: string[];
+      findings?: ValidationFinding[];
       status?: number;
     };
     error.errors = body.errors;
     error.incompleteSteps = body.incompleteSteps;
+    error.findings = body.findings;
     error.status = res.status;
     throw error;
   }
@@ -117,13 +122,37 @@ export function submitReport(
   return fetch(`${API_ROOT}/reports/${id}/submit`, { method: "POST" }).then((r) => asJson(r));
 }
 
-export function uploadAttachment(reportId: string, file: File): Promise<AttachmentMeta> {
+export function uploadAttachment(
+  reportId: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<AttachmentMeta> {
   const formData = new FormData();
   formData.append("file", file);
-  return fetch(`${API_ROOT}/reports/${reportId}/attachments`, {
-    method: "POST",
-    body: formData,
-  }).then((r) => asJson(r));
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_ROOT}/reports/${reportId}/attachments`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      let body: unknown;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        body = {};
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as AttachmentMeta);
+      } else {
+        const message = (body as { error?: string })?.error ?? "Upload failed";
+        reject(new Error(message));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.send(formData);
+  });
 }
 
 export function listAttachments(reportId: string): Promise<AttachmentMeta[]> {
@@ -186,14 +215,6 @@ export interface ConsistencyIssue {
   field: "description" | "outcomes" | "hospitalizationDates";
   issue: string;
   suggestion: string;
-}
-
-export function askFaqAssistant(question: string, step?: string): Promise<{ answer: string }> {
-  return fetch(`${API_ROOT}/assistant/faq`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, step }),
-  }).then((r) => asJson(r));
 }
 
 export function checkDescriptionConsistency(input: {

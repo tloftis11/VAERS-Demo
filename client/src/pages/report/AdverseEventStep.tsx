@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { adverseEventSchema, OUTCOME_OPTIONS } from "../../../../shared/src/schemas";
+import { adverseEventSchema, OUTCOME_OPTIONS, SYMPTOM_OPTIONS } from "../../../../shared/src/schemas";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import { checkDescriptionConsistency, type AdverseEventData, type ConsistencyIssue } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
-import { TextField, TextAreaField, CheckboxGroupField } from "../../components/Field";
+import { ConversationalStep, type FieldDescriptor } from "../../components/ConversationalStep";
 
 interface AdverseEventStepProps {
   submitterType: SubmitterType;
@@ -15,6 +15,7 @@ interface AdverseEventStepProps {
 const EMPTY: AdverseEventData = {
   onsetDate: "",
   description: "",
+  symptoms: [],
   outcomes: [],
   hospitalizationDates: "",
   treatmentGiven: "",
@@ -32,6 +33,56 @@ export function AdverseEventStep({ submitterType, initialData, onNext, onBack }:
   const [checking, setChecking] = useState(false);
   const [checkIssues, setCheckIssues] = useState<ConsistencyIssue[] | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
+
+  const descriptors: FieldDescriptor[] = [
+    { type: "text", name: "onsetDate", label: "When did symptoms start?", inputType: "date", required: true },
+    {
+      type: "checkbox-group",
+      name: "symptoms",
+      label: "Symptoms experienced (optional)",
+      hint: "Quick-select common symptoms — describe anything else in the next field.",
+      options: SYMPTOM_OPTIONS,
+    },
+    {
+      type: "textarea",
+      name: "description",
+      label: isHcp ? "Clinical description" : "What happened?",
+      required: true,
+      rows: 5,
+      hint: isHcp ? undefined : "Describe the symptoms and what happened in your own words.",
+    },
+    {
+      type: "checkbox-group",
+      name: "outcomes",
+      label: "Outcome (select all that apply)",
+      required: true,
+      options: OUTCOME_OPTIONS,
+    },
+    ...(showHospitalizationDates
+      ? ([{ type: "text", name: "hospitalizationDates", label: "Hospitalization dates (optional)" }] as FieldDescriptor[])
+      : []),
+    { type: "textarea", name: "treatmentGiven", label: "Treatment given (optional)", rows: 3 },
+    ...(isHcp
+      ? ([
+          {
+            type: "textarea",
+            name: "clinicalCourseNotes",
+            label: "Clinical course notes",
+            required: true,
+            rows: 4,
+          },
+        ] as FieldDescriptor[])
+      : []),
+  ];
+
+  function formatValue(name: string, value: unknown): string {
+    if (name === "symptoms" || name === "outcomes") {
+      const options = name === "symptoms" ? SYMPTOM_OPTIONS : OUTCOME_OPTIONS;
+      const selected = (value as string[]) ?? [];
+      return selected.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ");
+    }
+    return value == null ? "" : String(value);
+  }
 
   async function handleCheckDescription() {
     if (!values.description.trim()) return;
@@ -62,27 +113,12 @@ export function AdverseEventStep({ submitterType, initialData, onNext, onBack }:
   return (
     <form className="step-form" onSubmit={handleSubmit}>
       <h1>What happened</h1>
-      <TextField
-        id="onsetDate"
-        label="When did symptoms start?"
-        type="date"
-        required
-        value={values.onsetDate}
-        onChange={(v) => setValue("onsetDate", v)}
-        error={errors.onsetDate}
-      />
-      <TextAreaField
-        id="description"
-        label={isHcp ? "Clinical description" : "What happened?"}
-        required
-        rows={5}
-        value={values.description}
-        onChange={(v) => {
-          setValue("description", v);
-          setCheckIssues(null);
-        }}
-        error={errors.description}
-        hint={isHcp ? undefined : "Describe the symptoms and what happened in your own words."}
+      <ConversationalStep
+        descriptors={descriptors}
+        values={values}
+        setValue={setValue}
+        errors={errors}
+        formatValue={formatValue}
       />
       <div className="consistency-check">
         <button
@@ -114,45 +150,6 @@ export function AdverseEventStep({ submitterType, initialData, onNext, onBack }:
           </ul>
         )}
       </div>
-      <CheckboxGroupField
-        legend="Outcome (select all that apply)"
-        required
-        value={values.outcomes}
-        onChange={(v) => {
-          setValue("outcomes", v);
-          setCheckIssues(null);
-        }}
-        options={OUTCOME_OPTIONS}
-        error={errors.outcomes}
-      />
-      {showHospitalizationDates && (
-        <TextField
-          id="hospitalizationDates"
-          label="Hospitalization dates (optional)"
-          value={values.hospitalizationDates}
-          onChange={(v) => setValue("hospitalizationDates", v)}
-          error={errors.hospitalizationDates}
-        />
-      )}
-      <TextAreaField
-        id="treatmentGiven"
-        label="Treatment given (optional)"
-        rows={3}
-        value={values.treatmentGiven}
-        onChange={(v) => setValue("treatmentGiven", v)}
-        error={errors.treatmentGiven}
-      />
-      {isHcp && (
-        <TextAreaField
-          id="clinicalCourseNotes"
-          label="Clinical course notes"
-          required
-          rows={4}
-          value={values.clinicalCourseNotes}
-          onChange={(v) => setValue("clinicalCourseNotes", v)}
-          error={errors.clinicalCourseNotes}
-        />
-      )}
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
           ← Back

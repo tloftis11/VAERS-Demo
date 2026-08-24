@@ -5,11 +5,10 @@
  * a Government AI-use approval gate (CDCH.10) — so this is plain heuristic
  * logic over the report's already-collected characteristics, not a model.
  */
-import type { ReportCharacteristic } from "./branchingRules";
-
 export interface DocumentSuggestionInput {
   submitterType: "public" | "hcp";
-  reportCharacteristic: ReportCharacteristic | null;
+  administrationError: boolean | null;
+  adverseEventOccurred: boolean | null;
   errorType?: string;
   outcomes?: string[];
 }
@@ -33,7 +32,10 @@ export function suggestDocuments(input: DocumentSuggestionInput): DocumentSugges
     reason: "Confirms vaccine, lot number, and administration date.",
   });
 
-  if (input.reportCharacteristic === "error_no_ae") {
+  // Independent booleans (PROV-002/003): a report can have an administration
+  // error, an adverse event, or both, so these suggestion sets are additive
+  // rather than either/or.
+  if (input.administrationError) {
     suggestions.push({
       documentType: "Medication administration record (MAR)",
       reason: "Documents what was actually administered and by whom.",
@@ -48,7 +50,9 @@ export function suggestDocuments(input: DocumentSuggestionInput): DocumentSugges
         reason: "Supports a storage or handling error report.",
       });
     }
-  } else {
+  }
+
+  if (input.adverseEventOccurred) {
     suggestions.push({
       documentType: "Clinical progress notes",
       reason: "Supports the reported clinical course of the adverse event.",

@@ -124,7 +124,8 @@ attachmentsRouter.get("/reports/:reportId/document-suggestions", async (req, res
 
   const suggestions = suggestDocuments({
     submitterType: (report.submitterType as "public" | "hcp" | null) ?? "public",
-    reportCharacteristic: report.reportCharacteristic as "adverse_event" | "error_no_ae" | null,
+    administrationError: report.administrationError,
+    adverseEventOccurred: report.adverseEventOccurred,
     errorType: report.errorDetail?.errorType ?? undefined,
     outcomes: report.adverseEvent?.outcomes ? JSON.parse(report.adverseEvent.outcomes) : [],
   });

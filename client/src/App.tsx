@@ -12,10 +12,11 @@ import { Confirmation } from "./pages/report/Confirmation";
 export function App() {
   const location = useLocation();
   const isWizard = location.pathname.startsWith("/report/") && !location.pathname.endsWith("/confirmation");
+  const isReportFlow = location.pathname.startsWith("/report/");
 
   return (
     <>
-      <NavBar />
+      <NavBar variant={isReportFlow ? "flow" : "marketing"} />
       <main id="main-content">
         <Routes>
           <Route path="/" element={<Landing />} />

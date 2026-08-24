@@ -1,7 +1,7 @@
 import { errorDetailSchema, ERROR_TYPES } from "../../../../shared/src/schemas";
 import type { ErrorDetailData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
-import { TextField, TextAreaField, SelectField } from "../../components/Field";
+import { ConversationalStep, type FieldDescriptor } from "../../components/ConversationalStep";
 
 interface ErrorDetailStepProps {
   initialData: ErrorDetailData | null;
@@ -16,8 +16,26 @@ const EMPTY: ErrorDetailData = {
   correctiveActionTaken: "",
 };
 
+const descriptors: FieldDescriptor[] = [
+  { type: "select", name: "errorType", label: "Type of error", required: true, options: ERROR_TYPES },
+  { type: "textarea", name: "errorDescription", label: "Describe the error", required: true, rows: 4 },
+  {
+    type: "text",
+    name: "errorDiscoveredDate",
+    label: "Date the error was discovered",
+    inputType: "date",
+    required: true,
+  },
+  { type: "textarea", name: "correctiveActionTaken", label: "Corrective action taken (optional)", rows: 3 },
+];
+
 export function ErrorDetailStep({ initialData, onNext, onBack }: ErrorDetailStepProps) {
   const { values, setValue, errors, validate } = useStepForm(errorDetailSchema, initialData ?? EMPTY);
+
+  function formatValue(name: string, value: unknown): string {
+    if (name === "errorType") return ERROR_TYPES.find((o) => o.value === value)?.label ?? "";
+    return value == null ? "" : String(value);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,40 +46,12 @@ export function ErrorDetailStep({ initialData, onNext, onBack }: ErrorDetailStep
   return (
     <form className="step-form" onSubmit={handleSubmit}>
       <h1>Administration error details</h1>
-      <SelectField
-        id="errorType"
-        label="Type of error"
-        required
-        value={values.errorType}
-        onChange={(v) => setValue("errorType", v)}
-        options={ERROR_TYPES}
-        error={errors.errorType}
-      />
-      <TextAreaField
-        id="errorDescription"
-        label="Describe the error"
-        required
-        rows={4}
-        value={values.errorDescription}
-        onChange={(v) => setValue("errorDescription", v)}
-        error={errors.errorDescription}
-      />
-      <TextField
-        id="errorDiscoveredDate"
-        label="Date the error was discovered"
-        type="date"
-        required
-        value={values.errorDiscoveredDate}
-        onChange={(v) => setValue("errorDiscoveredDate", v)}
-        error={errors.errorDiscoveredDate}
-      />
-      <TextAreaField
-        id="correctiveActionTaken"
-        label="Corrective action taken (optional)"
-        rows={3}
-        value={values.correctiveActionTaken}
-        onChange={(v) => setValue("correctiveActionTaken", v)}
-        error={errors.correctiveActionTaken}
+      <ConversationalStep
+        descriptors={descriptors}
+        values={values}
+        setValue={setValue}
+        errors={errors}
+        formatValue={formatValue}
       />
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>

@@ -10,15 +10,16 @@ datasource db {
 }
 
 model Report {
-  id                   String    @id @default(cuid())
-  status               String    @default("draft") // draft | submitted
-  submitterType        String? // public | hcp
-  reportCharacteristic String? // adverse_event | error_no_ae
-  supplementalNotes    String?
-  duplicateFlag        Boolean   @default(false)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  submittedAt          DateTime?
+  id                  String    @id @default(cuid())
+  status              String    @default("draft") // draft | submitted
+  submitterType       String? // public | hcp
+  administrationError Boolean? // HCP-only; null = not yet answered
+  adverseEventOccurred Boolean? // HCP-only; null = not yet answered (public reports are implicitly true)
+  supplementalNotes   String?
+  duplicateFlag       Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  submittedAt         DateTime?
 
   submitter       Submitter?
   patient         Patient?
@@ -47,6 +48,7 @@ model Patient {
   lastName             String?
   dateOfBirth         String?
   sex                 String?
+  state               String? // public-path only (PUB-002): patient's state of residence
   weightKg            Float?
   medicalRecordNumber String?
 }
@@ -71,6 +73,7 @@ model AdverseEvent {
   report               Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   onsetDate            String?
   description          String?
+  symptoms             String? // JSON-encoded string array (PUB-003: quick-select symptom chips)
   outcomes             String? // JSON-encoded string array (SQLite has no native array type)
   hospitalizationDates String?
   treatmentGiven       String?
