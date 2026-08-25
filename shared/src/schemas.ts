@@ -144,7 +144,7 @@ export function patientSchema(submitterType: SubmitterType) {
     ),
     patientSex: selectEnum(["female", "male", "unknown"], "Select the patient's sex"),
     patientState: optionalString(),
-    patientWeightKg: z
+    patientWeightLbs: z
       .union([z.coerce.number().positive(), z.literal("")])
       .optional(),
   });

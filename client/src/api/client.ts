@@ -16,7 +16,7 @@ export interface PatientData {
   patientDateOfBirth: string;
   patientSex: string;
   patientState: string;
-  patientWeightKg: number | string;
+  patientWeightLbs: number | string;
   medicalRecordNumber: string;
 }
 

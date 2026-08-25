@@ -49,7 +49,7 @@ model Patient {
   dateOfBirth         String?
   sex                 String?
   state               String? // public-path only (PUB-002): patient's state of residence
-  weightKg            Float?
+  weightLbs           Float?
   medicalRecordNumber String?
 }
 

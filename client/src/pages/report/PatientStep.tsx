@@ -17,7 +17,7 @@ const EMPTY: PatientData = {
   patientDateOfBirth: "",
   patientSex: "",
   patientState: "",
-  patientWeightKg: "",
+  patientWeightLbs: "",
   medicalRecordNumber: "",
 };
 
@@ -41,8 +41,8 @@ export function PatientStep({ submitterType, initialData, onNext, onBack }: Pati
     },
     {
       type: "text",
-      name: "patientWeightKg",
-      label: "Weight in kg (optional)",
+      name: "patientWeightLbs",
+      label: "Weight in lbs (optional)",
       inputType: "number",
       hint: "Especially useful for pediatric reports.",
     },

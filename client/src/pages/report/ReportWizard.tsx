@@ -15,7 +15,12 @@ import {
   type ClientReport,
   type ValidationFinding,
 } from "../../api/client";
-import { branchingStateFromReport, firstIncompleteStep } from "../../reportProgress";
+import {
+  applyOptimisticUpdate,
+  branchingStateFromReport,
+  firstIncompleteStep,
+  mergeServerUpdate,
+} from "../../reportProgress";
 import { StepIndicator } from "../../components/StepIndicator";
 import { FaqWidget } from "../../components/FaqWidget";
 import { SubmitterTypeStep } from "./SubmitterTypeStep";
@@ -34,6 +39,7 @@ export function ReportWizard() {
   const navigate = useNavigate();
   const [report, setReport] = useState<ClientReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState(false);
 
   useEffect(() => {
     if (!reportId) return;
@@ -72,11 +78,24 @@ export function ReportWizard() {
     if (target) navigate(`/report/${reportId}/${target}`);
   }
 
+  // Navigates on the client-validated data immediately instead of waiting on
+  // the PATCH round-trip first — the round-trip still happens, just in the
+  // background, reconciling `report` when it resolves. Every field the
+  // branching/next-step logic reads (submitterType, administrationError,
+  // adverseEventOccurred) is already known here, so there's nothing the
+  // server response could tell us that changes where we navigate to.
   async function handleNext(data: Record<string, unknown>) {
-    const updated = await patchReport(reportId!, currentStep, data);
-    setReport(updated);
-    const updatedState = branchingStateFromReport(updated);
-    goTo(nextStep(currentStep, updatedState));
+    const optimisticReport = applyOptimisticUpdate(report!, currentStep, data);
+    setReport(optimisticReport);
+    setSaveError(false);
+    goTo(nextStep(currentStep, branchingStateFromReport(optimisticReport)));
+
+    patchReport(reportId!, currentStep, data)
+      .then((server) => setReport((prev) => (prev ? mergeServerUpdate(prev, currentStep, server) : server)))
+      .catch((err) => {
+        console.error("Failed to save step", currentStep, err);
+        setSaveError(true);
+      });
   }
 
   async function handleSelectAndAdvance(data: Record<string, unknown>) {
@@ -207,6 +226,12 @@ export function ReportWizard() {
   return (
     <div className="page page--wizard">
       <StepIndicator steps={steps} currentStep={currentStep} />
+      {saveError && (
+        <p role="alert" className="notice notice--warning">
+          We had trouble saving your last answer — please check your connection. Your progress so far
+          will be double-checked before you submit.
+        </p>
+      )}
       {stepContent}
       <FaqWidget step={currentStep} />
     </div>

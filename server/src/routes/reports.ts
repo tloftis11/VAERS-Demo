@@ -62,7 +62,7 @@ async function serializeReport(reportId: string) {
           patientDateOfBirth: report.patient.dateOfBirth ?? "",
           patientSex: report.patient.sex ?? "",
           patientState: report.patient.state ?? "",
-          patientWeightKg: report.patient.weightKg ?? "",
+          patientWeightLbs: report.patient.weightLbs ?? "",
           medicalRecordNumber: report.patient.medicalRecordNumber ?? "",
         }
       : null,
@@ -179,7 +179,7 @@ reportsRouter.patch("/:id", async (req, res) => {
         dateOfBirth: validated.patientDateOfBirth,
         sex: validated.patientSex,
         state: validated.patientState || null,
-        weightKg: validated.patientWeightKg || null,
+        weightLbs: validated.patientWeightLbs || null,
         medicalRecordNumber: validated.medicalRecordNumber || null,
       };
       await prisma.patient.upsert({
@@ -317,7 +317,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             patientDateOfBirth: report.patient.dateOfBirth ?? "",
             patientSex: report.patient.sex ?? "",
             patientState: report.patient.state ?? "",
-            patientWeightKg: report.patient.weightKg ?? "",
+            patientWeightLbs: report.patient.weightLbs ?? "",
             medicalRecordNumber: report.patient.medicalRecordNumber ?? "",
           }
         : null;
