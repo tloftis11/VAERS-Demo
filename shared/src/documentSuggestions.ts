@@ -59,7 +59,11 @@ export function suggestDocuments(input: DocumentSuggestionInput): DocumentSugges
     });
 
     const outcomes = input.outcomes ?? [];
-    if (outcomes.includes("hospitalized") || outcomes.includes("life_threatening")) {
+    if (
+      outcomes.includes("hospitalization") ||
+      outcomes.includes("hospitalization_prolonged") ||
+      outcomes.includes("life_threatening")
+    ) {
       suggestions.push({
         documentType: "Hospital discharge summary",
         reason: "Selected outcome indicates hospitalization.",
