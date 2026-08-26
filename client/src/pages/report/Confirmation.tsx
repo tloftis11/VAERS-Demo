@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { getReport, postSubmissionSurvey, type ClientReport } from "../../api/client";
 import { SurveyForm } from "../../components/SurveyForm";
+import { CheckBadge } from "../../components/illustrations";
 
 const DRAFT_KEY = "vaers_draft_report_id";
 
@@ -19,15 +20,19 @@ export function Confirmation() {
 
   return (
     <div className="page page--prose">
-      <h1>Report submitted</h1>
-      <p>Thank you — your report has been received and is now part of vaccine-safety monitoring.</p>
+      <CheckBadge className="confirmation__badge" />
+      <h1 className="confirmation__heading">Thank you for reporting</h1>
+      <p className="confirmation__lead">
+        Your report has been received and is now part of the national effort to keep vaccines
+        safe. Reports like yours are what make this system work.
+      </p>
       {report?.duplicateFlag && (
         <p className="notice notice--info">
           This report looks similar to one already on file. That's okay — it's been flagged for
           review and no action is needed on your part.
         </p>
       )}
-      <p>
+      <p className="confirmation__reference">
         Reference number: <strong>{reportId}</strong>
       </p>
       <p>
@@ -36,8 +41,9 @@ export function Confirmation() {
         won't receive an individual response otherwise.
       </p>
       <p>
-        Need to add more later? You can still attach medical records or other documents to this
-        report using the existing follow-up information tool — you don't need to submit a new report.
+        Need to add more later? You can{" "}
+        <Link to="/follow-up">attach medical records or other documents to this report</Link> — you
+        don't need to submit a new one.
       </p>
 
       {reportId && (

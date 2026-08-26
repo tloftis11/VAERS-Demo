@@ -255,6 +255,14 @@ export function postSubmissionSurvey(
   }).then((r) => asJson(r));
 }
 
+export function askFaqAssistant(question: string, step?: string): Promise<{ answer: string }> {
+  return fetch(`${API_ROOT}/assistant/faq`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, step }),
+  }).then((r) => asJson(r));
+}
+
 export interface ConsistencyIssue {
   field: "description" | "outcomes" | "recoveryStatus";
   issue: string;

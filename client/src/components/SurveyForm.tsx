@@ -5,6 +5,8 @@ interface SurveyFormProps {
   prompt: string;
   onSubmit: (rating: number, comment?: string) => Promise<void>;
   onDismiss?: () => void;
+  /** Suppress the built-in title/dismiss header — for use inside a Modal that already provides one. */
+  hideHeader?: boolean;
 }
 
 /**
@@ -13,7 +15,7 @@ interface SurveyFormProps {
  * single question plus a comment so it doesn't work against the
  * ≤10-minute median submission-time target.
  */
-export function SurveyForm({ title, prompt, onSubmit, onDismiss }: SurveyFormProps) {
+export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: SurveyFormProps) {
   const [rating, setRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -41,15 +43,17 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss }: SurveyFormPro
 
   return (
     <form className="survey" onSubmit={handleSubmit} aria-label={title}>
-      <div className="survey__header">
-        <h2 className="survey__title">{title}</h2>
-        {onDismiss && (
-          <button type="button" className="survey__dismiss" onClick={onDismiss} aria-label="Dismiss survey">
-            ×
-          </button>
-        )}
-      </div>
-      <fieldset>
+      {!hideHeader && (
+        <div className="survey__header">
+          <h2 className="survey__title">{title}</h2>
+          {onDismiss && (
+            <button type="button" className="survey__dismiss" onClick={onDismiss} aria-label="Dismiss survey">
+              ×
+            </button>
+          )}
+        </div>
+      )}
+      <fieldset className="survey__fieldset">
         <legend>{prompt}</legend>
         <div className="survey__rating" role="radiogroup" aria-label="Rating, 1 to 5">
           {[1, 2, 3, 4, 5].map((value) => (
@@ -58,12 +62,17 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss }: SurveyFormPro
                 type="radio"
                 name="rating"
                 value={value}
+                aria-label={String(value)}
                 checked={rating === value}
                 onChange={() => setRating(value)}
               />
-              {value}
+              <span aria-hidden="true">{value}</span>
             </label>
           ))}
+        </div>
+        <div className="survey__rating-labels" aria-hidden="true">
+          <span>Not great</span>
+          <span>Excellent</span>
         </div>
       </fieldset>
       <label htmlFor="survey-comment" className="field__label">

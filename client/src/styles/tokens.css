@@ -1,32 +1,33 @@
 :root {
   --color-bg: #ffffff;
-  --color-surface: #f5f7fa;
-  --color-border: #e2e5ea;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
-
-  /* Brand blues (from the reference prototype): --color-primary is the
-     brighter accent used for the wordmark/links/hero highlight;
-     --color-primary-deep is the solid fill used on buttons and cards. */
-  --color-primary: #1d4ed8;
-  --color-primary-deep: #1e3a8a;
+  --color-surface: #f4f6fb;
+  --color-border: #d7dceb;
+  --color-text: #17203a;
+  --color-text-muted: #5b6785;
+  --color-primary: #1746a2;
+  --color-primary-dark: #0d2c6b;
   --color-primary-contrast: #ffffff;
-  --color-focus-ring: #1d4ed8;
-
-  /* Dark navy info panels (e.g. "How Your Report Is Used"). */
-  --color-navy: #0f1e3d;
-  --color-navy-contrast: #ffffff;
-
-  /* Answered-question chip fill in the conversational form pattern. */
-  --color-chip: #7c93c9;
-  --color-chip-contrast: #ffffff;
-
+  --color-recap: #7c93c4;
+  --color-recap-contrast: #ffffff;
+  --color-accent: #b7cf3a;
+  --color-accent-dark: #7f9420;
+  /* Warm accent — reserved for encouragement/success moments (milestone
+     banner, confirmation) so navy carries structure/trust and this carries
+     warmth, rather than one cool palette doing both jobs. */
+  --color-warm: #e08a3c;
+  --color-warm-dark: #b5651d;
+  --color-warm-bg: #fdf1e4;
   --color-success-bg: #e6f4ea;
   --color-success-text: #1e4620;
-  --color-warning-bg: #fef6e7;
+  /* Softened from a pure alarm-red so a routine "this field is required"
+     doesn't read with the same intensity as something actually serious. */
+  --color-error: #ad3d2f;
+  --color-error-bg: #fbe9e4;
+  /* Distinct from --color-warm (reserved for encouragement/success) — this
+     is for transient, recoverable problems like a background save failure. */
+  --color-warning-bg: #fdf1d9;
   --color-warning-text: #7a5200;
-  --color-error: #b3261e;
-  --color-error-bg: #fdecea;
+  --color-focus-ring: #1746a2;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -36,35 +37,39 @@
   --space-6: 2rem;
   --space-8: 3rem;
 
-  --radius: 10px;
-  --radius-lg: 20px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
   --radius-pill: 999px;
-
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Poppins", var(--font-sans);
+  --radius: var(--radius-sm);
+  --shadow-panel: 0 12px 32px rgba(23, 32, 58, 0.14);
+  --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --max-content-width: 880px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #14161a;
-    --color-surface: #1e2126;
-    --color-border: #3a3f47;
-    --color-text: #eef0f2;
-    --color-text-muted: #b0b6bd;
-    --color-primary: #6d9bff;
-    --color-primary-deep: #355fce;
-    --color-primary-contrast: #08131f;
-    --color-focus-ring: #6d9bff;
-    --color-navy: #0a1730;
-    --color-navy-contrast: #eef0f2;
-    --color-chip: #46538a;
-    --color-chip-contrast: #eef0f2;
+    --color-bg: #12172a;
+    --color-surface: #1a2140;
+    --color-border: #333d63;
+    --color-text: #edf0fb;
+    --color-text-muted: #a9b3d6;
+    --color-primary: #6f97e8;
+    --color-primary-dark: #9db8ef;
+    --color-primary-contrast: #0a1128;
+    --color-recap: #4d5c8f;
+    --color-recap-contrast: #f2f4fc;
+    --color-accent: #cfe25c;
+    --color-accent-dark: #9fb534;
+    --color-warm: #f0a565;
+    --color-warm-dark: #d98a3f;
+    --color-warm-bg: #3a2a18;
     --color-success-bg: #123321;
     --color-success-text: #a6e6b0;
+    --color-error: #e8877a;
+    --color-error-bg: #3a1f1a;
     --color-warning-bg: #3a2f10;
     --color-warning-text: #f0cf7a;
-    --color-error: #ff8a80;
-    --color-error-bg: #3a1a18;
+    --color-focus-ring: #6f97e8;
+    --shadow-panel: 0 12px 32px rgba(0, 0, 0, 0.45);
   }
 }
