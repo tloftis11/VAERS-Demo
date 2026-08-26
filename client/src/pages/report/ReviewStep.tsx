@@ -22,6 +22,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
   const [findings, setFindings] = useState<ValidationFinding[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [certified, setCertified] = useState(false);
   const alertRef = useRef<HTMLDivElement>(null);
   const isHcp = report.submitterType === "hcp";
 
@@ -149,11 +150,21 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
         {report.documents.supplementalNotes && <p>{report.documents.supplementalNotes}</p>}
       </div>
 
+      <label className="review-certify">
+        <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} />
+        <span>I certify that the information provided is accurate to the best of my knowledge.</span>
+      </label>
+
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
           ← Back
         </button>
-        <button type="button" className="button button--primary" onClick={handleSubmit} disabled={submitting}>
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={handleSubmit}
+          disabled={submitting || !certified}
+        >
           {submitting ? "Submitting…" : "Submit report"}
         </button>
       </div>
