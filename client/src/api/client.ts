@@ -15,9 +15,16 @@ export interface PatientData {
   patientLastName: string;
   patientDateOfBirth: string;
   patientSex: string;
+  ageYears: number | string;
+  ageMonths: number | string;
   patientState: string;
-  patientWeightLbs: number | string;
-  medicalRecordNumber: string;
+  pregnant: string;
+  medicationsAtVaccination: string;
+  allergies: string;
+  recentIllnesses: string;
+  chronicConditions: string;
+  patientRace: string[];
+  patientEthnicity: string;
 }
 
 export interface VaccineData {
@@ -26,19 +33,31 @@ export interface VaccineData {
   lotNumber: string;
   doseNumber: string;
   administrationDate: string;
+  administrationTime: string;
   route: string;
   bodySite: string;
   administeringFacility: string;
+  facilityType: string;
+  otherVaccinesRecent: string;
 }
 
 export interface AdverseEventData {
   onsetDate: string;
+  onsetTime: string;
   description: string;
   symptoms: string[];
+  labResults: string;
+  recoveryStatus: string;
   outcomes: string[];
-  hospitalizationDates: string;
+  hospitalizationDays: number | string;
+  hospitalName: string;
+  hospitalCity: string;
+  hospitalState: string;
+  dateOfDeath: string;
   treatmentGiven: string;
   clinicalCourseNotes: string;
+  previousAdverseEvent: string;
+  previousAdverseEventDetails: string;
 }
 
 export interface ErrorDetailData {
@@ -54,6 +73,13 @@ export interface AttachmentMeta {
   mimeType: string;
   sizeBytes: number;
   uploadedAt: string;
+  isFollowUp: boolean;
+}
+
+export interface FollowUpNote {
+  id: string;
+  note: string;
+  createdAt: string;
 }
 
 export interface ClientReport {
@@ -71,6 +97,7 @@ export interface ClientReport {
   errorDetail: ErrorDetailData | null;
   documents: { supplementalNotes: string };
   attachments: AttachmentMeta[];
+  followUpNotes: FollowUpNote[];
 }
 
 export interface FieldError {
@@ -159,6 +186,23 @@ export function listAttachments(reportId: string): Promise<AttachmentMeta[]> {
   return fetch(`${API_ROOT}/reports/${reportId}/attachments`).then((r) => asJson(r));
 }
 
+export function uploadFollowUpAttachment(reportId: string, file: File): Promise<AttachmentMeta> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return fetch(`${API_ROOT}/reports/${reportId}/follow-up-attachments`, {
+    method: "POST",
+    body: formData,
+  }).then((r) => asJson(r));
+}
+
+export function postFollowUpNote(reportId: string, note: string): Promise<ClientReport> {
+  return fetch(`${API_ROOT}/reports/${reportId}/follow-up-notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  }).then((r) => asJson(r));
+}
+
 export function deleteAttachment(attachmentId: string): Promise<void> {
   return fetch(`${API_ROOT}/attachments/${attachmentId}`, { method: "DELETE" }).then((r) => {
     if (!r.ok) throw new Error("Failed to delete attachment");
@@ -211,8 +255,16 @@ export function postSubmissionSurvey(
   }).then((r) => asJson(r));
 }
 
+export function askFaqAssistant(question: string, step?: string): Promise<{ answer: string }> {
+  return fetch(`${API_ROOT}/assistant/faq`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, step }),
+  }).then((r) => asJson(r));
+}
+
 export interface ConsistencyIssue {
-  field: "description" | "outcomes" | "hospitalizationDates";
+  field: "description" | "outcomes" | "recoveryStatus";
   issue: string;
   suggestion: string;
 }
@@ -220,7 +272,7 @@ export interface ConsistencyIssue {
 export function checkDescriptionConsistency(input: {
   description: string;
   outcomes: string[];
-  hospitalizationDates?: string;
+  recoveryStatus?: string;
   submitterType: "public" | "hcp";
 }): Promise<{ issues: ConsistencyIssue[] }> {
   return fetch(`${API_ROOT}/assistant/check-description`, {

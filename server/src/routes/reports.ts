@@ -35,6 +35,7 @@ async function serializeReport(reportId: string) {
       adverseEvent: true,
       errorDetail: true,
       attachments: true,
+      followUpNotes: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!report) return null;
@@ -61,9 +62,16 @@ async function serializeReport(reportId: string) {
           patientLastName: report.patient.lastName ?? "",
           patientDateOfBirth: report.patient.dateOfBirth ?? "",
           patientSex: report.patient.sex ?? "",
+          ageYears: report.patient.ageYears ?? "",
+          ageMonths: report.patient.ageMonths ?? "",
           patientState: report.patient.state ?? "",
-          patientWeightLbs: report.patient.weightLbs ?? "",
-          medicalRecordNumber: report.patient.medicalRecordNumber ?? "",
+          pregnant: report.patient.pregnant ?? "",
+          medicationsAtVaccination: report.patient.medicationsAtVaccination ?? "",
+          allergies: report.patient.allergies ?? "",
+          recentIllnesses: report.patient.recentIllnesses ?? "",
+          chronicConditions: report.patient.chronicConditions ?? "",
+          patientRace: report.patient.race ? (JSON.parse(report.patient.race) as string[]) : [],
+          patientEthnicity: report.patient.ethnicity ?? "",
         }
       : null,
     vaccine: report.vaccine
@@ -73,24 +81,36 @@ async function serializeReport(reportId: string) {
           lotNumber: report.vaccine.lotNumber ?? "",
           doseNumber: report.vaccine.doseNumber ?? "",
           administrationDate: report.vaccine.administrationDate ?? "",
+          administrationTime: report.vaccine.administrationTime ?? "",
           route: report.vaccine.route ?? "",
           bodySite: report.vaccine.bodySite ?? "",
           administeringFacility: report.vaccine.administeringFacility ?? "",
+          facilityType: report.vaccine.facilityType ?? "",
+          otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
         }
       : null,
     adverseEvent: report.adverseEvent
       ? {
           onsetDate: report.adverseEvent.onsetDate ?? "",
+          onsetTime: report.adverseEvent.onsetTime ?? "",
           description: report.adverseEvent.description ?? "",
           symptoms: report.adverseEvent.symptoms
             ? (JSON.parse(report.adverseEvent.symptoms) as string[])
             : [],
+          labResults: report.adverseEvent.labResults ?? "",
+          recoveryStatus: report.adverseEvent.recoveryStatus ?? "",
           outcomes: report.adverseEvent.outcomes
             ? (JSON.parse(report.adverseEvent.outcomes) as string[])
             : [],
-          hospitalizationDates: report.adverseEvent.hospitalizationDates ?? "",
+          hospitalizationDays: report.adverseEvent.hospitalizationDays ?? "",
+          hospitalName: report.adverseEvent.hospitalName ?? "",
+          hospitalCity: report.adverseEvent.hospitalCity ?? "",
+          hospitalState: report.adverseEvent.hospitalState ?? "",
+          dateOfDeath: report.adverseEvent.dateOfDeath ?? "",
           treatmentGiven: report.adverseEvent.treatmentGiven ?? "",
           clinicalCourseNotes: report.adverseEvent.clinicalCourseNotes ?? "",
+          previousAdverseEvent: report.adverseEvent.previousAdverseEvent ?? "",
+          previousAdverseEventDetails: report.adverseEvent.previousAdverseEventDetails ?? "",
         }
       : null,
     errorDetail: report.errorDetail
@@ -110,6 +130,12 @@ async function serializeReport(reportId: string) {
       mimeType: a.mimeType,
       sizeBytes: a.sizeBytes,
       uploadedAt: a.uploadedAt,
+      isFollowUp: a.isFollowUp,
+    })),
+    followUpNotes: report.followUpNotes.map((n) => ({
+      id: n.id,
+      note: n.note,
+      createdAt: n.createdAt,
     })),
   };
 }
@@ -165,27 +191,55 @@ reportsRouter.patch("/:id", async (req, res) => {
         data: { adverseEventOccurred: validated.adverseEventOccurred },
       });
       break;
-    case "about-you":
+    case "about-you": {
       await prisma.submitter.upsert({
         where: { reportId: id },
         create: { reportId: id, ...validated },
         update: { ...validated },
       });
+      // Reporting for "myself" means the contact IS the patient — carry the
+      // name over so it isn't re-typed a step later. Only fills a blank
+      // patient name (first-time only), so it never clobbers a manual edit
+      // made after this point.
+      if (validated.relationship === "self") {
+        const existingPatient = await prisma.patient.findUnique({ where: { reportId: id } });
+        if (!existingPatient?.firstName) {
+          const fullName = String(validated.contactName ?? "").trim();
+          const spaceIdx = fullName.indexOf(" ");
+          const firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
+          const lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1).trim();
+          if (firstName) {
+            await prisma.patient.upsert({
+              where: { reportId: id },
+              create: { reportId: id, firstName, lastName },
+              update: { firstName, lastName },
+            });
+          }
+        }
+      }
       break;
+    }
     case "patient": {
-      const patientFields = {
+      const patientData = {
         firstName: validated.patientFirstName,
         lastName: validated.patientLastName,
         dateOfBirth: validated.patientDateOfBirth,
         sex: validated.patientSex,
+        ageYears: validated.ageYears ?? null,
+        ageMonths: validated.ageMonths === "" ? null : validated.ageMonths,
         state: validated.patientState || null,
-        weightLbs: validated.patientWeightLbs || null,
-        medicalRecordNumber: validated.medicalRecordNumber || null,
+        pregnant: validated.pregnant || null,
+        medicationsAtVaccination: validated.medicationsAtVaccination || null,
+        allergies: validated.allergies || null,
+        recentIllnesses: validated.recentIllnesses || null,
+        chronicConditions: validated.chronicConditions || null,
+        race: JSON.stringify(validated.patientRace ?? []),
+        ethnicity: validated.patientEthnicity || null,
       };
       await prisma.patient.upsert({
         where: { reportId: id },
-        create: { reportId: id, ...patientFields },
-        update: patientFields,
+        create: { reportId: id, ...patientData },
+        update: patientData,
       });
       break;
     }
@@ -199,16 +253,29 @@ reportsRouter.patch("/:id", async (req, res) => {
     case "adverse-event": {
       // administrationError and adverseEventOccurred are independent
       // (PROV-002/003), so a report can have both an ErrorDetail and an
-      // AdverseEvent row — no longer deletes the other table.
-      const adverseEventFields = {
-        ...validated,
+      // AdverseEvent row — this never deletes the other table.
+      const adverseEventData = {
+        onsetDate: validated.onsetDate,
+        onsetTime: validated.onsetTime || null,
+        description: validated.description,
         symptoms: JSON.stringify(validated.symptoms ?? []),
+        labResults: validated.labResults || null,
+        recoveryStatus: validated.recoveryStatus || null,
         outcomes: JSON.stringify(validated.outcomes ?? []),
+        hospitalizationDays: validated.hospitalizationDays === "" ? null : validated.hospitalizationDays,
+        hospitalName: validated.hospitalName || null,
+        hospitalCity: validated.hospitalCity || null,
+        hospitalState: validated.hospitalState || null,
+        dateOfDeath: validated.dateOfDeath || null,
+        treatmentGiven: validated.treatmentGiven || null,
+        clinicalCourseNotes: validated.clinicalCourseNotes || null,
+        previousAdverseEvent: validated.previousAdverseEvent || null,
+        previousAdverseEventDetails: validated.previousAdverseEventDetails || null,
       };
       await prisma.adverseEvent.upsert({
         where: { reportId: id },
-        create: { reportId: id, ...adverseEventFields },
-        update: adverseEventFields,
+        create: { reportId: id, ...adverseEventData },
+        update: adverseEventData,
       });
       break;
     }
@@ -298,6 +365,21 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   res.json({ id, status: "submitted", duplicateFlag });
 });
 
+reportsRouter.post("/:id/follow-up-notes", async (req, res) => {
+  const { id } = req.params;
+  const note = String((req.body as { note?: unknown })?.note ?? "").trim();
+  if (!note) return res.status(400).json({ error: "Note text is required" });
+
+  const report = await prisma.report.findUnique({ where: { id } });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  if (report.status !== "submitted") {
+    return res.status(409).json({ error: "Follow-up notes can only be added to a submitted report" });
+  }
+
+  await prisma.followUpNote.create({ data: { reportId: id, note } });
+  res.status(201).json(await serializeReport(id));
+});
+
 function sliceForStep(step: StepId, report: any): Record<string, unknown> | null {
   switch (step) {
     case "about-you":
@@ -316,9 +398,16 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             patientLastName: report.patient.lastName ?? "",
             patientDateOfBirth: report.patient.dateOfBirth ?? "",
             patientSex: report.patient.sex ?? "",
+            ageYears: report.patient.ageYears ?? "",
+            ageMonths: report.patient.ageMonths ?? "",
             patientState: report.patient.state ?? "",
-            patientWeightLbs: report.patient.weightLbs ?? "",
-            medicalRecordNumber: report.patient.medicalRecordNumber ?? "",
+            pregnant: report.patient.pregnant ?? "",
+            medicationsAtVaccination: report.patient.medicationsAtVaccination ?? "",
+            allergies: report.patient.allergies ?? "",
+            recentIllnesses: report.patient.recentIllnesses ?? "",
+            chronicConditions: report.patient.chronicConditions ?? "",
+            patientRace: report.patient.race ? JSON.parse(report.patient.race) : [],
+            patientEthnicity: report.patient.ethnicity ?? "",
           }
         : null;
     case "vaccine":
@@ -329,21 +418,33 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             lotNumber: report.vaccine.lotNumber ?? "",
             doseNumber: report.vaccine.doseNumber ?? "",
             administrationDate: report.vaccine.administrationDate ?? "",
+            administrationTime: report.vaccine.administrationTime ?? "",
             route: report.vaccine.route ?? "",
             bodySite: report.vaccine.bodySite ?? "",
             administeringFacility: report.vaccine.administeringFacility ?? "",
+            facilityType: report.vaccine.facilityType ?? "",
+            otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
           }
         : null;
     case "adverse-event":
       return report.adverseEvent
         ? {
             onsetDate: report.adverseEvent.onsetDate ?? "",
+            onsetTime: report.adverseEvent.onsetTime ?? "",
             description: report.adverseEvent.description ?? "",
             symptoms: report.adverseEvent.symptoms ? JSON.parse(report.adverseEvent.symptoms) : [],
+            labResults: report.adverseEvent.labResults ?? "",
+            recoveryStatus: report.adverseEvent.recoveryStatus ?? "",
             outcomes: report.adverseEvent.outcomes ? JSON.parse(report.adverseEvent.outcomes) : [],
-            hospitalizationDates: report.adverseEvent.hospitalizationDates ?? "",
+            hospitalizationDays: report.adverseEvent.hospitalizationDays ?? "",
+            hospitalName: report.adverseEvent.hospitalName ?? "",
+            hospitalCity: report.adverseEvent.hospitalCity ?? "",
+            hospitalState: report.adverseEvent.hospitalState ?? "",
+            dateOfDeath: report.adverseEvent.dateOfDeath ?? "",
             treatmentGiven: report.adverseEvent.treatmentGiven ?? "",
             clinicalCourseNotes: report.adverseEvent.clinicalCourseNotes ?? "",
+            previousAdverseEvent: report.adverseEvent.previousAdverseEvent ?? "",
+            previousAdverseEventDetails: report.adverseEvent.previousAdverseEventDetails ?? "",
           }
         : null;
     case "error-detail":

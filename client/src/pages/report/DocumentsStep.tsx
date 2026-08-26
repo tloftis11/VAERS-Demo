@@ -13,6 +13,8 @@ import {
 } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { TextAreaField } from "../../components/Field";
+import { FieldIcon } from "../../components/illustrations";
+import { Dropzone } from "../../components/Dropzone";
 
 interface DocumentsStepProps {
   reportId: string;
@@ -22,6 +24,8 @@ interface DocumentsStepProps {
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
 }
+
+const ACCEPTED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".docx"];
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -41,15 +45,13 @@ export function DocumentsStep({
   });
   const [attachments, setAttachments] = useState<AttachmentMeta[]>(initialAttachments);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [replacingId, setReplacingId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiDocumentSuggestion[]>([]);
   const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
-  const uploading = uploadProgress !== null;
 
   useEffect(() => {
     if (submitterType === "hcp") {
@@ -62,30 +64,23 @@ export function DocumentsStep({
     }
   }, [reportId, submitterType]);
 
-  async function uploadFile(file: File) {
-    setUploadProgress(0);
-    setUploadError(null);
-    try {
-      const meta = await uploadAttachment(reportId, file, setUploadProgress);
-      setAttachments((prev) => [...prev, meta]);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploadProgress(null);
+  async function handleFiles(accepted: File[], rejectedCount: number) {
+    setUploadError(rejectedCount > 0 ? "Some files were skipped — only PDF, JPEG, PNG, or Word documents are accepted." : null);
+    if (accepted.length === 0) return;
+
+    setUploadingCount((n) => n + accepted.length);
+    for (const file of accepted) {
+      setUploadProgress(0);
+      try {
+        const meta = await uploadAttachment(reportId, file, setUploadProgress);
+        setAttachments((prev) => [...prev, meta]);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed");
+      } finally {
+        setUploadingCount((n) => n - 1);
+        setUploadProgress(null);
+      }
     }
-  }
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) await uploadFile(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    setDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) void uploadFile(file);
   }
 
   async function handleDelete(id: string) {
@@ -167,60 +162,42 @@ export function DocumentsStep({
         </div>
       )}
 
-      <div className="field">
-        <label htmlFor="file-upload" className="field__label">
-          Add a document
-        </label>
-        <div
-          className={`dropzone${dragActive ? " dropzone--active" : ""}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragActive(true);
-          }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={handleDrop}
-        >
-          <p>Drag and drop a file here, or</p>
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            Choose a file
-          </button>
-          <input
-            id="file-upload"
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.docx"
-            onChange={handleFileChange}
-            disabled={uploading}
-            hidden
-          />
-        </div>
-        <input ref={replaceInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={handleReplaceFileChange} hidden />
-        {uploadProgress !== null && (
-          <div className="dropzone__progress" role="status" aria-label="Uploading">
-            <div className="dropzone__progress-bar">
-              <div className="dropzone__progress-fill" style={{ width: `${uploadProgress}%` }} />
-            </div>
-            <span>{uploadProgress}%</span>
+      <Dropzone acceptedExtensions={ACCEPTED_EXTENSIONS} onFiles={handleFiles} />
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept={ACCEPTED_EXTENSIONS.join(",")}
+        onChange={handleReplaceFileChange}
+        hidden
+      />
+      {uploadingCount > 0 && (
+        <p role="status" className="dropzone__status">
+          Uploading {uploadingCount} file{uploadingCount === 1 ? "" : "s"}…
+        </p>
+      )}
+      {uploadProgress !== null && (
+        <div className="dropzone__progress" role="status" aria-label="Uploading">
+          <div className="dropzone__progress-bar">
+            <div className="dropzone__progress-fill" style={{ width: `${uploadProgress}%` }} />
           </div>
-        )}
-        {uploadError && (
-          <p role="alert" className="field__error">
-            {uploadError}
-          </p>
-        )}
-      </div>
+          <span>{uploadProgress}%</span>
+        </div>
+      )}
+      {uploadError && (
+        <p role="alert" className="field__error">
+          {uploadError}
+        </p>
+      )}
 
       {attachments.length > 0 && (
         <ul className="attachment-list">
           {attachments.map((a) => (
             <li key={a.id} className="attachment-list__item">
-              <span>
-                {a.originalFilename} ({formatSize(a.sizeBytes)})
+              <span className="attachment-list__info">
+                <FieldIcon name="document" size={18} className="attachment-list__icon" />
+                <span>
+                  {a.originalFilename} ({formatSize(a.sizeBytes)})
+                </span>
               </span>
               <span className="attachment-list__actions">
                 <button
@@ -234,7 +211,7 @@ export function DocumentsStep({
                   type="button"
                   className="button button--text"
                   onClick={() => handleReplaceClick(a.id)}
-                  disabled={uploading}
+                  disabled={uploadProgress !== null}
                 >
                   Replace
                 </button>

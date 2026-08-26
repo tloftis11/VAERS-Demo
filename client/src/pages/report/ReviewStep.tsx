@@ -3,6 +3,12 @@ import { STEP_LABELS, type StepId } from "../../../../shared/src/branchingRules"
 import { checkCrossFieldRules, type ValidationFinding } from "../../../../shared/src/validationRules";
 import { missingRequiredSteps } from "../../reportProgress";
 import type { ClientReport } from "../../api/client";
+import { ReportSummarySection } from "../../components/ReportSummary";
+import { aboutYouFieldSpecs } from "./AboutYouStep";
+import { PATIENT_FIELD_SPECS } from "./PatientStep";
+import { vaccineFieldSpecs } from "./VaccineStep";
+import { adverseEventFieldSpecs } from "./AdverseEventStep";
+import { ERROR_DETAIL_FIELD_SPECS } from "./ErrorDetailStep";
 
 interface ReviewStepProps {
   report: ClientReport;
@@ -11,41 +17,14 @@ interface ReviewStepProps {
   onGoToStep: (step: StepId) => void;
 }
 
-function SummarySection({ title, data }: { title: string; data: object | null }) {
-  if (!data) return null;
-  const record = data as Record<string, unknown>;
-  const entries = Object.entries(record).filter(([, v]) => v !== "" && v !== null && !Array.isArray(v));
-  const arrayEntries = Object.entries(record).filter(
-    ([, v]) => Array.isArray(v) && (v as unknown[]).length > 0
-  );
-  if (entries.length === 0 && arrayEntries.length === 0) return null;
-  return (
-    <div className="review-section">
-      <h2>{title}</h2>
-      <dl>
-        {entries.map(([key, value]) => (
-          <div key={key} className="review-section__row">
-            <dt>{key}</dt>
-            <dd>{String(value)}</dd>
-          </div>
-        ))}
-        {arrayEntries.map(([key, value]) => (
-          <div key={key} className="review-section__row">
-            <dt>{key}</dt>
-            <dd>{(value as string[]).join(", ")}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
 export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepProps) {
   const [incompleteSteps, setIncompleteSteps] = useState<StepId[]>([]);
   const [findings, setFindings] = useState<ValidationFinding[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [certified, setCertified] = useState(false);
   const alertRef = useRef<HTMLDivElement>(null);
+  const isHcp = report.submitterType === "hcp";
 
   // VAL-001/003: computed on every render so the checklist below is
   // proactive — it reflects what a submit attempt *would* find, before the
@@ -135,11 +114,27 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
         </p>
       )}
 
-      <SummarySection title="About you" data={report.aboutYou} />
-      <SummarySection title="About the patient" data={report.patient} />
-      <SummarySection title="Vaccine information" data={report.vaccine} />
-      <SummarySection title="What happened" data={report.adverseEvent} />
-      <SummarySection title="Administration error details" data={report.errorDetail} />
+      <ReportSummarySection
+        title="About you"
+        fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
+        values={report.aboutYou}
+      />
+      <ReportSummarySection title="About the patient" fields={PATIENT_FIELD_SPECS} values={report.patient} />
+      <ReportSummarySection
+        title="Vaccine information"
+        fields={vaccineFieldSpecs(isHcp)}
+        values={report.vaccine}
+      />
+      <ReportSummarySection
+        title="What happened"
+        fields={adverseEventFieldSpecs(isHcp)}
+        values={report.adverseEvent}
+      />
+      <ReportSummarySection
+        title="Administration error details"
+        fields={ERROR_DETAIL_FIELD_SPECS}
+        values={report.errorDetail}
+      />
 
       <div className="review-section">
         <h2>Supporting documents</h2>
@@ -155,11 +150,21 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
         {report.documents.supplementalNotes && <p>{report.documents.supplementalNotes}</p>}
       </div>
 
+      <label className="review-certify">
+        <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} />
+        <span>I certify that the information provided is accurate to the best of my knowledge.</span>
+      </label>
+
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
           ← Back
         </button>
-        <button type="button" className="button button--primary" onClick={handleSubmit} disabled={submitting}>
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={handleSubmit}
+          disabled={submitting || !certified}
+        >
           {submitting ? "Submitting…" : "Submit report"}
         </button>
       </div>

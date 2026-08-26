@@ -23,6 +23,7 @@ import {
 } from "../../reportProgress";
 import { StepIndicator } from "../../components/StepIndicator";
 import { FaqWidget } from "../../components/FaqWidget";
+import { MilestoneBanner } from "../../components/MilestoneBanner";
 import { SubmitterTypeStep } from "./SubmitterTypeStep";
 import { BeforeYouStartStep } from "./BeforeYouStartStep";
 import { YesNoQuestionStep } from "./YesNoQuestionStep";
@@ -223,6 +224,8 @@ export function ReportWizard() {
       break;
   }
 
+  const crossedHalfway = steps.indexOf(currentStep) / steps.length >= 0.5;
+
   return (
     <div className="page page--wizard">
       <StepIndicator steps={steps} currentStep={currentStep} />
@@ -232,6 +235,7 @@ export function ReportWizard() {
           will be double-checked before you submit.
         </p>
       )}
+      {crossedHalfway && <MilestoneBanner />}
       {stepContent}
       <FaqWidget step={currentStep} />
     </div>
