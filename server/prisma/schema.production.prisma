@@ -14,16 +14,16 @@ datasource db {
 }
 
 model Report {
-  id                  String    @id @default(cuid())
-  status              String    @default("draft") // draft | submitted
-  submitterType       String? // public | hcp
-  administrationError Boolean? // HCP-only; null = not yet answered
+  id                   String    @id @default(cuid())
+  status               String    @default("draft") // draft | submitted
+  submitterType        String? // public | hcp
+  administrationError  Boolean? // HCP-only; null = not yet answered
   adverseEventOccurred Boolean? // HCP-only; null = not yet answered (public reports are implicitly true)
-  supplementalNotes   String?
-  duplicateFlag       Boolean   @default(false)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  submittedAt         DateTime?
+  supplementalNotes    String?
+  duplicateFlag        Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  submittedAt          DateTime?
 
   submitter       Submitter?
   patient         Patient?
@@ -32,6 +32,7 @@ model Report {
   errorDetail     ErrorDetail?
   attachments     Attachment[]
   surveyResponses SurveyResponse[]
+  followUpNotes   FollowUpNote[]
 }
 
 model Submitter {
@@ -45,16 +46,23 @@ model Submitter {
 }
 
 model Patient {
-  id                  String  @id @default(cuid())
-  reportId            String  @unique
-  report              Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  firstName           String?
-  lastName             String?
-  dateOfBirth         String?
-  sex                 String?
-  state               String? // public-path only (PUB-002): patient's state of residence
-  weightLbs           Float?
-  medicalRecordNumber String?
+  id                       String  @id @default(cuid())
+  reportId                 String  @unique
+  report                   Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  firstName                String?
+  lastName                 String?
+  dateOfBirth              String?
+  sex                      String?
+  ageYears                 Int?
+  ageMonths                Int?
+  state                    String? // public-path only (PUB-002): patient's state of residence
+  pregnant                 String?
+  medicationsAtVaccination String?
+  allergies                String?
+  recentIllnesses          String?
+  chronicConditions        String?
+  race                     String? // JSON-encoded string array (SQLite has no native array type)
+  ethnicity                String?
 }
 
 model VaccineAdministration {
@@ -66,22 +74,34 @@ model VaccineAdministration {
   lotNumber             String?
   doseNumber            String?
   administrationDate    String?
+  administrationTime    String?
   route                 String?
   bodySite              String?
   administeringFacility String?
+  facilityType          String?
+  otherVaccinesRecent   String?
 }
 
 model AdverseEvent {
-  id                   String  @id @default(cuid())
-  reportId             String  @unique
-  report               Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  onsetDate            String?
-  description          String?
-  symptoms             String? // JSON-encoded string array (PUB-003: quick-select symptom chips)
-  outcomes             String? // JSON-encoded string array (SQLite has no native array type)
-  hospitalizationDates String?
-  treatmentGiven       String?
-  clinicalCourseNotes  String?
+  id                          String  @id @default(cuid())
+  reportId                    String  @unique
+  report                      Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  onsetDate                   String?
+  onsetTime                   String?
+  description                 String?
+  symptoms                    String? // JSON-encoded string array (PUB-003: quick-select symptom chips)
+  labResults                  String?
+  recoveryStatus              String?
+  outcomes                    String? // JSON-encoded string array (SQLite has no native array type)
+  hospitalizationDays         Int?
+  hospitalName                String?
+  hospitalCity                String?
+  hospitalState               String?
+  dateOfDeath                 String?
+  treatmentGiven               String?
+  clinicalCourseNotes         String?
+  previousAdverseEvent        String?
+  previousAdverseEventDetails String?
 }
 
 model ErrorDetail {
@@ -103,6 +123,19 @@ model Attachment {
   mimeType         String
   sizeBytes        Int
   uploadedAt       DateTime @default(now())
+  // True for documents added via the post-submission Follow-Up Information
+  // page (PWS Task 2.1 "maintaining the current upload tool for documents
+  // that become available post-submission") rather than during the
+  // original report draft.
+  isFollowUp       Boolean  @default(false)
+}
+
+model FollowUpNote {
+  id        String   @id @default(cuid())
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  note      String
+  createdAt DateTime @default(now())
 }
 
 model SurveyResponse {

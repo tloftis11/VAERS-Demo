@@ -31,9 +31,16 @@ CREATE TABLE "Patient" (
     "lastName" TEXT,
     "dateOfBirth" TEXT,
     "sex" TEXT,
+    "ageYears" INTEGER,
+    "ageMonths" INTEGER,
     "state" TEXT,
-    "weightKg" REAL,
-    "medicalRecordNumber" TEXT,
+    "pregnant" TEXT,
+    "medicationsAtVaccination" TEXT,
+    "allergies" TEXT,
+    "recentIllnesses" TEXT,
+    "chronicConditions" TEXT,
+    "race" TEXT,
+    "ethnicity" TEXT,
     CONSTRAINT "Patient_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -46,9 +53,12 @@ CREATE TABLE "VaccineAdministration" (
     "lotNumber" TEXT,
     "doseNumber" TEXT,
     "administrationDate" TEXT,
+    "administrationTime" TEXT,
     "route" TEXT,
     "bodySite" TEXT,
     "administeringFacility" TEXT,
+    "facilityType" TEXT,
+    "otherVaccinesRecent" TEXT,
     CONSTRAINT "VaccineAdministration_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -57,12 +67,21 @@ CREATE TABLE "AdverseEvent" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "reportId" TEXT NOT NULL,
     "onsetDate" TEXT,
+    "onsetTime" TEXT,
     "description" TEXT,
     "symptoms" TEXT,
+    "labResults" TEXT,
+    "recoveryStatus" TEXT,
     "outcomes" TEXT,
-    "hospitalizationDates" TEXT,
+    "hospitalizationDays" INTEGER,
+    "hospitalName" TEXT,
+    "hospitalCity" TEXT,
+    "hospitalState" TEXT,
+    "dateOfDeath" TEXT,
     "treatmentGiven" TEXT,
     "clinicalCourseNotes" TEXT,
+    "previousAdverseEvent" TEXT,
+    "previousAdverseEventDetails" TEXT,
     CONSTRAINT "AdverseEvent_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -86,7 +105,17 @@ CREATE TABLE "Attachment" (
     "mimeType" TEXT NOT NULL,
     "sizeBytes" INTEGER NOT NULL,
     "uploadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "isFollowUp" BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT "Attachment_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "FollowUpNote" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "reportId" TEXT NOT NULL,
+    "note" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "FollowUpNote_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
