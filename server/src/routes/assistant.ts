@@ -2,14 +2,35 @@ import { Router, type Response } from "express";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../db.js";
-import { flagDescriptionInconsistencies, suggestDocumentsFromNarrative } from "../services/claudeClient.js";
+import {
+  answerFaqQuestion,
+  flagDescriptionInconsistencies,
+  suggestDocumentsFromNarrative,
+} from "../services/claudeClient.js";
 
 export const assistantRouter = Router();
+
+const faqBodySchema = z.object({
+  question: z.string().trim().min(1).max(1000),
+  step: z.string().optional(),
+});
+
+assistantRouter.post("/faq", async (req, res) => {
+  const parsed = faqBodySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ errors: parsed.error.issues });
+
+  try {
+    const answer = await answerFaqQuestion(parsed.data.question, parsed.data.step);
+    res.json({ answer });
+  } catch (err) {
+    handleClaudeError(err, res);
+  }
+});
 
 const consistencyBodySchema = z.object({
   description: z.string().trim().min(1).max(5000),
   outcomes: z.array(z.string()).default([]),
-  hospitalizationDates: z.string().optional(),
+  recoveryStatus: z.string().optional(),
   submitterType: z.enum(["public", "hcp"]),
 });
 

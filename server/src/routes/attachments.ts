@@ -64,6 +64,54 @@ attachmentsRouter.post("/reports/:reportId/attachments", (req, res) => {
       mimeType: attachment.mimeType,
       sizeBytes: attachment.sizeBytes,
       uploadedAt: attachment.uploadedAt,
+      isFollowUp: attachment.isFollowUp,
+    });
+  });
+});
+
+// PWS Task 2.1 / PRS#9: "maintaining the current upload tool for documents
+// that become available post-submission" — the mirror image of the route
+// above. Deliberately a separate endpoint rather than relaxing the
+// status==="submitted" check on the main upload route, so a report's
+// original-submission documents and anything added later stay clearly
+// distinguishable (isFollowUp), and the two flows can't be confused for
+// each other.
+attachmentsRouter.post("/reports/:reportId/follow-up-attachments", (req, res) => {
+  upload.single("file")(req, res, async (err) => {
+    if (err) {
+      const message =
+        err.message === "UNSUPPORTED_FILE_TYPE"
+          ? "That file type isn't supported. Please upload a PDF, JPEG, PNG, or Word document."
+          : "Upload failed. The file may be too large (15 MB max).";
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) return res.status(400).json({ error: "No file provided" });
+
+    const report = await prisma.report.findUnique({ where: { id: req.params.reportId } });
+    if (!report) return res.status(404).json({ error: "Report not found" });
+    if (report.status !== "submitted") {
+      return res.status(409).json({ error: "Follow-up documents can only be added to a submitted report" });
+    }
+
+    const storedFilename = await saveFile(req.file.buffer, req.file.originalname);
+    const attachment = await prisma.attachment.create({
+      data: {
+        reportId: report.id,
+        originalFilename: req.file.originalname,
+        storedFilename,
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size,
+        isFollowUp: true,
+      },
+    });
+
+    res.status(201).json({
+      id: attachment.id,
+      originalFilename: attachment.originalFilename,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      uploadedAt: attachment.uploadedAt,
+      isFollowUp: attachment.isFollowUp,
     });
   });
 });
@@ -80,6 +128,7 @@ attachmentsRouter.get("/reports/:reportId/attachments", async (req, res) => {
       mimeType: a.mimeType,
       sizeBytes: a.sizeBytes,
       uploadedAt: a.uploadedAt,
+      isFollowUp: a.isFollowUp,
     }))
   );
 });
