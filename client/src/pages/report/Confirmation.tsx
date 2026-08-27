@@ -26,25 +26,39 @@ export function Confirmation() {
         Your report has been received and is now part of the national effort to keep vaccines
         safe. Reports like yours are what make this system work.
       </p>
+
+      <div className="confirmation__reference">
+        <span className="confirmation__reference-label">Your reference number</span>
+        <span className="confirmation__reference-value">{reportId}</span>
+        <span className="confirmation__reference-hint">Save this — you'll need it to add documents later.</span>
+      </div>
+
       {report?.duplicateFlag && (
-        <p className="notice notice--info">
-          This report looks similar to one already on file. That's okay — it's been flagged for
-          review and no action is needed on your part.
-        </p>
+        <div className="notice notice--info">
+          <p>
+            <strong>This report may be similar to one already on file.</strong> That's okay — no
+            action is needed on your part.
+          </p>
+          <p className="confirmation__duplicate-detail">
+            We automatically compared the patient, vaccine, and description against existing
+            reports; a CDC reviewer will take a closer look before anything is merged or discarded.
+          </p>
+        </div>
       )}
-      <p className="confirmation__reference">
-        Reference number: <strong>{reportId}</strong>
-      </p>
-      <p>
-        CDC and FDA staff review submitted reports as part of ongoing vaccine-safety monitoring, and
-        may follow up with the contact on this report if more information is needed. You generally
-        won't receive an individual response otherwise.
-      </p>
-      <p>
-        Need to add more later? You can{" "}
-        <Link to="/follow-up">attach medical records or other documents to this report</Link> — you
-        don't need to submit a new one.
-      </p>
+
+      <h2 className="confirmation__next-heading">What happens next</h2>
+      <ol className="confirmation__next-steps">
+        <li>CDC and FDA staff review your report as part of ongoing vaccine-safety monitoring.</li>
+        <li>
+          They may follow up with the contact on this report if more information is needed — you
+          generally won't receive an individual response otherwise.
+        </li>
+        <li>
+          If a discharge summary or other document comes in later, you can{" "}
+          <Link to="/follow-up">add it to this report</Link> using your reference number above — no
+          need to submit a new one.
+        </li>
+      </ol>
 
       {reportId && (
         <SurveyForm

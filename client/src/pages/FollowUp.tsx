@@ -2,6 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getReport,
+  getReportStatus,
+  requestFollowUpCode,
+  verifyFollowUpCode,
+  getFollowUpReport,
   postFollowUpNote,
   uploadFollowUpAttachment,
   type AttachmentMeta,
@@ -34,10 +38,27 @@ function formatDate(iso: string): string {
 }
 
 type LookupState = "idle" | "loading" | "not-found" | "error";
+/** "email" / "code": the identity gate for a submitted report, before any
+ * of its PHI reaches the browser. "verified": gate passed, full report loaded. */
+type GatePhase = "email" | "code" | "verified";
 
 export function FollowUp() {
   const [referenceInput, setReferenceInput] = useState("");
   const [lookupState, setLookupState] = useState<LookupState>("idle");
+  const [draftReport, setDraftReport] = useState<ClientReport | null>(null);
+  const [reportId, setReportId] = useState<string | null>(null);
+  const [gatePhase, setGatePhase] = useState<GatePhase | null>(null);
+
+  const [emailInput, setEmailInput] = useState("");
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
+
+  const [codeInput, setCodeInput] = useState("");
+  const [codeSubmitting, setCodeSubmitting] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [followUpToken, setFollowUpToken] = useState<string | null>(null);
+
   const [report, setReport] = useState<ClientReport | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
@@ -49,19 +70,64 @@ export function FollowUp() {
     const id = referenceInput.trim();
     if (!id) return;
     setLookupState("loading");
-    setReport(null);
+    setDraftReport(null);
+    setReportId(null);
+    setGatePhase(null);
     try {
-      const found = await getReport(id);
-      setReport(found);
+      const status = await getReportStatus(id);
+      setReportId(status.id);
       setLookupState("idle");
+      if (status.status === "draft") {
+        setDraftReport(await getReport(id));
+      } else {
+        setGatePhase("email");
+      }
     } catch (err) {
       const status = (err as { status?: number }).status;
       setLookupState(status === 404 ? "not-found" : "error");
     }
   }
 
+  async function handleRequestCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reportId || !emailInput.trim()) return;
+    setEmailSubmitting(true);
+    setEmailError(null);
+    try {
+      const result = await requestFollowUpCode(reportId, emailInput.trim());
+      setDevCode(result.devCode);
+      setGatePhase("code");
+    } catch (err) {
+      setEmailError(
+        (err as { status?: number }).status === 403
+          ? "That email doesn't match our records for this report."
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setEmailSubmitting(false);
+    }
+  }
+
+  async function handleVerifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reportId || !codeInput.trim()) return;
+    setCodeSubmitting(true);
+    setCodeError(null);
+    try {
+      const { accessToken } = await verifyFollowUpCode(reportId, codeInput.trim());
+      setFollowUpToken(accessToken);
+      const full = await getFollowUpReport(reportId, accessToken);
+      setReport(full);
+      setGatePhase("verified");
+    } catch {
+      setCodeError("That code is incorrect or has expired.");
+    } finally {
+      setCodeSubmitting(false);
+    }
+  }
+
   async function handleFiles(accepted: File[], rejectedCount: number) {
-    if (!report) return;
+    if (!report || !followUpToken) return;
     setUploadError(
       rejectedCount > 0 ? "Some files were skipped — only PDF, JPEG, PNG, or Word documents are accepted." : null
     );
@@ -70,7 +136,7 @@ export function FollowUp() {
     setUploadingCount((n) => n + accepted.length);
     for (const file of accepted) {
       try {
-        const meta = await uploadFollowUpAttachment(report.id, file);
+        const meta = await uploadFollowUpAttachment(report.id, file, followUpToken);
         setReport((prev) => (prev ? { ...prev, attachments: [...prev.attachments, meta] } : prev));
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Upload failed");
@@ -82,10 +148,10 @@ export function FollowUp() {
 
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
-    if (!report || !noteText.trim()) return;
+    if (!report || !followUpToken || !noteText.trim()) return;
     setNoteSubmitting(true);
     try {
-      const updated = await postFollowUpNote(report.id, noteText.trim());
+      const updated = await postFollowUpNote(report.id, noteText.trim(), followUpToken);
       setReport(updated);
       setNoteText("");
     } finally {
@@ -129,15 +195,62 @@ export function FollowUp() {
         </p>
       )}
 
-      {report && report.status === "draft" && (
+      {draftReport && (
         <p className="notice notice--info">
           This report hasn't been submitted yet.{" "}
-          <Link to={`/report/${report.id}/${firstIncompleteStep(report)}`}>Continue completing it</Link> —
-          you can add documents on the final steps before you submit.
+          <Link to={`/report/${draftReport.id}/${firstIncompleteStep(draftReport)}`}>
+            Continue completing it
+          </Link>{" "}
+          — you can add documents on the final steps before you submit.
         </p>
       )}
 
-      {report && report.status === "submitted" && (
+      {gatePhase === "email" && (
+        <form className="step-form identity-gate" onSubmit={handleRequestCode}>
+          <h2>Verify it's you</h2>
+          <p className="field__hint">
+            This report has already been submitted, so before we show anything from it we need to
+            confirm you're the person who filed it. Enter the email address you used when you
+            submitted.
+          </p>
+          <TextField id="verify-email" label="Email of record" value={emailInput} onChange={setEmailInput} />
+          {emailError && (
+            <p role="alert" className="field__error">
+              {emailError}
+            </p>
+          )}
+          <div className="step-form__actions">
+            <button type="submit" className="button button--primary" disabled={emailSubmitting}>
+              {emailSubmitting ? "Checking…" : "Send verification code"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {gatePhase === "code" && (
+        <form className="step-form identity-gate" onSubmit={handleVerifyCode}>
+          <h2>Enter your verification code</h2>
+          {devCode && (
+            <p className="notice notice--info">
+              <strong>Prototype note:</strong> in production this code would be emailed to you. For
+              this demo, here it is directly: <strong>{devCode}</strong>
+            </p>
+          )}
+          <TextField id="verify-code" label="6-digit code" value={codeInput} onChange={setCodeInput} />
+          {codeError && (
+            <p role="alert" className="field__error">
+              {codeError}
+            </p>
+          )}
+          <div className="step-form__actions">
+            <button type="submit" className="button button--primary" disabled={codeSubmitting}>
+              {codeSubmitting ? "Verifying…" : "Verify"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {gatePhase === "verified" && report && (
         <div className="follow-up__report">
           <dl className="review-list">
             <div className="review-list__row">
