@@ -131,6 +131,11 @@ export function getReport(id: string): Promise<ClientReport> {
   return fetch(`${API_ROOT}/reports/${id}`).then((r) => asJson(r));
 }
 
+/** PHI-free existence/status check — safe to call before identity is verified. */
+export function getReportStatus(id: string): Promise<{ id: string; status: "draft" | "submitted" }> {
+  return fetch(`${API_ROOT}/reports/${id}/status`).then((r) => asJson(r));
+}
+
 export function patchReport(
   id: string,
   step: string,
@@ -186,20 +191,58 @@ export function listAttachments(reportId: string): Promise<AttachmentMeta[]> {
   return fetch(`${API_ROOT}/reports/${reportId}/attachments`).then((r) => asJson(r));
 }
 
-export function uploadFollowUpAttachment(reportId: string, file: File): Promise<AttachmentMeta> {
+export function uploadFollowUpAttachment(
+  reportId: string,
+  file: File,
+  followUpToken: string
+): Promise<AttachmentMeta> {
   const formData = new FormData();
   formData.append("file", file);
   return fetch(`${API_ROOT}/reports/${reportId}/follow-up-attachments`, {
     method: "POST",
+    headers: { "X-Followup-Token": followUpToken },
     body: formData,
   }).then((r) => asJson(r));
 }
 
-export function postFollowUpNote(reportId: string, note: string): Promise<ClientReport> {
+export function postFollowUpNote(
+  reportId: string,
+  note: string,
+  followUpToken: string
+): Promise<ClientReport> {
   return fetch(`${API_ROOT}/reports/${reportId}/follow-up-notes`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Followup-Token": followUpToken },
     body: JSON.stringify({ note }),
+  }).then((r) => asJson(r));
+}
+
+/** Step 1 of the follow-up identity check: confirm the email on file, get a
+ * one-time code. `devCode` is only present because this prototype has no
+ * email provider — in production the code would be emailed, not returned. */
+export function requestFollowUpCode(
+  reportId: string,
+  email: string
+): Promise<{ sent: true; devCode: string }> {
+  return fetch(`${API_ROOT}/reports/${reportId}/request-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  }).then((r) => asJson(r));
+}
+
+/** Step 2: exchange the code for a short-lived access token scoped to this report. */
+export function verifyFollowUpCode(reportId: string, code: string): Promise<{ accessToken: string }> {
+  return fetch(`${API_ROOT}/reports/${reportId}/verify-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  }).then((r) => asJson(r));
+}
+
+export function getFollowUpReport(reportId: string, followUpToken: string): Promise<ClientReport> {
+  return fetch(`${API_ROOT}/reports/${reportId}/follow-up`, {
+    headers: { "X-Followup-Token": followUpToken },
   }).then((r) => asJson(r));
 }
 

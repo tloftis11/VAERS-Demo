@@ -3,6 +3,7 @@ import multer from "multer";
 import { prisma } from "../db.js";
 import { saveFile, readFileStream, fileExists } from "../services/storage.js";
 import { createDownloadToken, verifyDownloadToken } from "../services/downloadTokens.js";
+import { verifyFollowUpAccessToken } from "../services/followUpAccess.js";
 import { suggestDocuments } from "../rules.js";
 
 export const attachmentsRouter = Router();
@@ -77,6 +78,10 @@ attachmentsRouter.post("/reports/:reportId/attachments", (req, res) => {
 // distinguishable (isFollowUp), and the two flows can't be confused for
 // each other.
 attachmentsRouter.post("/reports/:reportId/follow-up-attachments", (req, res) => {
+  const token = String(req.headers["x-followup-token"] ?? "");
+  if (!verifyFollowUpAccessToken(token, req.params.reportId)) {
+    return res.status(401).json({ error: "Verification required" });
+  }
   upload.single("file")(req, res, async (err) => {
     if (err) {
       const message =

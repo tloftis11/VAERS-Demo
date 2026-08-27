@@ -35,6 +35,30 @@ import { ErrorDetailStep } from "./ErrorDetailStep";
 import { DocumentsStep } from "./DocumentsStep";
 import { ReviewStep } from "./ReviewStep";
 
+/** Only administration-error and adverse-event-occurred (both HCP-only)
+ * ever cause the wizard to jump past a whole section, and both only take
+ * effect right after "vaccine" (see getApplicableSteps) — so that's the one
+ * transition worth explaining. */
+function skipNoticeForVaccineExit(state: {
+  submitterType: "public" | "hcp" | null;
+  administrationError: boolean | null;
+  adverseEventOccurred: boolean | null;
+}): string | null {
+  if (state.submitterType !== "hcp") return null;
+  const skippedError = state.administrationError !== true;
+  const skippedAdverse = state.adverseEventOccurred === false;
+  if (skippedError && skippedAdverse) {
+    return "Skipping the adverse-event and administration-error sections — you told us neither applied to this report.";
+  }
+  if (skippedError) {
+    return "Skipping administration-error details — you told us this was an adverse event only.";
+  }
+  if (skippedAdverse) {
+    return "Skipping adverse-event details — you told us this was an administration error only, not a health event.";
+  }
+  return null;
+}
+
 export function ReportWizard() {
   const { reportId, step: stepParam } = useParams<{ reportId: string; step: string }>();
   const navigate = useNavigate();
@@ -45,6 +69,11 @@ export function ReportWizard() {
   // HCP) — ephemeral, never sent to the server, just lets the About-You
   // step avoid re-asking a question the card already answered.
   const [submitterCard, setSubmitterCard] = useState<"patient" | "caregiver" | "hcp" | null>(null);
+  // Set right when a branching decision causes the very next step to skip
+  // over a whole section, so the jump reads as deliberate rather than a
+  // glitch — cleared on any other navigation.
+  const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   useEffect(() => {
     if (!reportId) return;
@@ -54,6 +83,12 @@ export function ReportWizard() {
       setLoading(false);
     });
   }, [reportId]);
+
+  useEffect(() => {
+    if (saveStatus !== "saved") return;
+    const timer = setTimeout(() => setSaveStatus("idle"), 2500);
+    return () => clearTimeout(timer);
+  }, [saveStatus]);
 
   if (!reportId) return <Navigate to="/report" replace />;
   if (loading || !report) {
@@ -93,13 +128,20 @@ export function ReportWizard() {
     const optimisticReport = applyOptimisticUpdate(report!, currentStep, data);
     setReport(optimisticReport);
     setSaveError(false);
-    goTo(nextStep(currentStep, branchingStateFromReport(optimisticReport)));
+    const nextState = branchingStateFromReport(optimisticReport);
+    setSkipNotice(currentStep === "vaccine" ? skipNoticeForVaccineExit(nextState) : null);
+    goTo(nextStep(currentStep, nextState));
 
+    setSaveStatus("saving");
     patchReport(reportId!, currentStep, data)
-      .then((server) => setReport((prev) => (prev ? mergeServerUpdate(prev, currentStep, server) : server)))
+      .then((server) => {
+        setReport((prev) => (prev ? mergeServerUpdate(prev, currentStep, server) : server));
+        setSaveStatus("saved");
+      })
       .catch((err) => {
         console.error("Failed to save step", currentStep, err);
         setSaveError(true);
+        setSaveStatus("idle");
       });
   }
 
@@ -108,6 +150,7 @@ export function ReportWizard() {
   }
 
   function handleBack() {
+    setSkipNotice(null);
     goTo(prevStep(currentStep, state));
   }
 
@@ -236,7 +279,14 @@ export function ReportWizard() {
 
   return (
     <div className="page page--wizard">
-      <StepIndicator steps={steps} currentStep={currentStep} />
+      <div className="wizard-header">
+        <StepIndicator steps={steps} currentStep={currentStep} />
+        {saveStatus !== "idle" && (
+          <span className={`autosave-indicator${saveStatus === "saved" ? " autosave-indicator--saved" : ""}`} role="status">
+            {saveStatus === "saving" ? "Saving…" : "✓ Saved"}
+          </span>
+        )}
+      </div>
       {saveError && (
         <p role="alert" className="notice notice--warning">
           We had trouble saving your last answer — please check your connection. Your progress so far
@@ -244,6 +294,11 @@ export function ReportWizard() {
         </p>
       )}
       {crossedHalfway && <MilestoneBanner />}
+      {skipNotice && (
+        <p role="status" className="notice notice--info">
+          {skipNotice}
+        </p>
+      )}
       {stepContent}
       <FaqWidget step={currentStep} />
     </div>

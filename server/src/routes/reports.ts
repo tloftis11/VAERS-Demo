@@ -10,6 +10,12 @@ import {
   type ValidationFinding,
 } from "../rules.js";
 import { isLikelyDuplicate } from "../services/duplicateHeuristic.js";
+import {
+  requestVerificationCode,
+  verifyCode,
+  createFollowUpAccessToken,
+  verifyFollowUpAccessToken,
+} from "../services/followUpAccess.js";
 
 export const reportsRouter = Router();
 
@@ -149,6 +155,15 @@ reportsRouter.get("/:id", async (req, res) => {
   const serialized = await serializeReport(req.params.id);
   if (!serialized) return res.status(404).json({ error: "Report not found" });
   res.json(serialized);
+});
+
+// PHI-free existence/status check — lets the follow-up lookup form confirm
+// a reference number and route (draft vs. submitted) without the full
+// report ever reaching the browser before identity is verified.
+reportsRouter.get("/:id/status", async (req, res) => {
+  const report = await prisma.report.findUnique({ where: { id: req.params.id } });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  res.json({ id: report.id, status: report.status });
 });
 
 reportsRouter.patch("/:id", async (req, res) => {
@@ -365,8 +380,63 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   res.json({ id, status: "submitted", duplicateFlag });
 });
 
+// Identity gate for follow-up (PRS#7/PWS §3.4 PHI handling): a submitted
+// report's contact email must be confirmed, then a one-time code proven,
+// before an access token scoped to this one report is issued. Delivery of
+// the code is mocked below (devCode is handed straight back) since this
+// prototype has no email provider wired up — everything else here is the
+// real check.
+reportsRouter.post("/:id/request-code", async (req, res) => {
+  const { id } = req.params;
+  const email = String((req.body as { email?: unknown })?.email ?? "").trim().toLowerCase();
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  const report = await prisma.report.findUnique({ where: { id }, include: { submitter: true } });
+  if (!report || report.status !== "submitted") {
+    return res.status(404).json({ error: "Report not found" });
+  }
+  const onFile = (report.submitter?.contactEmail ?? "").trim().toLowerCase();
+  if (!onFile || onFile !== email) {
+    return res.status(403).json({ error: "That email doesn't match our records for this report" });
+  }
+
+  const devCode = requestVerificationCode(id);
+  res.json({ sent: true, devCode });
+});
+
+reportsRouter.post("/:id/verify-code", async (req, res) => {
+  const { id } = req.params;
+  const code = String((req.body as { code?: unknown })?.code ?? "").trim();
+  if (!code) return res.status(400).json({ error: "Code is required" });
+
+  if (!verifyCode(id, code)) {
+    return res.status(401).json({ error: "That code is incorrect or has expired" });
+  }
+  res.json({ accessToken: createFollowUpAccessToken(id) });
+});
+
+function requireFollowUpAccess(req: { params: { id: string }; headers: Record<string, unknown> }): boolean {
+  const token = String(req.headers["x-followup-token"] ?? "");
+  return verifyFollowUpAccessToken(token, req.params.id);
+}
+
+reportsRouter.get("/:id/follow-up", async (req, res) => {
+  const { id } = req.params;
+  if (!requireFollowUpAccess(req)) {
+    return res.status(401).json({ error: "Verification required" });
+  }
+  const serialized = await serializeReport(id);
+  if (!serialized || serialized.status !== "submitted") {
+    return res.status(404).json({ error: "Report not found" });
+  }
+  res.json(serialized);
+});
+
 reportsRouter.post("/:id/follow-up-notes", async (req, res) => {
   const { id } = req.params;
+  if (!requireFollowUpAccess(req)) {
+    return res.status(401).json({ error: "Verification required" });
+  }
   const note = String((req.body as { note?: unknown })?.note ?? "").trim();
   if (!note) return res.status(400).json({ error: "Note text is required" });
 

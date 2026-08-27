@@ -150,6 +150,7 @@ export function DocumentsStep({
               <ul>
                 {aiSuggestions.map((s) => (
                   <li key={s.documentType}>
+                    <span className="suggestion-box__ai-badge">AI suggested</span>
                     <strong>{s.documentType}</strong> — {s.reason}
                   </li>
                 ))}

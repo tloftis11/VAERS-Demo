@@ -89,15 +89,35 @@ export function ConversationalStep({
   const [index, setIndex] = useState(initialIndex);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Error shown under the *active* question. Deliberately not just
+  // `errors[field.id]` — that map comes from validating the whole step's
+  // schema at once, so it always includes "required" errors for fields the
+  // user hasn't reached yet. This only ever gets set by an actual attempt
+  // on the field currently on screen (a blocked Next, or navigating back to
+  // a field that already had a known issue), and is cleared on every
+  // forward move into new territory.
+  const [activeError, setActiveError] = useState<string | null>(null);
   const reviewing = index >= fields.length;
 
   function goBack() {
-    if (index === 0) onBack();
-    else setIndex((i) => i - 1);
+    if (index === 0) {
+      onBack();
+      return;
+    }
+    const prevField = fields[index - 1];
+    setActiveError(errors[prevField.id] ?? null);
+    setIndex(index - 1);
   }
 
   function advance() {
+    setActiveError(null);
     setIndex((i) => Math.min(i + 1, fields.length));
+  }
+
+  function jumpTo(targetIndex: number) {
+    const targetField = fields[targetIndex];
+    setActiveError((targetField && errors[targetField.id]) ?? null);
+    setIndex(targetIndex);
   }
 
   async function handleReviewContinue() {
@@ -130,7 +150,7 @@ export function ConversationalStep({
                 if (!field) return null;
                 return (
                   <li key={id}>
-                    <button type="button" className="button button--text" onClick={() => setIndex(fieldIdx)}>
+                    <button type="button" className="button button--text" onClick={() => jumpTo(fieldIdx)}>
                       {field.label}: {errors[id]}
                     </button>
                   </li>
@@ -156,7 +176,7 @@ export function ConversationalStep({
                   <button
                     type="button"
                     className="review-list__edit"
-                    onClick={() => setIndex(i)}
+                    onClick={() => jumpTo(i)}
                     aria-label={`Edit answer: ${field.label}`}
                   >
                     Edit
@@ -168,7 +188,7 @@ export function ConversationalStep({
         </dl>
 
         <div className="step-form__actions">
-          <button type="button" className="button button--text" onClick={() => setIndex(fields.length - 1)}>
+          <button type="button" className="button button--text" onClick={() => jumpTo(fields.length - 1)}>
             ← Back
           </button>
           <button type="button" className="button button--primary" onClick={handleReviewContinue} disabled={submitting}>
@@ -181,12 +201,13 @@ export function ConversationalStep({
 
   const field = fields[index];
   const value = values[field.id];
-  const error = errors[field.id];
+  const error = activeError;
   const canSkip = !field.required;
   const useCombobox = field.kind === "choice" && (field.options?.length ?? 0) > 4;
   const isCardChoice = field.kind === "choice" && !useCombobox;
   const controlId = `q-${field.id}`;
   const labelId = `${controlId}-label`;
+  const errorId = `${controlId}-error`;
 
   // Runs the real zod validation for this question before letting the user
   // move on — a malformed answer (bad email, out-of-range number, etc.)
@@ -195,7 +216,10 @@ export function ConversationalStep({
   // more questions and have to navigate back to fix it.
   function handleNextClick() {
     const result = validate();
-    if (!result.success && result.errors[field.id]) return;
+    if (!result.success && result.errors[field.id]) {
+      setActiveError(result.errors[field.id]);
+      return;
+    }
     advance();
   }
 
@@ -260,6 +284,7 @@ export function ConversationalStep({
             value={typeof value === "string" ? value : ""}
             onChange={(e) => setValue(field.id, e.target.value)}
             aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
           >
             <option value="">Select…</option>
             {field.options?.map((opt) => (
@@ -278,6 +303,7 @@ export function ConversationalStep({
             value={typeof value === "string" ? value : ""}
             onChange={(e) => setValue(field.id, e.target.value)}
             aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
           />
         );
       default:
@@ -289,6 +315,7 @@ export function ConversationalStep({
             value={value === undefined || value === null ? "" : String(value)}
             onChange={(e) => setValue(field.id, e.target.value)}
             aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
           />
         );
     }
@@ -307,7 +334,7 @@ export function ConversationalStep({
                 key={f.id}
                 type="button"
                 className={`recap-pill recap-pill--complete${display ? "" : " recap-pill--empty"}`}
-                onClick={() => setIndex(i)}
+                onClick={() => jumpTo(i)}
                 aria-label={`Edit answer: ${f.label}`}
               >
                 <span className="recap-pill__text">
@@ -354,7 +381,7 @@ export function ConversationalStep({
         {field.hint && <p className="field__hint">{field.hint}</p>}
         {renderActiveInput()}
         {error && (
-          <p role="alert" className="field__error">
+          <p id={errorId} role="alert" className="field__error">
             {error}
           </p>
         )}
