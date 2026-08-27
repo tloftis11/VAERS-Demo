@@ -86,6 +86,7 @@ model AdverseEvent {
   onsetTime                   String?
   description                 String?
   symptoms                    String? // JSON-encoded string array (PUB-003: quick-select symptom chips)
+  symptomsOther               String? // free-text detail when "Other" is among the selected symptoms
   labResults                  String?
   recoveryStatus              String?
   outcomes                    String? // JSON-encoded string array (SQLite has no native array type)

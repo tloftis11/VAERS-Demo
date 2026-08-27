@@ -103,6 +103,7 @@ async function serializeReport(reportId: string) {
           symptoms: report.adverseEvent.symptoms
             ? (JSON.parse(report.adverseEvent.symptoms) as string[])
             : [],
+          symptomsOther: report.adverseEvent.symptomsOther ?? "",
           labResults: report.adverseEvent.labResults ?? "",
           recoveryStatus: report.adverseEvent.recoveryStatus ?? "",
           outcomes: report.adverseEvent.outcomes
@@ -274,6 +275,7 @@ reportsRouter.patch("/:id", async (req, res) => {
         onsetTime: validated.onsetTime || null,
         description: validated.description,
         symptoms: JSON.stringify(validated.symptoms ?? []),
+        symptomsOther: validated.symptomsOther || null,
         labResults: validated.labResults || null,
         recoveryStatus: validated.recoveryStatus || null,
         outcomes: JSON.stringify(validated.outcomes ?? []),
@@ -503,6 +505,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             onsetTime: report.adverseEvent.onsetTime ?? "",
             description: report.adverseEvent.description ?? "",
             symptoms: report.adverseEvent.symptoms ? JSON.parse(report.adverseEvent.symptoms) : [],
+            symptomsOther: report.adverseEvent.symptomsOther ?? "",
             labResults: report.adverseEvent.labResults ?? "",
             recoveryStatus: report.adverseEvent.recoveryStatus ?? "",
             outcomes: report.adverseEvent.outcomes ? JSON.parse(report.adverseEvent.outcomes) : [],

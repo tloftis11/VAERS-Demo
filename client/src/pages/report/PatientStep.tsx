@@ -50,17 +50,17 @@ export const PATIENT_FIELD_SPECS: ConversationalFieldSpec[] = [
   { id: "patientSex", label: "Sex", required: true, kind: "choice", options: SEX_OPTIONS },
   {
     id: "ageYears",
-    label: "Age at vaccination — years",
+    label: "How old was the patient when they got the vaccine? (years)",
     required: true,
     kind: "number",
-    hint: "If younger than 1 year, enter 0 and give months below.",
+    hint: "Whole years only. If the patient was younger than 1 year old, enter 0 — you'll be able to add months next.",
   },
   {
     id: "ageMonths",
-    label: "Age at vaccination — additional months (optional)",
+    label: "If younger than 2 years old, how many additional months? (optional)",
     required: false,
     kind: "number",
-    hint: "For infants and toddlers under 2, e.g. 1 year and 6 months.",
+    hint: "Only for infants and toddlers. For example, a patient who was 1 year and 6 months old: enter 1 above, and 6 here.",
   },
   { id: "patientState", label: "Patient's state (optional)", required: false, kind: "choice", options: STATE_OPTIONS },
   {
@@ -104,7 +104,7 @@ export const PATIENT_FIELD_SPECS: ConversationalFieldSpec[] = [
     id: "patientRace",
     label: "Patient's race (optional, select all that apply)",
     required: false,
-    kind: "checkboxGroup",
+    kind: "multiSelect",
     options: RACE_OPTIONS,
   },
   {

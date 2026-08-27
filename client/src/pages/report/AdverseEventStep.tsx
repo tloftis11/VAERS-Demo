@@ -7,6 +7,7 @@ import {
   STATE_OPTIONS,
   SYMPTOM_OPTIONS,
 } from "../../../../shared/src/schemas";
+import { isDateBefore, hospitalizationExceedsElapsed } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import { checkDescriptionConsistency, type AdverseEventData, type ConsistencyIssue } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -15,6 +16,8 @@ import { ConversationalStep, type ConversationalFieldSpec } from "../../componen
 interface AdverseEventStepProps {
   submitterType: SubmitterType;
   initialData: AdverseEventData | null;
+  /** From the Vaccine step, for live "onset can't be before vaccination" checks. */
+  vaccineAdministrationDate?: string;
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
 }
@@ -24,6 +27,7 @@ const EMPTY: AdverseEventData = {
   onsetTime: "",
   description: "",
   symptoms: [],
+  symptomsOther: "",
   labResults: "",
   recoveryStatus: "",
   outcomes: [],
@@ -55,7 +59,7 @@ const EMPTY: AdverseEventData = {
 export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   return [
     { id: "onsetDate", label: "When did symptoms start?", required: true, kind: "date", icon: "calendar" },
-    { id: "onsetTime", label: "Time symptoms started (optional)", required: false, kind: "text", hint: "e.g. 3:00 PM" },
+    { id: "onsetTime", label: "Time symptoms started (optional)", required: false, kind: "time12" },
     {
       id: "description",
       label: isHcp ? "Clinical description" : "What happened?",
@@ -68,9 +72,15 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
       id: "symptoms",
       label: "Did any of these symptoms occur? (optional, select all that apply)",
       required: false,
-      kind: "checkboxGroup",
+      kind: "multiSelect",
       options: SYMPTOM_OPTIONS,
       hint: "This is a quick-select shortcut — it doesn't replace the description above.",
+    },
+    {
+      id: "symptomsOther",
+      label: "Describe the \"Other\" symptom",
+      required: false,
+      kind: "text",
     },
     {
       id: "labResults",
@@ -124,7 +134,13 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
   ];
 }
 
-export function AdverseEventStep({ submitterType, initialData, onNext, onBack }: AdverseEventStepProps) {
+export function AdverseEventStep({
+  submitterType,
+  initialData,
+  vaccineAdministrationDate,
+  onNext,
+  onBack,
+}: AdverseEventStepProps) {
   const schema = adverseEventSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
@@ -134,6 +150,25 @@ export function AdverseEventStep({ submitterType, initialData, onNext, onBack }:
     outcomes.includes("hospitalization") || outcomes.includes("hospitalization_prolonged");
   const showDateOfDeath = outcomes.includes("death");
   const showPreviousDetails = values.previousAdverseEvent === "yes";
+  const showSymptomsOther = (values.symptoms as string[]).includes("other");
+
+  function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {
+    if (fieldId === "onsetDate" && vaccineAdministrationDate) {
+      const onsetDate = String(liveValues.onsetDate ?? "");
+      if (onsetDate && isDateBefore(onsetDate, vaccineAdministrationDate)) {
+        return "Symptom onset date can't be before the vaccination date.";
+      }
+    }
+    if (fieldId === "hospitalizationDays") {
+      const onsetDate = String(liveValues.onsetDate ?? "");
+      const days = Number(liveValues.hospitalizationDays);
+      if (onsetDate && Number.isFinite(days)) {
+        const message = hospitalizationExceedsElapsed(onsetDate, days);
+        if (message) return message;
+      }
+    }
+    return null;
+  }
 
   const [checking, setChecking] = useState(false);
   const [checkIssues, setCheckIssues] = useState<ConsistencyIssue[] | null>(null);
@@ -166,6 +201,8 @@ export function AdverseEventStep({ submitterType, initialData, onNext, onBack }:
 
   const fields = adverseEventFieldSpecs(isHcp).filter((f) => {
     switch (f.id) {
+      case "symptomsOther":
+        return showSymptomsOther;
       case "hospitalizationDays":
       case "hospitalName":
       case "hospitalCity":
@@ -193,6 +230,7 @@ export function AdverseEventStep({ submitterType, initialData, onNext, onBack }:
       onNext={onNext}
       onBack={onBack}
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
+      extraFieldValidation={checkFieldLogic}
       extras={{
         description: () => (
           <div className="consistency-check">

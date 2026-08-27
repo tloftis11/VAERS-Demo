@@ -852,6 +852,104 @@ a {
   font-size: 0.9rem;
 }
 
+.multiselect {
+  position: relative;
+  margin-top: var(--space-2);
+}
+
+.multiselect__trigger {
+  margin-top: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.multiselect__placeholder {
+  color: var(--color-text-muted);
+}
+
+.multiselect__chevron {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.multiselect__panel {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+}
+
+.multiselect__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.multiselect__option:hover {
+  background: var(--color-surface);
+}
+
+.time12 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.time12__hour,
+.time12__minute {
+  margin-top: 0;
+  width: auto;
+  min-width: 4.5em;
+}
+
+.time12__colon {
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.time12__period {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+}
+
+.time12__period-btn {
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.time12__period-btn--selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
 /* Step forms and fields (classic grouped screens: Documents step, FAQ inputs) */
 
 .step-form {
@@ -901,6 +999,14 @@ a {
   color: var(--color-error);
   margin: var(--space-1) 0 0;
   font-size: 0.9rem;
+}
+
+/* Non-blocking recommendation, not a validation failure — a softer tone
+   than .field__error since the user is never prevented from continuing. */
+.field__advisory {
+  color: var(--color-primary-dark);
+  margin: var(--space-1) 0 0;
+  font-size: 0.85rem;
 }
 
 .checkbox-group {
