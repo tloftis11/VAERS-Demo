@@ -41,7 +41,9 @@ export function useStepForm<T extends object>(schema: ZodType, initialValues: T)
     setValues((v) => ({ ...v, [key]: value }));
   }
 
-  function validate(): { success: true; data: Record<string, unknown> } | { success: false } {
+  function validate():
+    | { success: true; data: Record<string, unknown> }
+    | { success: false; errors: Record<string, string> } {
     const result = schema.safeParse(values);
     if (result.success) {
       setErrors({});
@@ -53,7 +55,7 @@ export function useStepForm<T extends object>(schema: ZodType, initialValues: T)
       if (!fieldErrors[path]) fieldErrors[path] = issue.message;
     }
     setErrors(fieldErrors);
-    return { success: false };
+    return { success: false, errors: fieldErrors };
   }
 
   return { values, setValue, setValues, errors, validate };

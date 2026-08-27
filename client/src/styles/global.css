@@ -36,28 +36,11 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* A barely-there version of the hero's plus-motif, tiled across the whole
-   page background rather than confined to the hero graphic. Opaque content
-   (.page, .nav-bar, cards) covers it everywhere it isn't wanted, so it only
-   actually shows in empty margin — which is exactly where a wide desktop
-   viewport needs it most, and it naturally disappears on mobile where
-   there's no such margin to fill. Baked as two static data-URIs (light/dark)
-   rather than a live SVG element, since CSS custom properties don't
-   cascade into a background-image's SVG content. */
 body {
   background-color: var(--color-bg);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='none' stroke='%231746a2' stroke-linecap='round'%3E%3Cpath d='M24 40h16M32 32v16' stroke-width='3' opacity='0.12'/%3E%3Cpath d='M104 22h12M110 16v12' stroke-width='2.5' opacity='0.10'/%3E%3C/g%3E%3Cg fill='none' stroke='%23b7cf3a' stroke-linecap='round'%3E%3Cpath d='M64 92h14M71 85v14' stroke-width='3' opacity='0.14'/%3E%3Cpath d='M16 102h10M21 97v10' stroke-width='2' opacity='0.10'/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 140px 140px;
   color: var(--color-text);
   font-family: var(--font-sans);
   line-height: 1.5;
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='none' stroke='%236f97e8' stroke-linecap='round'%3E%3Cpath d='M24 40h16M32 32v16' stroke-width='3' opacity='0.12'/%3E%3Cpath d='M104 22h12M110 16v12' stroke-width='2.5' opacity='0.10'/%3E%3C/g%3E%3Cg fill='none' stroke='%23cfe25c' stroke-linecap='round'%3E%3Cpath d='M64 92h14M71 85v14' stroke-width='3' opacity='0.14'/%3E%3Cpath d='M16 102h10M21 97v10' stroke-width='2' opacity='0.10'/%3E%3C/g%3E%3C/svg%3E");
-  }
 }
 
 h1,
@@ -629,13 +612,6 @@ a {
   .convo-step--question .step-form__actions {
     grid-area: actions;
   }
-
-  /* On desktop the sidebar shows the whole section — completed, current,
-     and upcoming — so it doubles as a progress outline, not just history. */
-  .recap-pill--current,
-  .recap-pill--upcoming {
-    display: flex;
-  }
 }
 
 .convo-step__review-title {
@@ -721,12 +697,12 @@ a {
   margin-left: var(--space-2);
 }
 
-/* Current/upcoming only show on desktop (see the ≥1000px block above) —
-   on mobile there's no room for a full outline, so the sidebar stays a
-   simple answered-so-far trail. */
+/* Shown at every viewport width — the sidebar is meant to preview every
+   question in the section, not just the ones already answered, so users
+   always know how much is left regardless of screen size. */
 .recap-pill--current,
 .recap-pill--upcoming {
-  display: none;
+  display: flex;
   border: 2px solid var(--color-primary);
   color: var(--color-primary-dark);
   font-weight: 700;
@@ -1292,17 +1268,28 @@ a {
   margin: var(--space-4) 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
 }
 
+/* Deliberately NOT styled like an input/pill (no border, no background,
+   no radius) — this is a read-only list of what's helpful to have on hand,
+   not something to click or fill in, and a pill/border look was getting
+   mistaken for a broken form control. */
 .checklist__item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) 0;
   color: var(--color-primary-dark);
+  font-weight: 600;
+}
+
+.checklist__item + .checklist__item {
+  border-top: 1px solid var(--color-border);
+}
+
+.checklist__item svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
 }
 
 /* Confirmation page */

@@ -36,7 +36,9 @@ interface ConversationalStepProps {
   values: Record<string, unknown>;
   setValue: (id: string, value: unknown) => void;
   errors: Record<string, string>;
-  validate: () => { success: true; data: Record<string, unknown> } | { success: false };
+  validate: () =>
+    | { success: true; data: Record<string, unknown> }
+    | { success: false; errors: Record<string, string> };
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
   /** Where to start: pass fields.length to land directly on the review screen for an already-complete step. */
@@ -185,6 +187,17 @@ export function ConversationalStep({
   const isCardChoice = field.kind === "choice" && !useCombobox;
   const controlId = `q-${field.id}`;
   const labelId = `${controlId}-label`;
+
+  // Runs the real zod validation for this question before letting the user
+  // move on — a malformed answer (bad email, out-of-range number, etc.)
+  // stops them here with an inline error instead of only surfacing at the
+  // end-of-section review, by which point they've already answered several
+  // more questions and have to navigate back to fix it.
+  function handleNextClick() {
+    const result = validate();
+    if (!result.success && result.errors[field.id]) return;
+    advance();
+  }
 
   function renderActiveInput() {
     switch (field.kind) {
@@ -362,7 +375,7 @@ export function ConversationalStep({
             <button
               type="button"
               className="button button--primary"
-              onClick={advance}
+              onClick={handleNextClick}
               disabled={!!field.required && isEmptyValue(value)}
             >
               Next →
