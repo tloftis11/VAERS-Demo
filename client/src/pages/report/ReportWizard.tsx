@@ -241,6 +241,7 @@ export function ReportWizard() {
         <AdverseEventStep
           submitterType={report.submitterType!}
           initialData={report.adverseEvent}
+          vaccineAdministrationDate={report.vaccine?.administrationDate}
           onNext={handleNext}
           onBack={handleBack}
         />
@@ -248,7 +249,12 @@ export function ReportWizard() {
       break;
     case "error-detail":
       stepContent = (
-        <ErrorDetailStep initialData={report.errorDetail} onNext={handleNext} onBack={handleBack} />
+        <ErrorDetailStep
+          initialData={report.errorDetail}
+          vaccineAdministrationDate={report.vaccine?.administrationDate}
+          onNext={handleNext}
+          onBack={handleBack}
+        />
       );
       break;
     case "documents":

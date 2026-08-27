@@ -296,6 +296,7 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
     ),
     // PUB-003: quick-select chips alongside (not instead of) the free-text description.
     symptoms: z.array(z.string()).optional().default([]),
+    symptomsOther: optionalString(),
     labResults: optionalString(),
     recoveryStatus: optionalEnum(RECOVERY_OPTIONS.map((o) => o.value)),
     // Item 21 is nominally "essential," but most real reports have none of these

@@ -5,6 +5,7 @@ import {
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
 } from "../../../../shared/src/schemas";
+import { suggestBodySiteMismatch } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { VaccineData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -45,7 +46,7 @@ export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   return [
     { id: "vaccineType", label: "Vaccine", required: true, kind: "choice", options: VACCINE_TYPES, icon: "vaccine" },
     { id: "administrationDate", label: "Date administered", required: true, kind: "date", icon: "calendar" },
-    { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "text", hint: "e.g. 9:30 AM" },
+    { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
     { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "text", hint: "e.g. 1st, 2nd, booster" },
     { id: "manufacturer", label: "Manufacturer", required: isHcp, kind: "text" },
     {
@@ -81,6 +82,7 @@ export function VaccineStep({ submitterType, initialData, onNext, onBack }: Vacc
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
   const isHcp = submitterType === "hcp";
   const fields = vaccineFieldSpecs(isHcp);
+  const siteMismatch = suggestBodySiteMismatch(values.route, values.bodySite);
 
   return (
     <ConversationalStep
@@ -93,6 +95,14 @@ export function VaccineStep({ submitterType, initialData, onNext, onBack }: Vacc
       onNext={onNext}
       onBack={onBack}
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
+      extras={{
+        bodySite: () =>
+          siteMismatch ? (
+            <p role="status" className="field__advisory">
+              {siteMismatch}
+            </p>
+          ) : null,
+      }}
     />
   );
 }

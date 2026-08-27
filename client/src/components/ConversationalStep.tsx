@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { FieldIcon, type FieldIconName } from "./illustrations";
 import { Combobox } from "./Combobox";
+import { MultiSelect } from "./MultiSelect";
+import { TimeInput12 } from "./TimeInput12";
 
 export type ConversationalFieldKind =
   | "text"
@@ -11,7 +13,9 @@ export type ConversationalFieldKind =
   | "textarea"
   | "select"
   | "choice"
-  | "checkboxGroup";
+  | "checkboxGroup"
+  | "multiSelect"
+  | "time12";
 
 export interface ConversationalOption {
   value: string;
@@ -45,6 +49,14 @@ interface ConversationalStepProps {
   initialIndex?: number;
   /** Extra content (e.g. an AI helper action) rendered under one specific active question. */
   extras?: Partial<Record<string, () => ReactNode>>;
+  /**
+   * Deterministic checks the per-step zod schema can't express — cross-field
+   * logic (e.g. "onset can't be before vaccination") or checks that need
+   * data from another step. Runs for the active field only, right before
+   * advancing; returning a message blocks Next with that message, same as a
+   * schema validation failure.
+   */
+  extraFieldValidation?: (fieldId: string, values: Record<string, unknown>) => string | null;
 }
 
 function isEmptyValue(v: unknown): boolean {
@@ -85,6 +97,7 @@ export function ConversationalStep({
   onBack,
   initialIndex = 0,
   extras,
+  extraFieldValidation,
 }: ConversationalStepProps) {
   const [index, setIndex] = useState(initialIndex);
   const [submitting, setSubmitting] = useState(false);
@@ -220,6 +233,11 @@ export function ConversationalStep({
       setActiveError(result.errors[field.id]);
       return;
     }
+    const extraMessage = extraFieldValidation?.(field.id, values);
+    if (extraMessage) {
+      setActiveError(extraMessage);
+      return;
+    }
     advance();
   }
 
@@ -276,6 +294,27 @@ export function ConversationalStep({
           </div>
         );
       }
+      case "multiSelect": {
+        const arr: string[] = Array.isArray(value) ? (value as string[]) : [];
+        return (
+          <MultiSelect
+            id={controlId}
+            options={field.options ?? []}
+            value={arr}
+            onChange={(v) => setValue(field.id, v)}
+            labelledBy={labelId}
+          />
+        );
+      }
+      case "time12":
+        return (
+          <TimeInput12
+            id={controlId}
+            value={typeof value === "string" ? value : ""}
+            onChange={(v) => setValue(field.id, v)}
+            labelledBy={labelId}
+          />
+        );
       case "select":
         return (
           <select
@@ -321,7 +360,8 @@ export function ConversationalStep({
     }
   }
 
-  const isGroupControl = field.kind === "choice" || field.kind === "checkboxGroup";
+  const isGroupControl =
+    field.kind === "choice" || field.kind === "checkboxGroup" || field.kind === "multiSelect" || field.kind === "time12";
 
   return (
     <div className="convo-step convo-step--question">

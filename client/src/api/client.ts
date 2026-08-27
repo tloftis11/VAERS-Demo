@@ -46,6 +46,7 @@ export interface AdverseEventData {
   onsetTime: string;
   description: string;
   symptoms: string[];
+  symptomsOther: string;
   labResults: string;
   recoveryStatus: string;
   outcomes: string[];
