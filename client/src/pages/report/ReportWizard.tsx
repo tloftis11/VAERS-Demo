@@ -41,6 +41,10 @@ export function ReportWizard() {
   const [report, setReport] = useState<ClientReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState(false);
+  // Which submitter-type card the user clicked (Patient vs. Caregiver vs.
+  // HCP) — ephemeral, never sent to the server, just lets the About-You
+  // step avoid re-asking a question the card already answered.
+  const [submitterCard, setSubmitterCard] = useState<"patient" | "caregiver" | "hcp" | null>(null);
 
   useEffect(() => {
     if (!reportId) return;
@@ -126,7 +130,10 @@ export function ReportWizard() {
       stepContent = (
         <SubmitterTypeStep
           value={report.submitterType}
-          onSelect={(v) => handleSelectAndAdvance({ submitterType: v })}
+          onSelect={(v, card) => {
+            setSubmitterCard(card);
+            return handleSelectAndAdvance({ submitterType: v });
+          }}
         />
       );
       break;
@@ -160,6 +167,7 @@ export function ReportWizard() {
         <AboutYouStep
           submitterType={report.submitterType!}
           initialData={report.aboutYou}
+          relationshipHint={submitterCard}
           onNext={handleNext}
           onBack={handleBack}
         />

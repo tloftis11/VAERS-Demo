@@ -181,14 +181,14 @@ export function ConversationalStep({
   const value = values[field.id];
   const error = errors[field.id];
   const canSkip = !field.required;
-  const isAutoAdvanceChoice = field.kind === "choice";
+  const useCombobox = field.kind === "choice" && (field.options?.length ?? 0) > 4;
+  const isCardChoice = field.kind === "choice" && !useCombobox;
   const controlId = `q-${field.id}`;
   const labelId = `${controlId}-label`;
 
   function renderActiveInput() {
     switch (field.kind) {
       case "choice": {
-        const useCombobox = (field.options?.length ?? 0) > 4;
         if (useCombobox) {
           return (
             <Combobox
@@ -196,10 +196,7 @@ export function ConversationalStep({
               options={field.options ?? []}
               value={typeof value === "string" ? value : ""}
               labelledBy={labelId}
-              onSelect={(v) => {
-                setValue(field.id, v);
-                advance();
-              }}
+              onSelect={(v) => setValue(field.id, v)}
             />
           );
         }
@@ -298,8 +295,12 @@ export function ConversationalStep({
                 type="button"
                 className={`recap-pill recap-pill--complete${display ? "" : " recap-pill--empty"}`}
                 onClick={() => setIndex(i)}
+                aria-label={`Edit answer: ${f.label}`}
               >
-                <span>{display || "Not provided"}</span>
+                <span className="recap-pill__text">
+                  <span className="recap-pill__label">{f.label}</span>
+                  <span className="recap-pill__value">{display || "Not provided"}</span>
+                </span>
                 <span className="recap-pill__edit" aria-hidden="true">
                   ✎
                 </span>
@@ -336,11 +337,6 @@ export function ConversationalStep({
               {field.label}
             </label>
           )}
-          {canSkip && (
-            <button type="button" className="convo-question__skip" onClick={advance}>
-              Skip →
-            </button>
-          )}
         </div>
         {field.hint && <p className="field__hint">{field.hint}</p>}
         {renderActiveInput()}
@@ -356,16 +352,22 @@ export function ConversationalStep({
         <button type="button" className="button button--text" onClick={goBack}>
           ← Back
         </button>
-        {!isAutoAdvanceChoice && (
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={advance}
-            disabled={!!field.required && isEmptyValue(value)}
-          >
-            Next →
-          </button>
-        )}
+        {isCardChoice
+          ? canSkip && (
+              <button type="button" className="button button--text" onClick={advance}>
+                Skip →
+              </button>
+            )
+          : (
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={advance}
+              disabled={!!field.required && isEmptyValue(value)}
+            >
+              Next →
+            </button>
+          )}
       </div>
     </div>
   );

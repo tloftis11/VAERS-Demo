@@ -501,48 +501,50 @@ a {
   color: var(--color-primary-contrast);
 }
 
-/* Step indicator — thin top progress bar + consolidated stage labels (FORM-001) */
+/* Step indicator */
 
 .step-indicator {
   margin-bottom: var(--space-6);
 }
 
-.step-indicator__bar {
+.step-indicator ol {
+  list-style: none;
+  display: flex;
+  gap: var(--space-1);
+  padding: 0;
+  margin: 0 0 var(--space-2);
+}
+
+.step-indicator__item {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-indicator__marker {
+  display: block;
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--color-border);
+}
+
+.step-indicator__item--current .step-indicator__marker,
+.step-indicator__item--complete .step-indicator__marker {
+  background: var(--color-primary);
+}
+
+/* Visually hidden but still announced by screen readers — the bar itself is
+   decorative; per-item labels matter for anyone not reading the segments
+   visually, so they must stay in the accessibility tree. */
+.step-indicator__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  margin-bottom: var(--space-3);
-}
-
-.step-indicator__bar-fill {
-  height: 100%;
-  background: var(--color-primary-dark);
-  border-radius: var(--radius-pill);
-  transition: width 0.2s ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .step-indicator__bar-fill {
-    transition: none;
-  }
-}
-
-.step-indicator__stages {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin-bottom: var(--space-2);
-  font-size: 0.85rem;
-}
-
-.step-indicator__stage {
-  color: var(--color-text-muted);
-}
-
-.step-indicator__stage--current {
-  color: var(--color-primary-dark);
-  font-weight: 700;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .step-indicator__progress-text {
@@ -687,8 +689,36 @@ a {
   background: var(--color-border);
 }
 
+.recap-pill__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.recap-pill__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recap-pill__value {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .recap-pill__edit {
   opacity: 0.75;
+  flex-shrink: 0;
+  margin-left: var(--space-2);
 }
 
 /* Current/upcoming only show on desktop (see the ≥1000px block above) —
