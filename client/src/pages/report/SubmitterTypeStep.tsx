@@ -1,14 +1,16 @@
 interface SubmitterTypeStepProps {
   value: "public" | "hcp" | null;
-  onSelect: (value: "public" | "hcp") => Promise<void>;
+  onSelect: (value: "public" | "hcp", card: "patient" | "caregiver" | "hcp") => Promise<void>;
 }
 
 /**
  * First branching decision (FLOW-001/002): three selectable options in the
  * UI, but exactly two underlying rule sets — Patient and Caregiver both map
  * to submitterType "public" (the person/caregiver distinction is captured
- * later by the "relationship" field on the About-You step), so no extra
- * branching logic is introduced for a third path.
+ * later by the "relationship" field on the About-You step). The `card`
+ * argument carries which of the three was actually clicked purely so the
+ * About-You step can pre-fill/simplify that relationship question instead
+ * of asking it from scratch — it's never persisted server-side.
  */
 export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
   return (
@@ -16,7 +18,7 @@ export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
       <h1>Who is filling out this form?</h1>
       <p>Choose the option that best matches your situation.</p>
       <div className="choice-cards">
-        <button type="button" className="choice-card" onClick={() => onSelect("public")}>
+        <button type="button" className="choice-card" onClick={() => onSelect("public", "patient")}>
           <span className="choice-card__icon">
             <PersonIcon />
           </span>
@@ -25,7 +27,7 @@ export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
             <p>Reporting for yourself</p>
           </span>
         </button>
-        <button type="button" className="choice-card" onClick={() => onSelect("public")}>
+        <button type="button" className="choice-card" onClick={() => onSelect("public", "caregiver")}>
           <span className="choice-card__icon">
             <PeopleIcon />
           </span>
@@ -34,7 +36,7 @@ export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
             <p>Reporting for a child, family, etc.</p>
           </span>
         </button>
-        <button type="button" className="choice-card" onClick={() => onSelect("hcp")}>
+        <button type="button" className="choice-card" onClick={() => onSelect("hcp", "hcp")}>
           <span className="choice-card__icon">
             <ClinicalIcon />
           </span>

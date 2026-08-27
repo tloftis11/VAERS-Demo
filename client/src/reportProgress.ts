@@ -156,7 +156,10 @@ export function mergeServerUpdate(report: ClientReport, step: StepId, server: Cl
     case "adverse-event-occurred":
       return { ...report, adverseEventOccurred: server.adverseEventOccurred };
     case "about-you":
-      return { ...report, aboutYou: server.aboutYou };
+      // Selecting "self" as relationship makes the server auto-fill the
+      // patient's name from the contact name as a side effect of this same
+      // PATCH — propagate it so the Patient step doesn't render blank.
+      return { ...report, aboutYou: server.aboutYou, patient: server.patient ?? report.patient };
     case "patient":
       return { ...report, patient: server.patient };
     case "vaccine":

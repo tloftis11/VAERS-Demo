@@ -4,17 +4,24 @@ import type { AboutYouData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 
+/** Which submitter-type card the user actually clicked (see SubmitterTypeStep) — never persisted, just a same-session hint for simplifying this step. */
+export type RelationshipHint = "patient" | "caregiver" | "hcp" | null;
+
 interface AboutYouStepProps {
   submitterType: SubmitterType;
   initialData: AboutYouData | null;
+  relationshipHint?: RelationshipHint;
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
 }
 
 const EMPTY: AboutYouData = { contactName: "", contactEmail: "", contactPhone: "", relationship: "" };
 
-/** Field set for "about you" — shared with the final review and the read-only follow-up lookup. */
-export function aboutYouFieldSpecs(submitterType: SubmitterType): ConversationalFieldSpec[] {
+/** Field set for "about you" — shared with the final review and the read-only follow-up lookup (both call this without a hint, since they're displaying an already-answered relationship, not asking it). */
+export function aboutYouFieldSpecs(
+  submitterType: SubmitterType,
+  relationshipHint: RelationshipHint = null
+): ConversationalFieldSpec[] {
   const isHcp = submitterType === "hcp";
   const fields: ConversationalFieldSpec[] = [
     { id: "contactName", label: "Your name", required: true, kind: "text", icon: "person" },
@@ -30,23 +37,32 @@ export function aboutYouFieldSpecs(submitterType: SubmitterType): Conversational
   ];
   // The real VAERS form has no healthcare-provider sub-role breakdown — HCPs
   // skip this question entirely (submitterType already captured that).
-  if (!isHcp) {
+  // Reporters who just told us they're the patient don't need to be asked
+  // their relationship to the patient — it's implied. Caregivers still get
+  // the question (parent vs. other relative isn't implied), just without
+  // the now-irrelevant "Myself" option.
+  if (!isHcp && relationshipHint !== "patient") {
     fields.push({
       id: "relationship",
       label: "Your relationship to the patient",
       required: true,
       kind: "choice",
-      options: RELATIONSHIP_OPTIONS_PUBLIC,
+      options:
+        relationshipHint === "caregiver"
+          ? RELATIONSHIP_OPTIONS_PUBLIC.filter((o) => o.value !== "self")
+          : RELATIONSHIP_OPTIONS_PUBLIC,
     });
   }
   return fields;
 }
 
-export function AboutYouStep({ submitterType, initialData, onNext, onBack }: AboutYouStepProps) {
+export function AboutYouStep({ submitterType, initialData, relationshipHint = null, onNext, onBack }: AboutYouStepProps) {
   const schema = aboutYouSchema(submitterType);
   const initial = initialData ?? EMPTY;
-  const { values, setValue, errors, validate } = useStepForm(schema, initial);
-  const fields = aboutYouFieldSpecs(submitterType);
+  const seededInitial =
+    relationshipHint === "patient" && !initial.relationship ? { ...initial, relationship: "self" } : initial;
+  const { values, setValue, errors, validate } = useStepForm(schema, seededInitial);
+  const fields = aboutYouFieldSpecs(submitterType, relationshipHint);
 
   return (
     <ConversationalStep
@@ -58,7 +74,7 @@ export function AboutYouStep({ submitterType, initialData, onNext, onBack }: Abo
       validate={validate}
       onNext={onNext}
       onBack={onBack}
-      initialIndex={schema.safeParse(initial).success ? fields.length : 0}
+      initialIndex={schema.safeParse(seededInitial).success ? fields.length : 0}
     />
   );
 }

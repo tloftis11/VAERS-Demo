@@ -1,5 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ZodType } from "zod";
+
+function isEmptyFieldValue(v: unknown): boolean {
+  if (v === null || v === undefined) return true;
+  if (typeof v === "string") return v.trim() === "";
+  if (Array.isArray(v)) return v.length === 0;
+  return false;
+}
 
 /**
  * Reuses the exact same zod schema the server re-validates with (design doc
@@ -9,6 +16,26 @@ import type { ZodType } from "zod";
 export function useStepForm<T extends object>(schema: ZodType, initialValues: T) {
   const [values, setValues] = useState<T>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // A step can mount before a server-side side effect from an earlier step
+  // (e.g. auto-filling the patient's name) has resolved, so `initialValues`
+  // may change identity after mount. Absorb any newly-available values for
+  // fields that are still blank locally — but never overwrite a field the
+  // user has already started filling in themselves.
+  useEffect(() => {
+    setValues((current) => {
+      let changed = false;
+      const merged = { ...current };
+      for (const key of Object.keys(initialValues) as (keyof T)[]) {
+        if (isEmptyFieldValue(current[key]) && !isEmptyFieldValue(initialValues[key])) {
+          merged[key] = initialValues[key];
+          changed = true;
+        }
+      }
+      return changed ? merged : current;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValues]);
 
   function setValue<K extends keyof T>(key: K, value: T[K]) {
     setValues((v) => ({ ...v, [key]: value }));

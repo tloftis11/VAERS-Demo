@@ -69,22 +69,24 @@ export function ReportEntry() {
 
   if (draft) {
     return (
-      <div className="choice-step">
-        <h1>Continue your report?</h1>
-        <p>You have a report in progress on this device that hasn't been submitted yet.</p>
-        <div className="choice-cards">
-          <button type="button" className="choice-card" onClick={resumeDraft}>
-            <span>
-              <h2>Continue where I left off</h2>
-              <p>Pick back up on your in-progress report.</p>
-            </span>
-          </button>
-          <button type="button" className="choice-card" onClick={startNew}>
-            <span>
-              <h2>Start a new report</h2>
-              <p>Your in-progress report stays saved in case you change your mind.</p>
-            </span>
-          </button>
+      <div className="page page--wizard">
+        <div className="choice-step">
+          <h1>Continue your report?</h1>
+          <p>You have a report in progress on this device that hasn't been submitted yet.</p>
+          <div className="choice-cards">
+            <button type="button" className="choice-card" onClick={resumeDraft}>
+              <span>
+                <h2>Continue where I left off</h2>
+                <p>Pick back up on your in-progress report.</p>
+              </span>
+            </button>
+            <button type="button" className="choice-card" onClick={startNew}>
+              <span>
+                <h2>Start a new report</h2>
+                <p>Your in-progress report stays saved in case you change your mind.</p>
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     );
