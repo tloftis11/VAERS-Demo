@@ -32,10 +32,12 @@ export function hospitalizationExceedsElapsed(
   const onset = parsedDate(onsetDate);
   if (onset === null || !Number.isFinite(hospitalizationDays) || hospitalizationDays <= 0) return null;
   const elapsedDays = Math.floor((today.getTime() - onset) / (24 * 60 * 60 * 1000));
-  if (hospitalizationDays > elapsedDays) {
-    return elapsedDays <= 0
-      ? "Hospitalization days can't exceed the time since symptoms began — that was today."
-      : `Hospitalization days (${hospitalizationDays}) can't exceed the ${elapsedDays} day${elapsedDays === 1 ? "" : "s"} since symptoms began.`;
+  // +1 because the day symptoms started already counts as a day — onset
+  // "today" (elapsedDays=0) should still allow reporting 1 day so far, not
+  // reject every same-day report as impossible.
+  const maxPlausibleDays = elapsedDays + 1;
+  if (hospitalizationDays > maxPlausibleDays) {
+    return `Hospitalization days (${hospitalizationDays}) can't exceed the ${maxPlausibleDays} day${maxPlausibleDays === 1 ? "" : "s"} since symptoms began.`;
   }
   return null;
 }

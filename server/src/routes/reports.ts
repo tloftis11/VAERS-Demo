@@ -19,6 +19,26 @@ import {
 
 export const reportsRouter = Router();
 
+/** Age at vaccination, derived from date of birth + vaccination date rather
+ * than trusting a manually-typed number that could disagree with either. */
+function computeAge(dobStr: string, atDateStr: string): { years: number; months: number } {
+  const dob = new Date(dobStr);
+  const at = new Date(atDateStr);
+  let years = at.getFullYear() - dob.getFullYear();
+  let months = at.getMonth() - dob.getMonth();
+  if (at.getDate() < dob.getDate()) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years < 0) {
+    // Shouldn't happen given the live "vaccination can't precede birth"
+    // check on the Vaccine step, but never report a negative age.
+    return { years: 0, months: 0 };
+  }
+  return { years, months };
+}
+
 function branchingStateFromReport(report: {
   submitterType: string | null;
   administrationError: boolean | null;
@@ -67,6 +87,7 @@ async function serializeReport(reportId: string) {
           patientFirstName: report.patient.firstName ?? "",
           patientLastName: report.patient.lastName ?? "",
           patientDateOfBirth: report.patient.dateOfBirth ?? "",
+          dateOfBirthUnknown: report.patient.dateOfBirthUnknown,
           patientSex: report.patient.sex ?? "",
           ageYears: report.patient.ageYears ?? "",
           ageMonths: report.patient.ageMonths ?? "",
@@ -83,6 +104,7 @@ async function serializeReport(reportId: string) {
     vaccine: report.vaccine
       ? {
           vaccineType: report.vaccine.vaccineType ?? "",
+          vaccineTypeOther: report.vaccine.vaccineTypeOther ?? "",
           manufacturer: report.vaccine.manufacturer ?? "",
           lotNumber: report.vaccine.lotNumber ?? "",
           doseNumber: report.vaccine.doseNumber ?? "",
@@ -236,13 +258,19 @@ reportsRouter.patch("/:id", async (req, res) => {
       break;
     }
     case "patient": {
+      const dobUnknown = Boolean(validated.dateOfBirthUnknown);
       const patientData = {
         firstName: validated.patientFirstName,
         lastName: validated.patientLastName,
-        dateOfBirth: validated.patientDateOfBirth,
+        dateOfBirth: dobUnknown ? null : validated.patientDateOfBirth || null,
+        dateOfBirthUnknown: dobUnknown,
         sex: validated.patientSex,
-        ageYears: validated.ageYears ?? null,
-        ageMonths: validated.ageMonths === "" ? null : validated.ageMonths,
+        // When DOB is known, age is derived once the vaccination date is
+        // available (below, and from the "vaccine" case) rather than
+        // trusted from the client — only the DOB-unknown fallback path
+        // takes a directly-entered age.
+        ageYears: dobUnknown ? (validated.ageYears === "" ? null : validated.ageYears) : null,
+        ageMonths: dobUnknown ? (validated.ageMonths === "" ? null : validated.ageMonths) : null,
         state: validated.patientState || null,
         pregnant: validated.pregnant || null,
         medicationsAtVaccination: validated.medicationsAtVaccination || null,
@@ -257,15 +285,34 @@ reportsRouter.patch("/:id", async (req, res) => {
         create: { reportId: id, ...patientData },
         update: patientData,
       });
+      if (!dobUnknown && patientData.dateOfBirth) {
+        const vaccine = await prisma.vaccineAdministration.findUnique({ where: { reportId: id } });
+        if (vaccine?.administrationDate) {
+          const age = computeAge(patientData.dateOfBirth, vaccine.administrationDate);
+          await prisma.patient.update({
+            where: { reportId: id },
+            data: { ageYears: age.years, ageMonths: age.months },
+          });
+        }
+      }
       break;
     }
-    case "vaccine":
+    case "vaccine": {
       await prisma.vaccineAdministration.upsert({
         where: { reportId: id },
         create: { reportId: id, ...validated },
         update: { ...validated },
       });
+      const patient = await prisma.patient.findUnique({ where: { reportId: id } });
+      if (patient && !patient.dateOfBirthUnknown && patient.dateOfBirth && validated.administrationDate) {
+        const age = computeAge(patient.dateOfBirth, validated.administrationDate);
+        await prisma.patient.update({
+          where: { reportId: id },
+          data: { ageYears: age.years, ageMonths: age.months },
+        });
+      }
       break;
+    }
     case "adverse-event": {
       // administrationError and adverseEventOccurred are independent
       // (PROV-002/003), so a report can have both an ErrorDetail and an
@@ -469,6 +516,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             patientFirstName: report.patient.firstName ?? "",
             patientLastName: report.patient.lastName ?? "",
             patientDateOfBirth: report.patient.dateOfBirth ?? "",
+            dateOfBirthUnknown: report.patient.dateOfBirthUnknown,
             patientSex: report.patient.sex ?? "",
             ageYears: report.patient.ageYears ?? "",
             ageMonths: report.patient.ageMonths ?? "",
@@ -486,6 +534,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
       return report.vaccine
         ? {
             vaccineType: report.vaccine.vaccineType ?? "",
+            vaccineTypeOther: report.vaccine.vaccineTypeOther ?? "",
             manufacturer: report.vaccine.manufacturer ?? "",
             lotNumber: report.vaccine.lotNumber ?? "",
             doseNumber: report.vaccine.doseNumber ?? "",

@@ -5,7 +5,7 @@ import {
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
 } from "../../../../shared/src/schemas";
-import { suggestBodySiteMismatch } from "../../../../shared/src/liveChecks";
+import { suggestBodySiteMismatch, isDateBefore } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { VaccineData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -14,12 +14,15 @@ import { ConversationalStep, type ConversationalFieldSpec } from "../../componen
 interface VaccineStepProps {
   submitterType: SubmitterType;
   initialData: VaccineData | null;
+  /** From the Patient step, for a live "vaccination can't precede birth" check — absent when DOB is unknown. */
+  patientDateOfBirth?: string;
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
 }
 
 const EMPTY: VaccineData = {
   vaccineType: "",
+  vaccineTypeOther: "",
   manufacturer: "",
   lotNumber: "",
   doseNumber: "",
@@ -45,6 +48,7 @@ const EMPTY: VaccineData = {
 export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   return [
     { id: "vaccineType", label: "Vaccine", required: true, kind: "choice", options: VACCINE_TYPES, icon: "vaccine" },
+    { id: "vaccineTypeOther", label: "Please specify the vaccine", required: false, kind: "text" },
     { id: "administrationDate", label: "Date administered", required: true, kind: "date", icon: "calendar" },
     { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
     { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "text", hint: "e.g. 1st, 2nd, booster" },
@@ -76,13 +80,31 @@ export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   ];
 }
 
-export function VaccineStep({ submitterType, initialData, onNext, onBack }: VaccineStepProps) {
+export function VaccineStep({
+  submitterType,
+  initialData,
+  patientDateOfBirth,
+  onNext,
+  onBack,
+}: VaccineStepProps) {
   const schema = vaccineSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
   const isHcp = submitterType === "hcp";
-  const fields = vaccineFieldSpecs(isHcp);
+  const fields = vaccineFieldSpecs(isHcp).filter(
+    (f) => f.id !== "vaccineTypeOther" || values.vaccineType === "other"
+  );
   const siteMismatch = suggestBodySiteMismatch(values.route, values.bodySite);
+
+  function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {
+    if (fieldId === "administrationDate" && patientDateOfBirth) {
+      const administrationDate = String(liveValues.administrationDate ?? "");
+      if (administrationDate && isDateBefore(administrationDate, patientDateOfBirth)) {
+        return "Vaccination date can't be before the patient's date of birth.";
+      }
+    }
+    return null;
+  }
 
   return (
     <ConversationalStep
@@ -95,6 +117,7 @@ export function VaccineStep({ submitterType, initialData, onNext, onBack }: Vacc
       onNext={onNext}
       onBack={onBack}
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
+      extraFieldValidation={checkFieldLogic}
       extras={{
         bodySite: () =>
           siteMismatch ? (

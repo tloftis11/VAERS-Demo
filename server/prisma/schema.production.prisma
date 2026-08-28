@@ -52,6 +52,7 @@ model Patient {
   firstName                String?
   lastName                 String?
   dateOfBirth              String?
+  dateOfBirthUnknown       Boolean @default(false) // when true, ageYears/ageMonths are manually entered instead of derived
   sex                      String?
   ageYears                 Int?
   ageMonths                Int?
@@ -70,6 +71,7 @@ model VaccineAdministration {
   reportId              String  @unique
   report                Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   vaccineType           String?
+  vaccineTypeOther      String? // free-text detail when vaccineType is "other"
   manufacturer          String?
   lotNumber             String?
   doseNumber            String?

@@ -5,7 +5,7 @@ import { missingRequiredSteps } from "../../reportProgress";
 import type { ClientReport } from "../../api/client";
 import { ReportSummarySection } from "../../components/ReportSummary";
 import { aboutYouFieldSpecs } from "./AboutYouStep";
-import { PATIENT_FIELD_SPECS } from "./PatientStep";
+import { patientFieldSpecs } from "./PatientStep";
 import { vaccineFieldSpecs } from "./VaccineStep";
 import { adverseEventFieldSpecs } from "./AdverseEventStep";
 import { ERROR_DETAIL_FIELD_SPECS } from "./ErrorDetailStep";
@@ -119,7 +119,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
         fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
         values={report.aboutYou}
       />
-      <ReportSummarySection title="About the patient" fields={PATIENT_FIELD_SPECS} values={report.patient} />
+      <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
       <ReportSummarySection
         title="Vaccine information"
         fields={vaccineFieldSpecs(isHcp)}

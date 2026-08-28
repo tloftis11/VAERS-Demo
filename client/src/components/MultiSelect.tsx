@@ -23,6 +23,8 @@ interface MultiSelectProps {
 export function MultiSelect({ id, options, value, onChange, labelledBy, placeholder }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const firstOptionRef = useRef<HTMLInputElement>(null);
   const panelId = `${id}-panel`;
 
   useEffect(() => {
@@ -34,6 +36,18 @@ export function MultiSelect({ id, options, value, onChange, labelledBy, placehol
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
+
+  // Opening the panel (mouse or keyboard) should land focus on its first
+  // checkbox — otherwise a keyboard user has no signal the panel opened at
+  // all short of guessing to Tab forward.
+  useEffect(() => {
+    if (open) firstOptionRef.current?.focus();
+  }, [open]);
+
+  function closeAndReturnFocus() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
 
   function toggle(v: string) {
     onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
@@ -52,6 +66,7 @@ export function MultiSelect({ id, options, value, onChange, labelledBy, placehol
       <button
         type="button"
         id={id}
+        ref={triggerRef}
         className="convo-input multiselect__trigger"
         aria-haspopup="true"
         aria-expanded={open}
@@ -72,13 +87,30 @@ export function MultiSelect({ id, options, value, onChange, labelledBy, placehol
         </span>
       </button>
       {open && (
-        <div className="multiselect__panel" id={panelId} role="group" aria-labelledby={labelledBy}>
-          {options.map((opt) => {
+        <div
+          className="multiselect__panel"
+          id={panelId}
+          role="group"
+          aria-labelledby={labelledBy}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              closeAndReturnFocus();
+            }
+          }}
+        >
+          {options.map((opt, i) => {
             const checked = value.includes(opt.value);
             const optId = `${id}-opt-${opt.value}`;
             return (
               <label key={opt.value} htmlFor={optId} className="multiselect__option">
-                <input id={optId} type="checkbox" checked={checked} onChange={() => toggle(opt.value)} />
+                <input
+                  id={optId}
+                  ref={i === 0 ? firstOptionRef : undefined}
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(opt.value)}
+                />
                 {opt.label}
               </label>
             );

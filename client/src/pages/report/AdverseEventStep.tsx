@@ -91,6 +91,13 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
       hint: "Include dates if you can — both abnormal and normal/negative findings are useful.",
     },
     {
+      id: "outcomes",
+      label: "Did any of these occur? (optional, select all that apply)",
+      required: false,
+      kind: "multiSelect",
+      options: OUTCOME_OPTIONS,
+    },
+    {
       id: "recoveryStatus",
       label: "Has the patient recovered? (optional)",
       required: false,
@@ -98,13 +105,12 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
       options: RECOVERY_OPTIONS,
     },
     {
-      id: "outcomes",
-      label: "Did any of these occur? (optional, select all that apply)",
-      required: false,
-      kind: "checkboxGroup",
-      options: OUTCOME_OPTIONS,
+      id: "hospitalizationDays",
+      label: "Number of days hospitalized",
+      required: true,
+      kind: "number",
+      hint: "If the patient is still hospitalized, enter the number of days so far — you can update this later with a follow-up note.",
     },
-    { id: "hospitalizationDays", label: "Number of days hospitalized (optional)", required: false, kind: "number" },
     { id: "hospitalName", label: "Hospital name (optional)", required: false, kind: "text" },
     { id: "hospitalCity", label: "Hospital city (optional)", required: false, kind: "text" },
     { id: "hospitalState", label: "Hospital state (optional)", required: false, kind: "choice", options: STATE_OPTIONS },
@@ -177,6 +183,27 @@ export function AdverseEventStep({
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof AdverseEventData, value as any);
     if (id === "description" || id === "outcomes" || id === "recoveryStatus") setCheckIssues(null);
+
+    // A field hidden because its trigger changed shouldn't leave stale data
+    // behind to be silently submitted once it's no longer visible.
+    if (id === "outcomes") {
+      const newOutcomes = value as string[];
+      if (!newOutcomes.includes("hospitalization") && !newOutcomes.includes("hospitalization_prolonged")) {
+        setValue("hospitalizationDays", "");
+        setValue("hospitalName", "");
+        setValue("hospitalCity", "");
+        setValue("hospitalState", "");
+      }
+      if (!newOutcomes.includes("death")) {
+        setValue("dateOfDeath", "");
+      }
+    }
+    if (id === "previousAdverseEvent" && value !== "yes") {
+      setValue("previousAdverseEventDetails", "");
+    }
+    if (id === "symptoms" && !(value as string[]).includes("other")) {
+      setValue("symptomsOther", "");
+    }
   }
 
   async function handleCheckDescription() {
@@ -203,6 +230,10 @@ export function AdverseEventStep({
     switch (f.id) {
       case "symptomsOther":
         return showSymptomsOther;
+      case "recoveryStatus":
+        // Asking "has the patient recovered?" doesn't make sense once
+        // "Patient died" is already recorded as an outcome.
+        return !outcomes.includes("death");
       case "hospitalizationDays":
       case "hospitalName":
       case "hospitalCity":
