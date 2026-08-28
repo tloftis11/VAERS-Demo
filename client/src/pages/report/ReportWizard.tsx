@@ -285,7 +285,13 @@ export function ReportWizard() {
   const crossedHalfway = steps.indexOf(currentStep) / steps.length >= 0.5;
 
   return (
-    <div className="page page--wizard">
+    // Keyed by reportId: React Router doesn't remount a component just
+    // because a route param changes, so without this, starting a new report
+    // via in-app navigation (no full page reload) reuses the same step
+    // component instances — and useStepForm's internal values/errors state
+    // — from whatever report was previously open, leaking stale data
+    // (including old validation errors) into the new one.
+    <div className="page page--wizard" key={reportId}>
       <div className="wizard-header">
         <StepIndicator steps={steps} currentStep={currentStep} />
         {saveStatus !== "idle" && (
