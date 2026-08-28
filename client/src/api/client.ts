@@ -14,6 +14,7 @@ export interface PatientData {
   patientFirstName: string;
   patientLastName: string;
   patientDateOfBirth: string;
+  dateOfBirthUnknown: boolean;
   patientSex: string;
   ageYears: number | string;
   ageMonths: number | string;
@@ -29,6 +30,7 @@ export interface PatientData {
 
 export interface VaccineData {
   vaccineType: string;
+  vaccineTypeOther: string;
   manufacturer: string;
   lotNumber: string;
   doseNumber: string;

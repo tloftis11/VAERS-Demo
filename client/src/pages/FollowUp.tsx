@@ -17,7 +17,7 @@ import { Dropzone } from "../components/Dropzone";
 import { FieldIcon } from "../components/illustrations";
 import { ReportSummarySection } from "../components/ReportSummary";
 import { aboutYouFieldSpecs } from "./report/AboutYouStep";
-import { PATIENT_FIELD_SPECS } from "./report/PatientStep";
+import { patientFieldSpecs } from "./report/PatientStep";
 import { vaccineFieldSpecs } from "./report/VaccineStep";
 import { adverseEventFieldSpecs } from "./report/AdverseEventStep";
 import { ERROR_DETAIL_FIELD_SPECS } from "./report/ErrorDetailStep";
@@ -271,7 +271,7 @@ export function FollowUp() {
             fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
             values={report.aboutYou}
           />
-          <ReportSummarySection title="About the patient" fields={PATIENT_FIELD_SPECS} values={report.patient} />
+          <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
           <ReportSummarySection
             title="Vaccine information"
             fields={vaccineFieldSpecs(report.submitterType === "hcp")}

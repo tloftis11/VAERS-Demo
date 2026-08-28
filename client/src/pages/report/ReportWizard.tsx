@@ -231,6 +231,7 @@ export function ReportWizard() {
         <VaccineStep
           submitterType={report.submitterType!}
           initialData={report.vaccine}
+          patientDateOfBirth={report.patient?.patientDateOfBirth || undefined}
           onNext={handleNext}
           onBack={handleBack}
         />

@@ -57,9 +57,9 @@ const optionalDate = (msg = "Enter a valid date") =>
 // The empty-string branch must be checked FIRST: z.coerce.number() happily
 // coerces "" to 0, which would otherwise pass a .nonnegative()/.min(0) check
 // and silently turn "skipped" into "zero".
-const optionalNonNegativeInt = () =>
+const optionalBoundedInt = (max: number, msg = `Enter a number from 0 to ${max}`) =>
   z
-    .union([z.literal(""), z.coerce.number().int().nonnegative()])
+    .union([z.literal(""), z.coerce.number().int().min(0, msg).max(max, msg)])
     .optional()
     .transform((v) => v ?? "");
 
@@ -226,30 +226,69 @@ export function aboutYouSchema(submitterType: SubmitterType) {
   });
 }
 
-/** Items 1 (patient demographics), 2 (DOB), 3 (sex), 6 (age), 8 (pregnancy), 9-12 (history), 24-25 (race/ethnicity). */
+/**
+ * Items 1 (patient demographics), 2 (DOB), 3 (sex), 6 (age), 8 (pregnancy),
+ * 9-12 (history), 24-25 (race/ethnicity).
+ *
+ * Age at vaccination (item 6) is derived from date of birth + the
+ * vaccination date rather than typed in directly — a manually-entered age
+ * can silently disagree with the DOB a couple of questions earlier, and
+ * there's no reason to ask for both when one determines the other. Age is
+ * only ever asked directly when `dateOfBirthUnknown` is set, since there's
+ * nothing to derive it from in that case. The base object below leaves
+ * patientDateOfBirth/ageYears/ageMonths structurally optional; superRefine
+ * enforces the actual either/or requirement.
+ */
+const patientBase = z.object({
+  patientFirstName: requiredString("Patient's first name is required"),
+  patientLastName: requiredString("Patient's last name is required"),
+  patientDateOfBirth: optionalDate("Enter the patient's date of birth"),
+  dateOfBirthUnknown: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v) => v === true || v === "true"),
+  patientSex: selectEnum(["female", "male", "unknown"], "Select the patient's sex"),
+  ageYears: z
+    .union([z.literal(""), z.coerce.number().int().min(0).max(120, "Enter a valid age")])
+    .optional()
+    .transform((v) => v ?? ""),
+  ageMonths: z
+    .union([z.literal(""), z.coerce.number().int().min(0).max(11)])
+    .optional()
+    .transform((v) => v ?? ""),
+  patientState: optionalString(),
+  pregnant: optionalEnum(["yes", "no", "unknown"]),
+  medicationsAtVaccination: optionalString(),
+  allergies: optionalString(),
+  recentIllnesses: optionalString(),
+  chronicConditions: optionalString(),
+  patientRace: z.array(z.string()).optional().default([]),
+  patientEthnicity: optionalEnum(ETHNICITY_OPTIONS.map((o) => o.value)),
+});
+
 export function patientSchema(_submitterType: SubmitterType) {
-  return z.object({
-    patientFirstName: requiredString("Patient's first name is required"),
-    patientLastName: requiredString("Patient's last name is required"),
-    patientDateOfBirth: dateSchema("Enter the patient's date of birth").refine(
-      notInFuture,
-      "Date of birth cannot be in the future"
-    ),
-    patientSex: selectEnum(["female", "male", "unknown"], "Select the patient's sex"),
-    // Item 6 (essential): age at vaccination, not weight — the real form has no weight field.
-    ageYears: z.coerce.number().int().min(0, "Enter age in years").max(120, "Enter a valid age"),
-    ageMonths: z
-      .union([z.literal(""), z.coerce.number().int().min(0).max(11)])
-      .optional()
-      .transform((v) => v ?? ""),
-    patientState: optionalString(),
-    pregnant: optionalEnum(["yes", "no", "unknown"]),
-    medicationsAtVaccination: optionalString(),
-    allergies: optionalString(),
-    recentIllnesses: optionalString(),
-    chronicConditions: optionalString(),
-    patientRace: z.array(z.string()).optional().default([]),
-    patientEthnicity: optionalEnum(ETHNICITY_OPTIONS.map((o) => o.value)),
+  return patientBase.superRefine((data, ctx) => {
+    if (!data.dateOfBirthUnknown) {
+      if (!data.patientDateOfBirth) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["patientDateOfBirth"],
+          message: "Enter the patient's date of birth, or mark it as unknown",
+        });
+      } else if (!isValidDate(data.patientDateOfBirth)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["patientDateOfBirth"], message: "Enter a valid date" });
+      } else if (!notInFuture(data.patientDateOfBirth)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["patientDateOfBirth"],
+          message: "Date of birth cannot be in the future",
+        });
+      }
+      // ageYears/ageMonths are computed server-side once the vaccination
+      // date is known (see reports.ts) — nothing to validate here.
+    } else if (data.ageYears === "" || data.ageYears === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ageYears"], message: "Enter age in years" });
+    }
   });
 }
 
@@ -257,6 +296,7 @@ export function patientSchema(_submitterType: SubmitterType) {
 export function vaccineSchema(submitterType: SubmitterType) {
   const base = z.object({
     vaccineType: requiredString("Select the vaccine given"),
+    vaccineTypeOther: optionalString(),
     doseNumber: optionalString(),
     administrationDate: dateSchema("Enter the vaccination date").refine(
       notInFuture,
@@ -305,7 +345,9 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
       .array(z.enum(OUTCOME_OPTIONS.map((o) => o.value) as [string, ...string[]]))
       .optional()
       .default([]),
-    hospitalizationDays: optionalNonNegativeInt(),
+    // Capped at a year — a hospitalization stay longer than that is almost
+    // certainly a data-entry mistake, not a real value worth accepting.
+    hospitalizationDays: optionalBoundedInt(365),
     hospitalName: optionalString(),
     hospitalCity: optionalString(),
     hospitalState: optionalString(),
@@ -315,7 +357,16 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
     previousAdverseEvent: optionalEnum(["yes", "no", "unknown"]),
     previousAdverseEventDetails: optionalString(),
   });
-  return base;
+  return base.superRefine((data, ctx) => {
+    const hospitalized = data.outcomes.includes("hospitalization") || data.outcomes.includes("hospitalization_prolonged");
+    if (hospitalized && data.hospitalizationDays === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["hospitalizationDays"],
+        message: "Enter the number of days hospitalized (if still hospitalized, enter the days so far)",
+      });
+    }
+  });
 }
 
 export const errorDetailSchema = z.object({
