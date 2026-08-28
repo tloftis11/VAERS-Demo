@@ -7,6 +7,15 @@
  * date-comparison logic in every step component.
  */
 
+/** Today as "YYYY-MM-DD", for capping date inputs at the native-picker
+ * level — the schema's own notInFuture refine still catches anything that
+ * gets through some other way, this just stops the picker from offering
+ * (or a scroll/keyboard slip from producing) an obviously-impossible date
+ * in the first place. */
+export function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function parsedDate(v: string): number | null {
   const t = Date.parse(v);
   return Number.isNaN(t) ? null : t;

@@ -31,6 +31,9 @@ export interface ConversationalFieldSpec {
   options?: readonly ConversationalOption[];
   rows?: number;
   icon?: FieldIconName;
+  /** For kind "date" — ISO "YYYY-MM-DD" bounds enforced by the native picker itself, not just the schema. */
+  min?: string;
+  max?: string;
 }
 
 interface ConversationalStepProps {
@@ -355,6 +358,8 @@ export function ConversationalStep({
             onChange={(e) => setValue(field.id, e.target.value)}
             aria-invalid={!!error}
             aria-describedby={error ? errorId : undefined}
+            min={field.kind === "date" ? field.min : undefined}
+            max={field.kind === "date" ? field.max : undefined}
           />
         );
     }

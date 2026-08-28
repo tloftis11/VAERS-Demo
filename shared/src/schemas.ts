@@ -366,6 +366,13 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
         message: "Enter the number of days hospitalized (if still hospitalized, enter the days so far)",
       });
     }
+    if (data.dateOfDeath && !notInFuture(data.dateOfDeath)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["dateOfDeath"],
+        message: "Date of death cannot be in the future",
+      });
+    }
   });
 }
 

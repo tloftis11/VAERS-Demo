@@ -1,5 +1,5 @@
 import { errorDetailSchema, ERROR_TYPES } from "../../../../shared/src/schemas";
-import { isDateBefore } from "../../../../shared/src/liveChecks";
+import { isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { ErrorDetailData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
@@ -23,7 +23,14 @@ const EMPTY: ErrorDetailData = {
 export const ERROR_DETAIL_FIELD_SPECS: ConversationalFieldSpec[] = [
   { id: "errorType", label: "Type of error", required: true, kind: "choice", options: ERROR_TYPES },
   { id: "errorDescription", label: "Describe the error", required: true, kind: "textarea", rows: 4 },
-  { id: "errorDiscoveredDate", label: "Date the error was discovered", required: true, kind: "date", icon: "calendar" },
+  {
+    id: "errorDiscoveredDate",
+    label: "Date the error was discovered",
+    required: true,
+    kind: "date",
+    icon: "calendar",
+    max: todayIsoDate(),
+  },
   {
     id: "correctiveActionTaken",
     label: "Corrective action taken (optional)",

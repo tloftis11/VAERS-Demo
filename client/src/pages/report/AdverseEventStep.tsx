@@ -7,7 +7,7 @@ import {
   STATE_OPTIONS,
   SYMPTOM_OPTIONS,
 } from "../../../../shared/src/schemas";
-import { isDateBefore, hospitalizationExceedsElapsed } from "../../../../shared/src/liveChecks";
+import { isDateBefore, hospitalizationExceedsElapsed, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import { checkDescriptionConsistency, type AdverseEventData, type ConsistencyIssue } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -58,7 +58,14 @@ const EMPTY: AdverseEventData = {
  */
 export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   return [
-    { id: "onsetDate", label: "When did symptoms start?", required: true, kind: "date", icon: "calendar" },
+    {
+      id: "onsetDate",
+      label: "When did symptoms start?",
+      required: true,
+      kind: "date",
+      icon: "calendar",
+      max: todayIsoDate(),
+    },
     { id: "onsetTime", label: "Time symptoms started (optional)", required: false, kind: "time12" },
     {
       id: "description",
@@ -114,7 +121,7 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
     { id: "hospitalName", label: "Hospital name (optional)", required: false, kind: "text" },
     { id: "hospitalCity", label: "Hospital city (optional)", required: false, kind: "text" },
     { id: "hospitalState", label: "Hospital state (optional)", required: false, kind: "choice", options: STATE_OPTIONS },
-    { id: "dateOfDeath", label: "Date of death", required: false, kind: "date" },
+    { id: "dateOfDeath", label: "Date of death", required: false, kind: "date", max: todayIsoDate() },
     { id: "treatmentGiven", label: "Treatment given (optional)", required: false, kind: "textarea", rows: 3 },
     {
       id: "clinicalCourseNotes",

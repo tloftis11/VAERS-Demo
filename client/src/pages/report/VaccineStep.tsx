@@ -5,7 +5,7 @@ import {
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
 } from "../../../../shared/src/schemas";
-import { suggestBodySiteMismatch, isDateBefore } from "../../../../shared/src/liveChecks";
+import { suggestBodySiteMismatch, isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { VaccineData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -49,7 +49,14 @@ export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   return [
     { id: "vaccineType", label: "Vaccine", required: true, kind: "choice", options: VACCINE_TYPES, icon: "vaccine" },
     { id: "vaccineTypeOther", label: "Please specify the vaccine", required: false, kind: "text" },
-    { id: "administrationDate", label: "Date administered", required: true, kind: "date", icon: "calendar" },
+    {
+      id: "administrationDate",
+      label: "Date administered",
+      required: true,
+      kind: "date",
+      icon: "calendar",
+      max: todayIsoDate(),
+    },
     { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
     { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "text", hint: "e.g. 1st, 2nd, booster" },
     { id: "manufacturer", label: "Manufacturer", required: isHcp, kind: "text" },

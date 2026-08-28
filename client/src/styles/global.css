@@ -1685,7 +1685,7 @@ a {
   border-radius: var(--radius-md);
   padding: var(--space-4);
   max-width: 420px;
-  margin-top: var(--space-6);
+  margin: var(--space-6) auto 0;
   box-shadow: var(--shadow-panel);
 }
 

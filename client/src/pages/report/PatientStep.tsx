@@ -6,6 +6,7 @@ import {
   RACE_OPTIONS,
   ETHNICITY_OPTIONS,
 } from "../../../../shared/src/schemas";
+import { todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -59,6 +60,7 @@ export function patientFieldSpecs(dateOfBirthUnknown = true): ConversationalFiel
       kind: "date",
       icon: "calendar",
       hint: "We use this to work out the patient's age at vaccination automatically.",
+      max: todayIsoDate(),
     },
     { id: "patientSex", label: "Sex", required: true, kind: "choice", options: SEX_OPTIONS },
   ];
