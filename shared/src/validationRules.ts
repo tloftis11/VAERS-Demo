@@ -89,7 +89,11 @@ export function checkCrossFieldRules(report: CrossFieldCheckInput): ValidationFi
   if (report.aboutYou?.relationship === "self" && report.adverseEvent?.outcomes?.includes("death")) {
     findings.push({
       severity: "ERROR",
-      step: "adverse-event",
+      // Routes to "submitter-type", not "adverse-event" — the message
+      // tells the reporter to go change *who's filling this out*, so the
+      // "go back" link needs to land where that's actually editable, not
+      // back on the very outcomes checkbox that triggered the finding.
+      step: "submitter-type",
       field: "outcomes",
       message:
         "A report submitted by the patient themselves can't also report that the patient died — if you're reporting on behalf of someone else, go back and update who's filling out this report.",

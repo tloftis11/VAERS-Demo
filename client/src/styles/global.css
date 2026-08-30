@@ -686,6 +686,50 @@ a {
   flex-shrink: 0;
 }
 
+/* Bundled repeatable-row editors (VaccineStep.tsx: additional vaccines /
+   prior vaccines) — all of one row's fields shown together on one screen,
+   rather than each field being its own sequential question. */
+.vaccine-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-3) 0;
+}
+
+.vaccine-row {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.vaccine-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+
+.vaccine-row__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 600px) {
+  .vaccine-row__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .vaccine-row__grid--narrow {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+.vaccine-row .field {
+  margin-bottom: 0;
+}
+
 .wizard-header {
   display: flex;
   align-items: flex-start;

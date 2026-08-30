@@ -57,7 +57,12 @@ async function serializeReport(reportId: string) {
     include: {
       submitter: true,
       patient: true,
-      vaccine: true,
+      vaccine: {
+        include: {
+          additionalVaccines: { orderBy: { sortOrder: "asc" } },
+          priorVaccines: { orderBy: { sortOrder: "asc" } },
+        },
+      },
       adverseEvent: true,
       errorDetail: true,
       attachments: true,
@@ -98,6 +103,7 @@ async function serializeReport(reportId: string) {
           ageMonths: report.patient.ageMonths ?? "",
           patientState: report.patient.state ?? "",
           pregnant: report.patient.pregnant ?? "",
+          pregnancyDetails: report.patient.pregnancyDetails ?? "",
           medicationsAtVaccination: report.patient.medicationsAtVaccination ?? "",
           allergies: report.patient.allergies ?? "",
           recentIllnesses: report.patient.recentIllnesses ?? "",
@@ -119,16 +125,20 @@ async function serializeReport(reportId: string) {
           bodySite: report.vaccine.bodySite ?? "",
           administeringFacility: report.vaccine.administeringFacility ?? "",
           facilityType: report.vaccine.facilityType ?? "",
-          otherVaccinesRecentGiven: report.vaccine.otherVaccinesRecentGiven,
           otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
           otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
-          vaccine2Given: report.vaccine.vaccine2Given,
-          vaccine2Type: report.vaccine.vaccine2Type ?? "",
-          vaccine2Manufacturer: report.vaccine.vaccine2Manufacturer ?? "",
-          vaccine2LotNumber: report.vaccine.vaccine2LotNumber ?? "",
-          vaccine2Route: report.vaccine.vaccine2Route ?? "",
-          vaccine2BodySite: report.vaccine.vaccine2BodySite ?? "",
-          vaccine2DoseNumber: report.vaccine.vaccine2DoseNumber ?? "",
+          additionalVaccines: report.vaccine.additionalVaccines.map((row) => ({
+            vaccineType: row.vaccineType ?? "",
+            manufacturer: row.manufacturer ?? "",
+            lotNumber: row.lotNumber ?? "",
+            route: row.route ?? "",
+            bodySite: row.bodySite ?? "",
+            doseNumber: row.doseNumber ?? "",
+          })),
+          priorVaccines: report.vaccine.priorVaccines.map((row) => ({
+            vaccineName: row.vaccineName ?? "",
+            administrationDate: row.administrationDate ?? "",
+          })),
         }
       : null,
     adverseEvent: report.adverseEvent
@@ -287,6 +297,7 @@ reportsRouter.patch("/:id", async (req, res) => {
         ageMonths: dobUnknown ? (validated.ageMonths === "" ? null : validated.ageMonths) : null,
         state: validated.patientState || null,
         pregnant: validated.pregnant || null,
+        pregnancyDetails: validated.pregnancyDetails || null,
         medicationsAtVaccination: validated.medicationsAtVaccination || null,
         allergies: validated.allergies || null,
         recentIllnesses: validated.recentIllnesses || null,
@@ -312,10 +323,29 @@ reportsRouter.patch("/:id", async (req, res) => {
       break;
     }
     case "vaccine": {
+      // additionalVaccines/priorVaccines are relations (repeatable bundled
+      // rows), not scalar columns — can't just spread them into the flat
+      // upsert. Simplest correct approach for "however many rows the
+      // reporter has right now": replace the whole set every save.
+      const { additionalVaccines, priorVaccines, ...scalarFields } = validated as Record<string, unknown> & {
+        additionalVaccines?: Record<string, unknown>[];
+        priorVaccines?: Record<string, unknown>[];
+      };
+      const additionalVaccinesData = (additionalVaccines ?? []).map((row, i) => ({ ...row, sortOrder: i }));
+      const priorVaccinesData = (priorVaccines ?? []).map((row, i) => ({ ...row, sortOrder: i }));
       await prisma.vaccineAdministration.upsert({
         where: { reportId: id },
-        create: { reportId: id, ...validated },
-        update: { ...validated },
+        create: {
+          reportId: id,
+          ...scalarFields,
+          additionalVaccines: { create: additionalVaccinesData },
+          priorVaccines: { create: priorVaccinesData },
+        },
+        update: {
+          ...scalarFields,
+          additionalVaccines: { deleteMany: {}, create: additionalVaccinesData },
+          priorVaccines: { deleteMany: {}, create: priorVaccinesData },
+        },
       });
       const patient = await prisma.patient.findUnique({ where: { reportId: id } });
       if (patient && !patient.dateOfBirthUnknown && patient.dateOfBirth && validated.administrationDate) {
@@ -381,7 +411,13 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   const { id } = req.params;
   const report = await prisma.report.findUnique({
     where: { id },
-    include: { submitter: true, patient: true, vaccine: true, adverseEvent: true, errorDetail: true },
+    include: {
+      submitter: true,
+      patient: true,
+      vaccine: { include: { additionalVaccines: true, priorVaccines: true } },
+      adverseEvent: true,
+      errorDetail: true,
+    },
   });
   if (!report) return res.status(404).json({ error: "Report not found" });
   if (report.status === "submitted") {
@@ -548,6 +584,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             ageMonths: report.patient.ageMonths ?? "",
             patientState: report.patient.state ?? "",
             pregnant: report.patient.pregnant ?? "",
+            pregnancyDetails: report.patient.pregnancyDetails ?? "",
             medicationsAtVaccination: report.patient.medicationsAtVaccination ?? "",
             allergies: report.patient.allergies ?? "",
             recentIllnesses: report.patient.recentIllnesses ?? "",
@@ -570,16 +607,20 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             bodySite: report.vaccine.bodySite ?? "",
             administeringFacility: report.vaccine.administeringFacility ?? "",
             facilityType: report.vaccine.facilityType ?? "",
-            otherVaccinesRecentGiven: report.vaccine.otherVaccinesRecentGiven,
             otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
             otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
-            vaccine2Given: report.vaccine.vaccine2Given,
-            vaccine2Type: report.vaccine.vaccine2Type ?? "",
-            vaccine2Manufacturer: report.vaccine.vaccine2Manufacturer ?? "",
-            vaccine2LotNumber: report.vaccine.vaccine2LotNumber ?? "",
-            vaccine2Route: report.vaccine.vaccine2Route ?? "",
-            vaccine2BodySite: report.vaccine.vaccine2BodySite ?? "",
-            vaccine2DoseNumber: report.vaccine.vaccine2DoseNumber ?? "",
+            additionalVaccines: (report.vaccine.additionalVaccines ?? []).map((row: any) => ({
+              vaccineType: row.vaccineType ?? "",
+              manufacturer: row.manufacturer ?? "",
+              lotNumber: row.lotNumber ?? "",
+              route: row.route ?? "",
+              bodySite: row.bodySite ?? "",
+              doseNumber: row.doseNumber ?? "",
+            })),
+            priorVaccines: (report.vaccine.priorVaccines ?? []).map((row: any) => ({
+              vaccineName: row.vaccineName ?? "",
+              administrationDate: row.administrationDate ?? "",
+            })),
           }
         : null;
     case "adverse-event":

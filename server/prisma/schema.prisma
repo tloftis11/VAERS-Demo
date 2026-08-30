@@ -65,6 +65,7 @@ model Patient {
   ageMonths                Int?
   state                    String? // public-path only (PUB-002): patient's state of residence
   pregnant                 String?
+  pregnancyDetails         String?
   medicationsAtVaccination String?
   allergies                String?
   recentIllnesses          String?
@@ -88,22 +89,44 @@ model VaccineAdministration {
   bodySite              String?
   administeringFacility String?
   facilityType          String?
-  // HCP path only: explicit yes/no gate before the free-text detail below.
-  otherVaccinesRecentGiven Boolean @default(false)
+  // Public path only (see vaccineSchema in shared/src/schemas.ts) — a
+  // single free-text question, kept low-burden for a public reporter.
   otherVaccinesRecent   String?
-  // Public path only (see vaccineSchema in shared/src/schemas.ts).
   otherVaccinesSameVisit String?
-  // HCP-only: a second vaccine given at the same visit (the real system
-  // supports up to 10 rows here; scoped down to one additional slot for the
-  // prototype — covers the common co-administration case, e.g. flu + COVID
-  // on the same visit, without a fully dynamic repeatable-row UI).
-  vaccine2Given         Boolean @default(false)
-  vaccine2Type          String?
-  vaccine2Manufacturer  String?
-  vaccine2LotNumber     String?
-  vaccine2Route         String?
-  vaccine2BodySite      String?
-  vaccine2DoseNumber    String?
+  // HCP path only: any number of additional vaccines given at this same
+  // visit, and any number of other vaccines the patient received in the
+  // month before — each captured as a full bundled row (not gated behind a
+  // yes/no + a fixed single extra slot like the prototype's earlier pass).
+  additionalVaccines    AdditionalVaccine[]
+  priorVaccines         PriorVaccine[]
+}
+
+// HCP-only: one row per additional vaccine given at the same visit as the
+// primary one above (real VAERS form supports up to 10; here it's however
+// many rows the reporter adds).
+model AdditionalVaccine {
+  id           String                @id @default(cuid())
+  vaccineId    String
+  vaccine      VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder    Int                   @default(0)
+  vaccineType  String?
+  manufacturer String?
+  lotNumber    String?
+  route        String?
+  bodySite     String?
+  doseNumber   String?
+}
+
+// HCP-only: one row per other vaccine the patient received in the month
+// before this visit (item 22 on the real paper form is a repeatable table;
+// this mirrors that instead of one free-text field).
+model PriorVaccine {
+  id                 String                @id @default(cuid())
+  vaccineId          String
+  vaccine            VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder          Int                   @default(0)
+  vaccineName        String?
+  administrationDate String?
 }
 
 model AdverseEvent {

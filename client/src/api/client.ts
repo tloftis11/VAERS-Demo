@@ -25,12 +25,27 @@ export interface PatientData {
   ageMonths: number | string;
   patientState: string;
   pregnant: string;
+  pregnancyDetails: string;
   medicationsAtVaccination: string;
   allergies: string;
   recentIllnesses: string;
   chronicConditions: string;
   patientRace: string[];
   patientEthnicity: string;
+}
+
+export interface AdditionalVaccineRow {
+  vaccineType: string;
+  manufacturer: string;
+  lotNumber: string;
+  route: string;
+  bodySite: string;
+  doseNumber: string;
+}
+
+export interface PriorVaccineRow {
+  vaccineName: string;
+  administrationDate: string;
 }
 
 export interface VaccineData {
@@ -45,16 +60,10 @@ export interface VaccineData {
   bodySite: string;
   administeringFacility: string;
   facilityType: string;
-  otherVaccinesRecentGiven: boolean;
   otherVaccinesRecent: string;
   otherVaccinesSameVisit: string;
-  vaccine2Given: boolean;
-  vaccine2Type: string;
-  vaccine2Manufacturer: string;
-  vaccine2LotNumber: string;
-  vaccine2Route: string;
-  vaccine2BodySite: string;
-  vaccine2DoseNumber: string;
+  additionalVaccines: AdditionalVaccineRow[];
+  priorVaccines: PriorVaccineRow[];
 }
 
 export interface AdverseEventData {
