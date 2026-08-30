@@ -9,6 +9,13 @@ export function NavBar() {
 
   return (
     <header className="nav-bar">
+      <div className="nav-bar__admin-row">
+        <div className="nav-bar__admin-row-inner">
+          <Link to="/admin" className="nav-bar__admin-link">
+            Staff Portal
+          </Link>
+        </div>
+      </div>
       <div className="nav-bar__inner">
         <Link to="/" className="nav-bar__brand" aria-label="VAERS home">
           <Mascot size={30} />
@@ -26,7 +33,7 @@ export function NavBar() {
           </Link>
           <button
             type="button"
-            className="button button--text nav-bar__language"
+            className="nav-bar__language"
             onClick={() => setLanguage(language === "en" ? "es" : "en")}
             aria-label={language === "en" ? "Switch to Spanish" : "Cambiar a inglés"}
           >

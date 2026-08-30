@@ -6,6 +6,8 @@ import { attachmentsRouter } from "./routes/attachments.js";
 import { surveysRouter } from "./routes/surveys.js";
 import { faqRouter } from "./routes/faq.js";
 import { assistantRouter } from "./routes/assistant.js";
+import { vaccineOptionsRouter } from "./routes/vaccineOptions.js";
+import { adminRouter } from "./routes/admin.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -26,6 +28,8 @@ app.use("/api", attachmentsRouter);
 app.use("/api/surveys", surveysRouter);
 app.use("/api/faq", faqRouter);
 app.use("/api/assistant", assistantRouter);
+app.use("/api/vaccine-options", vaccineOptionsRouter);
+app.use("/api/admin", adminRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

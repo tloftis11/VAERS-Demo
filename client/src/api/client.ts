@@ -319,6 +319,55 @@ export function askFaqAssistant(question: string, step?: string): Promise<{ answ
   }).then((r) => asJson(r));
 }
 
+export interface VaccineOption {
+  value: string;
+  label: string;
+}
+
+export function getVaccineOptions(audience: "public" | "hcp"): Promise<VaccineOption[]> {
+  return fetch(`${API_ROOT}/vaccine-options?audience=${audience}`).then((r) => asJson(r));
+}
+
+export interface AdminVaccineOption {
+  id: string;
+  value: string;
+  label: string;
+  audience: "public" | "hcp";
+  active: boolean;
+  sortOrder: number;
+}
+
+function adminHeaders(token: string) {
+  return { "Content-Type": "application/json", "X-Admin-Token": token };
+}
+
+export function adminListVaccineOptions(token: string): Promise<AdminVaccineOption[]> {
+  return fetch(`${API_ROOT}/admin/vaccine-options`, { headers: adminHeaders(token) }).then((r) => asJson(r));
+}
+
+export function adminCreateVaccineOption(
+  token: string,
+  data: { value: string; label: string; audience: "public" | "hcp" }
+): Promise<AdminVaccineOption> {
+  return fetch(`${API_ROOT}/admin/vaccine-options`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  }).then((r) => asJson(r));
+}
+
+export function adminUpdateVaccineOption(
+  token: string,
+  id: string,
+  data: { label?: string; active?: boolean }
+): Promise<AdminVaccineOption> {
+  return fetch(`${API_ROOT}/admin/vaccine-options/${id}`, {
+    method: "PATCH",
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  }).then((r) => asJson(r));
+}
+
 export interface ConsistencyIssue {
   field: "description" | "outcomes" | "recoveryStatus";
   issue: string;

@@ -9,8 +9,9 @@ import {
 } from "../../../../shared/src/schemas";
 import { suggestBodySiteMismatch, isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
-import type { VaccineData } from "../../api/client";
+import type { VaccineData, VaccineOption } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
+import { useVaccineOptions } from "../../hooks/useVaccineOptions";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 
 interface VaccineStepProps {
@@ -55,7 +56,17 @@ const EMPTY: VaccineData = {
  * real form; simplified here to one free-text field.
  * Exported so the final review and the read-only follow-up lookup can show the same labels.
  */
-export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
+/**
+ * `vaccineTypeOptions` defaults to the static seed lists (used by ReviewStep
+ * and the read-only follow-up lookup, which only need to resolve a label for
+ * an already-submitted value). The live wizard step passes the freshly
+ * fetched /api/vaccine-options list instead, so admin-added vaccines show up
+ * without a redeploy — see useVaccineOptions.
+ */
+export function vaccineFieldSpecs(
+  isHcp: boolean,
+  vaccineTypeOptions: readonly VaccineOption[] = isHcp ? VACCINE_TYPES_HCP : VACCINE_TYPES
+): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     {
       id: "vaccineType",
@@ -66,7 +77,7 @@ export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
       // the real system's full clinical brand list. A public reporter
       // usually doesn't, and forcing that choice just produces guesses or
       // "Unknown", so they get plain-language categories instead.
-      options: isHcp ? VACCINE_TYPES_HCP : VACCINE_TYPES,
+      options: vaccineTypeOptions,
       icon: "vaccine",
     },
     { id: "vaccineTypeOther", label: "Please specify the vaccine", required: false, kind: "text" },
@@ -97,7 +108,7 @@ export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
   // the same pattern as PatientStep's dateOfBirthUnknown checkbox.
   if (isHcp) {
     fields.push(
-      { id: "vaccine2Type", label: "Second vaccine given at this same visit", required: false, kind: "choice", options: VACCINE_TYPES_HCP },
+      { id: "vaccine2Type", label: "Second vaccine given at this same visit", required: false, kind: "choice", options: vaccineTypeOptions },
       { id: "vaccine2Manufacturer", label: "Manufacturer (second vaccine, optional)", required: false, kind: "text" },
       { id: "vaccine2LotNumber", label: "Lot number (second vaccine, optional)", required: false, kind: "text" },
       {
@@ -163,8 +174,9 @@ export function VaccineStep({
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
   const isHcp = submitterType === "hcp";
+  const vaccineTypeOptions = useVaccineOptions(isHcp ? "hcp" : "public");
   const vaccine2Given = isHcp && Boolean(values.vaccine2Given);
-  const fields = vaccineFieldSpecs(isHcp).filter((f) => {
+  const fields = (vaccineTypeOptions ? vaccineFieldSpecs(isHcp, vaccineTypeOptions) : []).filter((f) => {
     if (f.id === "vaccineTypeOther") return values.vaccineType === "other" || values.vaccineType === "foreign";
     if (f.id.startsWith("vaccine2")) return vaccine2Given;
     return true;
@@ -193,6 +205,10 @@ export function VaccineStep({
       }
     }
     return null;
+  }
+
+  if (!vaccineTypeOptions) {
+    return <div className="page">Loading…</div>;
   }
 
   return (
