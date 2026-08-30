@@ -40,6 +40,14 @@ export function Confirmation() {
         </span>
       </div>
 
+      <button
+        type="button"
+        className="button button--secondary confirmation__print-button"
+        onClick={() => window.print()}
+      >
+        Print or save a copy of this page
+      </button>
+
       {report?.duplicateFlag && (
         <div className="notice notice--info">
           <p>

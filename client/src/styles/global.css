@@ -722,7 +722,9 @@ a {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  opacity: 0.8;
+  /* No opacity reduction here (an axe-core audit caught this failing WCAG AA
+     contrast in the empty/"Not provided" pill state — the muted text color
+     already provides enough visual de-emphasis on its own). */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1897,4 +1899,41 @@ a {
   border: none;
   box-shadow: none;
   max-width: none;
+}
+
+/* Print — mainly for the Confirmation page's "print a copy" button, and
+   the Review page if someone prints straight from there. Strips every bit
+   of interactive/persistent chrome (nav, mascot widgets, buttons, the CSAT
+   survey) down to a plain black-on-white record of what was submitted. */
+@media print {
+  .nav-bar,
+  .step-indicator,
+  .feedback-button,
+  .faq-widget,
+  .milestone-banner,
+  .step-form__actions,
+  .review-list__edit,
+  .review-certify,
+  .review-error,
+  .survey,
+  .confirmation__print-button,
+  button {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  a {
+    color: black;
+    text-decoration: none;
+  }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { FieldIcon, type FieldIconName } from "./illustrations";
 import { Combobox } from "./Combobox";
@@ -117,6 +117,19 @@ export function ConversationalStep({
   const [activeError, setActiveError] = useState<string | null>(null);
   const reviewing = index >= fields.length;
 
+  // An axe-core audit + manual keyboard check caught this: advancing,
+  // going back, or jumping between questions left focus on nothing (it
+  // fell back to <body>), so a screen-reader or keyboard user got no
+  // indication the question had changed at all. Moving focus to the new
+  // question's heading on every index change fixes that — it's what
+  // announces the change, even though it doesn't drop focus straight into
+  // the control itself (which varies too much by field kind to target
+  // uniformly).
+  const questionHeadingRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    questionHeadingRef.current?.focus();
+  }, [index]);
+
   function goBack() {
     if (index === 0) {
       onBack();
@@ -156,7 +169,9 @@ export function ConversationalStep({
     const errorFieldIds = Object.keys(errors).filter((key) => fields.some((f) => f.id === key));
     return (
       <div className="convo-step convo-step--review">
-        <h1 className="convo-step__review-title">Review: {stepTitle}</h1>
+        <h1 className="convo-step__review-title" ref={questionHeadingRef as never} tabIndex={-1}>
+          Review: {stepTitle}
+        </h1>
 
         {errorFieldIds.length > 0 && (
           <div className="review-error" role="alert">
@@ -430,11 +445,17 @@ export function ConversationalStep({
         <div className="convo-question__head">
           {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
           {isGroupControl ? (
-            <h2 id={labelId} className="convo-question__label">
+            <h2 id={labelId} className="convo-question__label" ref={questionHeadingRef as never} tabIndex={-1}>
               {field.label}
             </h2>
           ) : (
-            <label htmlFor={controlId} id={labelId} className="convo-question__label">
+            <label
+              htmlFor={controlId}
+              id={labelId}
+              className="convo-question__label"
+              ref={questionHeadingRef as never}
+              tabIndex={-1}
+            >
               {field.label}
             </label>
           )}
