@@ -122,6 +122,13 @@ export const ETHNICITY_OPTIONS = [
   { value: "unknown", label: "Unknown" },
 ] as const;
 
+/**
+ * Public/self-report path: a public reporter usually doesn't know (and
+ * shouldn't be forced to guess) the exact product given — plain-language
+ * categories instead of clinical brand names. See VACCINE_TYPES_HCP for the
+ * healthcare-professional path, which gets the real system's full brand-
+ * level list since that reporter plausibly has it on hand.
+ */
 export const VACCINE_TYPES = [
   { value: "covid19", label: "COVID-19" },
   { value: "influenza", label: "Influenza (flu)" },
@@ -133,6 +140,103 @@ export const VACCINE_TYPES = [
   { value: "unknown", label: "Not sure" },
 ] as const;
 
+/**
+ * Healthcare-professional path: the real VAERS eSubmitter system's actual
+ * vaccine+brand dropdown (item 17), captured verbatim from its live HTML.
+ * Values are the display label itself (matching the real system's own
+ * convention) since nothing downstream branches on a specific vaccine value
+ * except "other" (reveals the free-text field below — see VaccineStep.tsx).
+ */
+export const VACCINE_TYPES_HCP = [
+  "Adenovirus (Types 4 & 7, No Brand Name)",
+  "Anthrax (BioThrax)",
+  "Anthrax (Cyfendus)",
+  "Chikungunya (Vimkunya)",
+  "Chikungunya Live (Ixchiq)",
+  "Cholera (Vaxchora)",
+  "COVID19 (Moderna Mnexspike)",
+  "COVID19 (Moderna Spikevax)",
+  "COVID19 (Novavax Nuvaxovid)",
+  "COVID19 (Pfizer-BioNTech Comirnaty)",
+  "Dengue Tetravalent (Dengvaxia)",
+  "DT Adsorbed (No Brand Name)",
+  "DTaP (Daptacel)",
+  "DTaP (Infanrix)",
+  "DTaP + Hep B + IPV (Pediarix)",
+  "DTaP + IPV (Kinrix)",
+  "DTaP + IPV (Quadracel)",
+  "DTaP + IPV + Hib (Pentacel)",
+  "DTaP + IPV + Hib + HepB (Vaxelis)",
+  "Ebola Zaire (Ervebo)",
+  "Hep A (Havrix)",
+  "Hep A (Vaqta)",
+  "Hep A + Hep B (Twinrix)",
+  "Hep B (Engerix-B)",
+  "Hep B (HEPLISAV-B)",
+  "Hep B (PreHevbrio)",
+  "Hep B (Recombivax HB)",
+  "Hib Conjugate (ActHIB)",
+  "Hib Conjugate (Hiberix)",
+  "Hib Conjugate (PedvaxHIB)",
+  "HPV (Gardasil 9)",
+  "Inactivated Polio Virus (IPOL)",
+  "Influenza (Seasonal) (Afluria)",
+  "Influenza (Seasonal) (Fluad)",
+  "Influenza (Seasonal) (Fluarix)",
+  "Influenza (Seasonal) (Flublok)",
+  "Influenza (Seasonal) (Flucelvax)",
+  "Influenza (Seasonal) (FluLaval)",
+  "Influenza (Seasonal) (FluMist)",
+  "Influenza (Seasonal) (Fluzone High-Dose)",
+  "Influenza (Seasonal) (Fluzone)",
+  "Japanese Encephalitis (Ixiaro)",
+  "Measles + Mumps + Rubella (MMR II)",
+  "Measles + Mumps + Rubella (Priorix)",
+  "Measles + Mumps + Rubella + Varicella (ProQuad)",
+  "Meningococcal B (Bexsero)",
+  "Meningococcal B (Trumenba)",
+  "Meningococcal Conjugate (Menactra)",
+  "Meningococcal Conjugate (MenQuadfi)",
+  "Meningococcal Conjugate (Menveo)",
+  "Meningococcal Conjugate (Penbraya)",
+  "Meningococcal Conjugate (Penmenvy)",
+  "Pneumo Conjugate (CAPVAXIVE)",
+  "Pneumo Conjugate (Prevnar 13)",
+  "Pneumo Conjugate (Prevnar 20)",
+  "Pneumo Conjugate (Vaxneuvance)",
+  "Pneumo Polysaccharide (Pneumovax 23)",
+  "Rabies (Imovax)",
+  "Rabies (RabAvert)",
+  "Rotavirus (Rotarix)",
+  "Rotavirus (RotaTeq)",
+  "RSV (Abrysvo)",
+  "RSV (Arexvy)",
+  "RSV (mRESVIA)",
+  "Smallpox (ACAM2000)",
+  "Smallpox + Monkeypox (Jynneos)",
+  "Td Adsorbed (No Brand Name)",
+  "Td Adsorbed (TDVAX)",
+  "Td Adsorbed (Tenivac)",
+  "Tdap (Adacel)",
+  "Tdap (Boostrix)",
+  "Tick-Borne Enceph (Ticovac)",
+  "Typhoid Live Oral Ty21a (Vivotif)",
+  "Typhoid Vi (Typhim Vi)",
+  "Varicella (Varivax)",
+  "Yellow Fever (Stamaril)",
+  "Yellow Fever (YF-Vax)",
+  "Zoster (Shingrix)",
+]
+  .map((label) => ({ value: label, label }))
+  .concat([
+    { value: "foreign", label: "Foreign Vaccine (not U.S.-licensed)" },
+    { value: "other", label: "Other Vaccine (not listed)" },
+    { value: "unknown", label: "Unknown Vaccine" },
+  ]);
+
+/** Matches the real VAERS eSubmitter system's own dose-number dropdown exactly
+ * (1-6, then "7+", then Unknown/N-A) — no separate "Booster" value there; a
+ * booster is just whichever dose number it is in the series. */
 export const DOSE_NUMBER_OPTIONS = [
   { value: "1", label: "1st dose" },
   { value: "2", label: "2nd dose" },
@@ -140,11 +244,9 @@ export const DOSE_NUMBER_OPTIONS = [
   { value: "4", label: "4th dose" },
   { value: "5", label: "5th dose" },
   { value: "6", label: "6th dose" },
-  { value: "7", label: "7th dose" },
-  { value: "8", label: "8th dose" },
-  { value: "9", label: "9th dose" },
-  { value: "booster", label: "Booster" },
+  { value: "7+", label: "7th dose or later" },
   { value: "unknown", label: "Unknown" },
+  { value: "n/a", label: "Not applicable" },
 ] as const;
 
 /** Matches the real form's own grouping — it does not ask laypeople to distinguish IM/SC/ID. */
@@ -176,6 +278,7 @@ export const FACILITY_TYPE_OPTIONS = [
   { value: "public_health_clinic", label: "Public health clinic" },
   { value: "nursing_home_senior_living", label: "Nursing home or senior living facility" },
   { value: "school_student_health_clinic", label: "School or student health clinic" },
+  { value: "home", label: "Home" },
   { value: "other", label: "Other" },
   { value: "unknown", label: "Unknown" },
 ] as const;
@@ -190,13 +293,15 @@ export const OUTCOME_OPTIONS = [
   { value: "disability", label: "Disability or permanent damage" },
   { value: "death", label: "Patient died" },
   { value: "birth_defect", label: "Congenital anomaly or birth defect" },
+  { value: "none", label: "None of the above" },
 ] as const;
 
+/** Matches the real form's item 20 exactly — just Yes/No/Unknown; "none of
+ * the above" belongs to outcomes (item 21, see OUTCOME_OPTIONS), not here. */
 export const RECOVERY_OPTIONS = [
   { value: "yes", label: "Yes, fully recovered" },
   { value: "no", label: "No, not yet recovered" },
   { value: "unknown", label: "Unknown" },
-  { value: "none", label: "None of the above" },
 ] as const;
 
 /** PUB-003: quick-select symptom chips, complementing (not replacing) the free-text description. */
@@ -242,6 +347,8 @@ export function aboutYouSchema(submitterType: SubmitterType) {
     contactEmail: z.string().trim().email("Enter a valid email address"),
     contactPhone: optionalString(),
     relationship: optionalString(),
+    mailingAddress: optionalString(),
+    bestContactInfo: optionalString(),
   });
   if (submitterType === "hcp") return base;
   return base.extend({
@@ -336,14 +443,42 @@ export function vaccineSchema(submitterType: SubmitterType) {
     administeringFacility: optionalString(),
     facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
     otherVaccinesRecent: optionalString(),
+    // Public path only: a lightweight substitute for the HCP path's full
+    // second-vaccine slot below — most public reporters won't have a second
+    // vaccine's manufacturer/lot/route on hand, so this stays one free-text
+    // question instead of a repeated structured block.
+    otherVaccinesSameVisit: optionalString(),
+    // HCP path only: one additional vaccine slot for the same visit (the
+    // real system supports up to 10 rows here; scoped down for the
+    // prototype — see VaccineAdministration.vaccine2* in schema.prisma).
+    vaccine2Given: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .transform((v) => v === true || v === "true"),
+    vaccine2Type: optionalString(),
+    vaccine2Manufacturer: optionalString(),
+    vaccine2LotNumber: optionalString(),
+    vaccine2Route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
+    vaccine2BodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
+    vaccine2DoseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
   });
   if (submitterType === "hcp") {
     // Not on the real form as a hard requirement, but a reasonable expectation
     // when the clinic itself is filing — kept as our own addition, not essential.
-    return base.extend({
-      manufacturer: requiredString("Manufacturer is required"),
-      lotNumber: requiredString("Lot number is required"),
-    });
+    return base
+      .extend({
+        manufacturer: requiredString("Manufacturer is required"),
+        lotNumber: requiredString("Lot number is required"),
+      })
+      .superRefine((data, ctx) => {
+        if (data.vaccine2Given && !data.vaccine2Type) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["vaccine2Type"],
+            message: "Select the second vaccine given, or go back and answer \"no\" above",
+          });
+        }
+      });
   }
   return base;
 }

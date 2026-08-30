@@ -18,8 +18,9 @@ export interface ValidationFinding {
 
 export interface CrossFieldCheckInput {
   vaccine: { administrationDate: string } | null;
-  adverseEvent: { onsetDate: string; dateOfDeath?: string } | null;
+  adverseEvent: { onsetDate: string; dateOfDeath?: string; outcomes?: string[] } | null;
   errorDetail: { errorDiscoveredDate: string } | null;
+  aboutYou: { relationship?: string } | null;
 }
 
 function isBefore(a: string, b: string): boolean {
@@ -80,6 +81,19 @@ export function checkCrossFieldRules(report: CrossFieldCheckInput): ValidationFi
         message: "Date of death is before the symptom onset date.",
       });
     }
+  }
+
+  // The real VAERS eSubmitter system has a dedicated check for exactly this
+  // contradiction (its own error id is literally "deathrelation") — a
+  // self-reporting submitter can't also be reporting their own death.
+  if (report.aboutYou?.relationship === "self" && report.adverseEvent?.outcomes?.includes("death")) {
+    findings.push({
+      severity: "ERROR",
+      step: "adverse-event",
+      field: "outcomes",
+      message:
+        "A report submitted by the patient themselves can't also report that the patient died — if you're reporting on behalf of someone else, go back and update who's filling out this report.",
+    });
   }
 
   return findings;

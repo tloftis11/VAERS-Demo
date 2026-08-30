@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
 import { Mascot } from "./Mascot";
 import { VaersLogo } from "./VaersLogo";
+import { useLanguage } from "../i18n/LanguageContext";
 
 /** Redesigned primary navigation (design doc §4.2). */
 export function NavBar() {
+  const { language, setLanguage, t } = useLanguage();
+
   return (
     <header className="nav-bar">
       <div className="nav-bar__inner">
@@ -12,15 +15,23 @@ export function NavBar() {
           <VaersLogo height={22} />
         </Link>
         <nav aria-label="Primary" className="nav-bar__links">
-          <Link to="/faq">FAQ</Link>
-          <Link to="/about">About VAERS</Link>
-          <Link to="/accessibility">Accessibility</Link>
+          <Link to="/faq">{t("nav.faq")}</Link>
+          <Link to="/about">{t("nav.about")}</Link>
+          <Link to="/accessibility">{t("nav.accessibility")}</Link>
           <Link to="/report" className="button button--primary nav-bar__cta">
-            Report an Event
+            {t("nav.reportEvent")}
           </Link>
           <Link to="/follow-up" className="button button--secondary nav-bar__cta">
-            Provide Follow-up Info
+            {t("nav.followUp")}
           </Link>
+          <button
+            type="button"
+            className="button button--text nav-bar__language"
+            onClick={() => setLanguage(language === "en" ? "es" : "en")}
+            aria-label={language === "en" ? "Switch to Spanish" : "Cambiar a inglés"}
+          >
+            {t("nav.languageToggle")}
+          </button>
         </nav>
       </div>
     </header>

@@ -204,7 +204,20 @@ export function AdverseEventStep({
     // A field hidden because its trigger changed shouldn't leave stale data
     // behind to be silently submitted once it's no longer visible.
     if (id === "outcomes") {
-      const newOutcomes = value as string[];
+      const prevOutcomes = values.outcomes as string[];
+      let newOutcomes = value as string[];
+
+      // "None of the above" is mutually exclusive with every real outcome —
+      // selecting it clears the rest, and selecting anything else clears it.
+      const noneJustAdded = newOutcomes.includes("none") && !prevOutcomes.includes("none");
+      if (noneJustAdded) {
+        newOutcomes = ["none"];
+        setValue("outcomes", newOutcomes);
+      } else if (newOutcomes.includes("none") && newOutcomes.length > 1) {
+        newOutcomes = newOutcomes.filter((o) => o !== "none");
+        setValue("outcomes", newOutcomes);
+      }
+
       if (!newOutcomes.includes("hospitalization") && !newOutcomes.includes("hospitalization_prolonged")) {
         setValue("hospitalizationDays", "");
         setValue("hospitalName", "");

@@ -15,7 +15,14 @@ interface AboutYouStepProps {
   onBack: () => void;
 }
 
-const EMPTY: AboutYouData = { contactName: "", contactEmail: "", contactPhone: "", relationship: "" };
+const EMPTY: AboutYouData = {
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  relationship: "",
+  mailingAddress: "",
+  bestContactInfo: "",
+};
 
 /** Field set for "about you" — shared with the final review and the read-only follow-up lookup (both call this without a hint, since they're displaying an already-answered relationship, not asking it). */
 export function aboutYouFieldSpecs(
@@ -53,6 +60,23 @@ export function aboutYouFieldSpecs(
           : RELATIONSHIP_OPTIONS_PUBLIC,
     });
   }
+  fields.push(
+    {
+      id: "bestContactInfo",
+      label: "Best doctor or healthcare professional to contact about this adverse event (optional)",
+      required: false,
+      kind: "text",
+      hint: "Name and phone number, if there's someone better placed than you to discuss the clinical details.",
+    },
+    {
+      id: "mailingAddress",
+      label: "Want a mailed response instead of email? Enter your mailing address (optional)",
+      required: false,
+      kind: "textarea",
+      rows: 2,
+      hint: "Leave this blank if email is fine — that's the default.",
+    }
+  );
   return fields;
 }
 

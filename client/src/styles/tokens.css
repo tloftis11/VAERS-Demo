@@ -7,7 +7,10 @@
   --color-primary: #1746a2;
   --color-primary-dark: #0d2c6b;
   --color-primary-contrast: #ffffff;
-  --color-recap: #7c93c4;
+  /* Darkened from the original #7c93c4 — that shade only hit ~3.1:1 contrast
+     against white recap-pill text (WCAG AA needs 4.5:1 for this size), found
+     via an axe-core accessibility audit. This hits ~4.8:1. */
+  --color-recap: #5a71a8;
   --color-recap-contrast: #ffffff;
   --color-accent: #b7cf3a;
   --color-accent-dark: #7f9420;

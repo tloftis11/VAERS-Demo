@@ -80,6 +80,8 @@ async function serializeReport(reportId: string) {
           contactEmail: report.submitter.contactEmail ?? "",
           contactPhone: report.submitter.contactPhone ?? "",
           relationship: report.submitter.relationship ?? "",
+          mailingAddress: report.submitter.mailingAddress ?? "",
+          bestContactInfo: report.submitter.bestContactInfo ?? "",
         }
       : null,
     patient: report.patient
@@ -115,6 +117,14 @@ async function serializeReport(reportId: string) {
           administeringFacility: report.vaccine.administeringFacility ?? "",
           facilityType: report.vaccine.facilityType ?? "",
           otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
+          otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
+          vaccine2Given: report.vaccine.vaccine2Given,
+          vaccine2Type: report.vaccine.vaccine2Type ?? "",
+          vaccine2Manufacturer: report.vaccine.vaccine2Manufacturer ?? "",
+          vaccine2LotNumber: report.vaccine.vaccine2LotNumber ?? "",
+          vaccine2Route: report.vaccine.vaccine2Route ?? "",
+          vaccine2BodySite: report.vaccine.vaccine2BodySite ?? "",
+          vaccine2DoseNumber: report.vaccine.vaccine2DoseNumber ?? "",
         }
       : null,
     adverseEvent: report.adverseEvent
@@ -410,11 +420,16 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   const crossFieldFindings: ValidationFinding[] = checkCrossFieldRules({
     vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate ?? "" } : null,
     adverseEvent: report.adverseEvent
-      ? { onsetDate: report.adverseEvent.onsetDate ?? "", dateOfDeath: report.adverseEvent.dateOfDeath ?? "" }
+      ? {
+          onsetDate: report.adverseEvent.onsetDate ?? "",
+          dateOfDeath: report.adverseEvent.dateOfDeath ?? "",
+          outcomes: report.adverseEvent.outcomes ? (JSON.parse(report.adverseEvent.outcomes) as string[]) : [],
+        }
       : null,
     errorDetail: report.errorDetail
       ? { errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "" }
       : null,
+    aboutYou: report.submitter ? { relationship: report.submitter.relationship ?? "" } : null,
   });
   const blockingFindings = crossFieldFindings.filter((f) => f.severity === "ERROR");
   if (blockingFindings.length > 0) {
@@ -510,6 +525,8 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             contactEmail: report.submitter.contactEmail ?? "",
             contactPhone: report.submitter.contactPhone ?? "",
             relationship: report.submitter.relationship ?? "",
+            mailingAddress: report.submitter.mailingAddress ?? "",
+            bestContactInfo: report.submitter.bestContactInfo ?? "",
           }
         : null;
     case "patient":
@@ -547,6 +564,14 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             administeringFacility: report.vaccine.administeringFacility ?? "",
             facilityType: report.vaccine.facilityType ?? "",
             otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
+            otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
+            vaccine2Given: report.vaccine.vaccine2Given,
+            vaccine2Type: report.vaccine.vaccine2Type ?? "",
+            vaccine2Manufacturer: report.vaccine.vaccine2Manufacturer ?? "",
+            vaccine2LotNumber: report.vaccine.vaccine2LotNumber ?? "",
+            vaccine2Route: report.vaccine.vaccine2Route ?? "",
+            vaccine2BodySite: report.vaccine.vaccine2BodySite ?? "",
+            vaccine2DoseNumber: report.vaccine.vaccine2DoseNumber ?? "",
           }
         : null;
     case "adverse-event":

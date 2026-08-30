@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { NavBar } from "./components/NavBar";
 import { FeedbackButton } from "./components/FeedbackButton";
 import { Landing } from "./pages/Landing";
+import { LanguageProvider } from "./i18n/LanguageContext";
 
 // Route-level code splitting: Landing (the most common first paint) stays
 // eager, everything else loads on demand. Without this, every route's full
@@ -29,7 +30,7 @@ const Confirmation = lazy(() =>
 
 export function App() {
   return (
-    <>
+    <LanguageProvider>
       <NavBar />
       <main id="main-content">
         <Suspense fallback={<div className="page">Loading…</div>}>
@@ -48,6 +49,6 @@ export function App() {
       {/* Persistent on every page, including mid-wizard — a small button doesn't
           compete for attention the way the old timed auto-popup did. */}
       <FeedbackButton />
-    </>
+    </LanguageProvider>
   );
 }

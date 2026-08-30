@@ -32,13 +32,22 @@ model Report {
 }
 
 model Submitter {
-  id           String @id @default(cuid())
-  reportId     String @unique
-  report       Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  contactName  String?
-  contactEmail String?
-  contactPhone String?
-  relationship String?
+  id              String @id @default(cuid())
+  reportId        String @unique
+  report          Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  contactName     String?
+  contactEmail    String?
+  contactPhone    String?
+  relationship    String?
+  // Fully optional, single-field simplification of the real form's separate
+  // multi-field mailing-address block (street/city/state/zip) — modern
+  // reporters mostly want an email response; this is only for the rare case
+  // where someone actually wants something mailed.
+  mailingAddress  String?
+  // Item 14 on the real form: name/phone of the best doctor or healthcare
+  // professional to contact about the adverse event — kept to one free-text
+  // field rather than separate name/phone/ext questions to keep the burden low.
+  bestContactInfo String?
 }
 
 model Patient {
@@ -78,6 +87,19 @@ model VaccineAdministration {
   administeringFacility String?
   facilityType          String?
   otherVaccinesRecent   String?
+  // Public path only (see vaccineSchema in shared/src/schemas.ts).
+  otherVaccinesSameVisit String?
+  // HCP-only: a second vaccine given at the same visit (the real system
+  // supports up to 10 rows here; scoped down to one additional slot for the
+  // prototype — covers the common co-administration case, e.g. flu + COVID
+  // on the same visit, without a fully dynamic repeatable-row UI).
+  vaccine2Given         Boolean @default(false)
+  vaccine2Type          String?
+  vaccine2Manufacturer  String?
+  vaccine2LotNumber     String?
+  vaccine2Route         String?
+  vaccine2BodySite      String?
+  vaccine2DoseNumber    String?
 }
 
 model AdverseEvent {
