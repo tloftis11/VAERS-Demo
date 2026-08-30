@@ -299,18 +299,21 @@ export function ConversationalStep({
           setValue(field.id, arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
         }
         return (
-          <div className="choice-chip-grid" role="group" aria-labelledby={labelId}>
-            {field.options?.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                className={`choice-chip${arr.includes(opt.value) ? " choice-chip--selected" : ""}`}
-                aria-pressed={arr.includes(opt.value)}
-                onClick={() => toggle(opt.value)}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="checkbox-table" role="group" aria-labelledby={labelId}>
+            {field.options?.map((opt) => {
+              const optId = `${controlId}-opt-${opt.value}`;
+              return (
+                <label key={opt.value} htmlFor={optId} className="checkbox-table__option">
+                  <input
+                    id={optId}
+                    type="checkbox"
+                    checked={arr.includes(opt.value)}
+                    onChange={() => toggle(opt.value)}
+                  />
+                  {opt.label}
+                </label>
+              );
+            })}
           </div>
         );
       }
@@ -438,58 +441,60 @@ export function ConversationalStep({
         })}
       </div>
 
-      <div className="convo-question">
-        <p className="convo-question__counter">
-          Question {index + 1} of {fields.length}
-        </p>
-        <div className="convo-question__head">
-          {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
-          {isGroupControl ? (
-            <h2 id={labelId} className="convo-question__label" ref={questionHeadingRef as never} tabIndex={-1}>
-              {field.label}
-            </h2>
-          ) : (
-            <label
-              htmlFor={controlId}
-              id={labelId}
-              className="convo-question__label"
-              ref={questionHeadingRef as never}
-              tabIndex={-1}
-            >
-              {field.label}
-            </label>
-          )}
-        </div>
-        {field.hint && <p className="field__hint">{field.hint}</p>}
-        {renderActiveInput()}
-        {error && (
-          <p id={errorId} role="alert" className="field__error">
-            {error}
+      <div className="convo-question-panel">
+        <div className="convo-question">
+          <p className="convo-question__counter">
+            Question {index + 1} of {fields.length}
           </p>
-        )}
-        {extras?.[field.id]?.()}
-      </div>
-
-      <div className="step-form__actions">
-        <button type="button" className="button button--text" onClick={goBack}>
-          ← Back
-        </button>
-        {isCardChoice
-          ? canSkip && (
-              <button type="button" className="button button--text" onClick={advance}>
-                Skip →
-              </button>
-            )
-          : (
-            <button
-              type="button"
-              className="button button--primary"
-              onClick={handleNextClick}
-              disabled={!!field.required && isEmptyValue(value)}
-            >
-              Next →
-            </button>
+          <div className="convo-question__head">
+            {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
+            {isGroupControl ? (
+              <h2 id={labelId} className="convo-question__label" ref={questionHeadingRef as never} tabIndex={-1}>
+                {field.label}
+              </h2>
+            ) : (
+              <label
+                htmlFor={controlId}
+                id={labelId}
+                className="convo-question__label"
+                ref={questionHeadingRef as never}
+                tabIndex={-1}
+              >
+                {field.label}
+              </label>
+            )}
+          </div>
+          {field.hint && <p className="field__hint">{field.hint}</p>}
+          {renderActiveInput()}
+          {error && (
+            <p id={errorId} role="alert" className="field__error">
+              {error}
+            </p>
           )}
+          {extras?.[field.id]?.()}
+        </div>
+
+        <div className="step-form__actions">
+          <button type="button" className="button button--text" onClick={goBack}>
+            ← Back
+          </button>
+          {isCardChoice
+            ? canSkip && (
+                <button type="button" className="button button--text" onClick={advance}>
+                  Skip →
+                </button>
+              )
+            : (
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={handleNextClick}
+                disabled={!!field.required && isEmptyValue(value)}
+              >
+                Next →
+              </button>
+            )}
+        </div>
       </div>
     </div>
   );

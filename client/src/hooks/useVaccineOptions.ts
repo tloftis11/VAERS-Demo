@@ -10,9 +10,16 @@ export function useVaccineOptions(audience: "public" | "hcp") {
   useEffect(() => {
     let cancelled = false;
     setOptions(null);
-    getVaccineOptions(audience).then((result) => {
-      if (!cancelled) setOptions(result);
-    });
+    getVaccineOptions(audience)
+      .then((result) => {
+        if (!cancelled) setOptions(result);
+      })
+      .catch(() => {
+        // A network/server failure shouldn't leave the caller stuck on
+        // "loading" forever — resolve to empty so VaccineStep's static-list
+        // fallback kicks in instead.
+        if (!cancelled) setOptions([]);
+      });
     return () => {
       cancelled = true;
     };

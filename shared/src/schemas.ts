@@ -347,7 +347,10 @@ export function aboutYouSchema(submitterType: SubmitterType) {
     contactEmail: z.string().trim().email("Enter a valid email address"),
     contactPhone: optionalString(),
     relationship: optionalString(),
-    mailingAddress: optionalString(),
+    mailingStreet: optionalString(),
+    mailingCity: optionalString(),
+    mailingState: optionalEnum(STATE_OPTIONS.map((o) => o.value)),
+    mailingZip: optionalString(),
     bestContactInfo: optionalString(),
   });
   if (submitterType === "hcp") return base;

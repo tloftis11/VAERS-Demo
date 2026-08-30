@@ -56,13 +56,13 @@ export function AdminPage() {
       <div className="page page--prose">
         <h1>Staff sign-in</h1>
         <p className="field__hint">
-          Prototype-only shared token. A production deployment would use real federal identity
-          (PIV/CAC or SSO) here instead.
+          Prototype-only shared token — for this demo, enter the word <strong>staff</strong>. A
+          production deployment would use real federal identity (PIV/CAC or SSO) here instead.
         </p>
         <form onSubmit={handleSignIn}>
           <div className="field">
             <label className="field__label" htmlFor="admin-token">
-              Admin token
+              Staff token
             </label>
             <input
               id="admin-token"

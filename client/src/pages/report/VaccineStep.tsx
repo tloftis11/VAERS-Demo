@@ -174,9 +174,20 @@ export function VaccineStep({
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
   const isHcp = submitterType === "hcp";
-  const vaccineTypeOptions = useVaccineOptions(isHcp ? "hcp" : "public");
+  const liveVaccineTypeOptions = useVaccineOptions(isHcp ? "hcp" : "public");
+  // A required choice field must never end up with zero options — if the
+  // live fetch is still loading, still gate on that (below), but once it
+  // resolves, an empty result (server unreachable, or a freshly-deployed
+  // database that hasn't been seeded yet) falls back to the static list
+  // rather than leaving the reporter stuck on a blank, un-skippable question.
+  const vaccineTypeOptions =
+    liveVaccineTypeOptions && liveVaccineTypeOptions.length > 0
+      ? liveVaccineTypeOptions
+      : isHcp
+        ? VACCINE_TYPES_HCP
+        : VACCINE_TYPES;
   const vaccine2Given = isHcp && Boolean(values.vaccine2Given);
-  const fields = (vaccineTypeOptions ? vaccineFieldSpecs(isHcp, vaccineTypeOptions) : []).filter((f) => {
+  const fields = (liveVaccineTypeOptions ? vaccineFieldSpecs(isHcp, vaccineTypeOptions) : []).filter((f) => {
     if (f.id === "vaccineTypeOther") return values.vaccineType === "other" || values.vaccineType === "foreign";
     if (f.id.startsWith("vaccine2")) return vaccine2Given;
     return true;
@@ -207,7 +218,7 @@ export function VaccineStep({
     return null;
   }
 
-  if (!vaccineTypeOptions) {
+  if (!liveVaccineTypeOptions) {
     return <div className="page">Loading…</div>;
   }
 

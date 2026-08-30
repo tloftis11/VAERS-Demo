@@ -43,7 +43,10 @@ model Submitter {
   contactEmail    String?
   contactPhone    String?
   relationship    String?
-  mailingAddress  String?
+  mailingStreet   String?
+  mailingCity     String?
+  mailingState    String?
+  mailingZip      String?
   bestContactInfo String?
 }
 

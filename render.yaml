@@ -32,7 +32,8 @@ services:
         npx prisma db push --schema=server/prisma/schema.production.prisma --accept-data-loss && exit 0;
         echo "Database not reachable yet, retrying in 5s ($i/24)...";
         sleep 5;
-      done; exit 1'
+      done; exit 1' &&
+      npx tsx server/prisma/seed.ts
     startCommand: npm run start --workspace=server
     envVars:
       - key: DATABASE_URL
@@ -45,6 +46,9 @@ services:
         value: ./uploads
       - key: CLIENT_ORIGIN
         value: "https://vaers-client.onrender.com"
+      # Prototype-only shared token gating /admin — see server/src/routes/admin.ts.
+      - key: ADMIN_TOKEN
+        value: "staff"
       # Secrets: not stored in this file. Render will prompt for these in the
       # dashboard the first time this blueprint is applied.
       - key: ANTHROPIC_API_KEY
