@@ -121,6 +121,20 @@ export const VACCINE_TYPES = [
   { value: "unknown", label: "Not sure" },
 ] as const;
 
+export const DOSE_NUMBER_OPTIONS = [
+  { value: "1", label: "1st dose" },
+  { value: "2", label: "2nd dose" },
+  { value: "3", label: "3rd dose" },
+  { value: "4", label: "4th dose" },
+  { value: "5", label: "5th dose" },
+  { value: "6", label: "6th dose" },
+  { value: "7", label: "7th dose" },
+  { value: "8", label: "8th dose" },
+  { value: "9", label: "9th dose" },
+  { value: "booster", label: "Booster" },
+  { value: "unknown", label: "Unknown" },
+] as const;
+
 /** Matches the real form's own grouping — it does not ask laypeople to distinguish IM/SC/ID. */
 export const ROUTE_OPTIONS = [
   { value: "injection", label: "Injection or shot" },
@@ -297,7 +311,7 @@ export function vaccineSchema(submitterType: SubmitterType) {
   const base = z.object({
     vaccineType: requiredString("Select the vaccine given"),
     vaccineTypeOther: optionalString(),
-    doseNumber: optionalString(),
+    doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
     administrationDate: dateSchema("Enter the vaccination date").refine(
       notInFuture,
       "Vaccination date cannot be in the future"
