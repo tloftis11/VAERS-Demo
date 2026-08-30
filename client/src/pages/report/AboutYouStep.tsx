@@ -1,4 +1,5 @@
-import { aboutYouSchema, RELATIONSHIP_OPTIONS_PUBLIC } from "../../../../shared/src/schemas";
+import { useState } from "react";
+import { aboutYouSchema, RELATIONSHIP_OPTIONS_PUBLIC, STATE_OPTIONS } from "../../../../shared/src/schemas";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { AboutYouData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -20,14 +21,26 @@ const EMPTY: AboutYouData = {
   contactEmail: "",
   contactPhone: "",
   relationship: "",
-  mailingAddress: "",
+  mailingStreet: "",
+  mailingCity: "",
+  mailingState: "",
+  mailingZip: "",
   bestContactInfo: "",
 };
 
-/** Field set for "about you" — shared with the final review and the read-only follow-up lookup (both call this without a hint, since they're displaying an already-answered relationship, not asking it). */
+/**
+ * Field set for "about you" — shared with the final review and the
+ * read-only follow-up lookup (both call this without a hint or gate, since
+ * they're displaying already-answered data, not asking new questions).
+ * `includeMailingAddress` gates the structured street/city/state/zip block
+ * behind the "want a mailed response?" toggle in the live wizard — off by
+ * default there until the reporter opts in, but always included (superset)
+ * for review/follow-up display.
+ */
 export function aboutYouFieldSpecs(
   submitterType: SubmitterType,
-  relationshipHint: RelationshipHint = null
+  relationshipHint: RelationshipHint = null,
+  includeMailingAddress = true
 ): ConversationalFieldSpec[] {
   const isHcp = submitterType === "hcp";
   const fields: ConversationalFieldSpec[] = [
@@ -60,23 +73,21 @@ export function aboutYouFieldSpecs(
           : RELATIONSHIP_OPTIONS_PUBLIC,
     });
   }
-  fields.push(
-    {
-      id: "bestContactInfo",
-      label: "Best doctor or healthcare professional to contact about this adverse event (optional)",
-      required: false,
-      kind: "text",
-      hint: "Name and phone number, if there's someone better placed than you to discuss the clinical details.",
-    },
-    {
-      id: "mailingAddress",
-      label: "Want a mailed response instead of email? Enter your mailing address (optional)",
-      required: false,
-      kind: "textarea",
-      rows: 2,
-      hint: "Leave this blank if email is fine — that's the default.",
-    }
-  );
+  fields.push({
+    id: "bestContactInfo",
+    label: "Best doctor or healthcare professional to contact about this adverse event (optional)",
+    required: false,
+    kind: "text",
+    hint: "Name and phone number, if there's someone better placed than you to discuss the clinical details.",
+  });
+  if (includeMailingAddress) {
+    fields.push(
+      { id: "mailingStreet", label: "Mailing street address", required: false, kind: "text" },
+      { id: "mailingCity", label: "Mailing city", required: false, kind: "text" },
+      { id: "mailingState", label: "Mailing state", required: false, kind: "choice", options: STATE_OPTIONS },
+      { id: "mailingZip", label: "Mailing ZIP code", required: false, kind: "text" }
+    );
+  }
   return fields;
 }
 
@@ -86,19 +97,48 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
   const seededInitial =
     relationshipHint === "patient" && !initial.relationship ? { ...initial, relationship: "self" } : initial;
   const { values, setValue, errors, validate } = useStepForm(schema, seededInitial);
-  const fields = aboutYouFieldSpecs(submitterType, relationshipHint);
+  const [wantsMailedResponse, setWantsMailedResponse] = useState(
+    () => !!(initial.mailingStreet || initial.mailingCity || initial.mailingState || initial.mailingZip)
+  );
+  const fields = aboutYouFieldSpecs(submitterType, relationshipHint, wantsMailedResponse);
+
+  function handleSetValue(id: string, value: unknown) {
+    setValue(id as keyof AboutYouData, value as any);
+  }
+
+  function handleMailToggle(checked: boolean) {
+    setWantsMailedResponse(checked);
+    if (!checked) {
+      handleSetValue("mailingStreet", "");
+      handleSetValue("mailingCity", "");
+      handleSetValue("mailingState", "");
+      handleSetValue("mailingZip", "");
+    }
+  }
 
   return (
     <ConversationalStep
       stepTitle="About you"
       fields={fields}
       values={values as unknown as Record<string, unknown>}
-      setValue={(id, value) => setValue(id as keyof AboutYouData, value as any)}
+      setValue={handleSetValue}
       errors={errors}
       validate={validate}
       onNext={onNext}
       onBack={onBack}
       initialIndex={schema.safeParse(seededInitial).success ? fields.length : 0}
+      extras={{
+        bestContactInfo: () => (
+          <label className="field__inline-toggle">
+            <input
+              type="checkbox"
+              checked={wantsMailedResponse}
+              onChange={(e) => handleMailToggle(e.target.checked)}
+            />
+            I'd like a mailed response instead of email
+          </label>
+        ),
+      }}
     />
   );
 }

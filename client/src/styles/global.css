@@ -573,34 +573,42 @@ a {
   opacity: 1;
 }
 
-/* Big single-choice pill buttons used inside the conversational engine */
-
-.choice-chip-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+/* "Select all that apply" checkbox groups (symptoms, outcomes, race) — a
+   clean, always-visible checklist rather than toggle pills, so every option
+   is readable at a glance instead of requiring a hover/press to tell
+   selected from unselected. */
+.checkbox-table {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1);
   margin: var(--space-3) 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
 }
 
-.choice-chip {
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-weight: 600;
-  font-size: 0.95rem;
+@media (min-width: 480px) {
+  .checkbox-table {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.checkbox-table__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-weight: 400;
   cursor: pointer;
 }
 
-.choice-chip:hover {
-  border-color: var(--color-primary);
+.checkbox-table__option:hover {
+  background: var(--color-surface);
 }
 
-.choice-chip--selected {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--color-primary-contrast);
+.checkbox-table__option input {
+  flex-shrink: 0;
 }
 
 .wizard-header {
@@ -732,9 +740,7 @@ a {
     grid-template-columns: 260px minmax(0, 560px);
     column-gap: var(--space-8);
     align-items: start;
-    grid-template-areas:
-      "recap   question"
-      "recap   actions";
+    grid-template-areas: "recap panel";
   }
 
   .convo-step--question .recap-pill-list {
@@ -747,12 +753,14 @@ a {
     overflow-y: auto;
   }
 
-  .convo-step--question .convo-question {
-    grid-area: question;
-  }
-
-  .convo-step--question .step-form__actions {
-    grid-area: actions;
+  /* Question + actions share one grid cell (see convo-question-panel in
+     ConversationalStep.tsx) so the Back/Next buttons sit directly under the
+     question in normal document flow — previously "actions" was its own
+     grid row alongside the tall, sticky recap sidebar, and browsers size a
+     spanning item's rows to fit its full height, which stretched that row
+     and pushed the buttons down into a large gap below a short question. */
+  .convo-step--question .convo-question-panel {
+    grid-area: panel;
   }
 }
 
@@ -862,6 +870,20 @@ a {
   border: 1px dashed var(--color-border);
   color: var(--color-text-muted);
   font-weight: 400;
+}
+
+/* A long question label (e.g. "Prescriptions, OTC medications, or
+   supplements at the time of vaccination") otherwise wraps across several
+   lines here — unlike the .recap-pill__label/__value spans used for
+   *completed* answers, these current/upcoming pills are just a bare <span>,
+   so they need their own truncation to stay one consistent line-height like
+   every other pill in the list. */
+.recap-pill--current span,
+.recap-pill--upcoming span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .convo-question__counter {

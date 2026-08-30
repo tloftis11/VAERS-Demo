@@ -39,11 +39,13 @@ model Submitter {
   contactEmail    String?
   contactPhone    String?
   relationship    String?
-  // Fully optional, single-field simplification of the real form's separate
-  // multi-field mailing-address block (street/city/state/zip) — modern
-  // reporters mostly want an email response; this is only for the rare case
-  // where someone actually wants something mailed.
-  mailingAddress  String?
+  // Structured mailing-address block, only populated when the reporter opts
+  // into a mailed response instead of email (see AboutYouStep.tsx) — most
+  // reporters leave these blank, since email is the default.
+  mailingStreet   String?
+  mailingCity     String?
+  mailingState    String?
+  mailingZip      String?
   // Item 14 on the real form: name/phone of the best doctor or healthcare
   // professional to contact about the adverse event — kept to one free-text
   // field rather than separate name/phone/ext questions to keep the burden low.

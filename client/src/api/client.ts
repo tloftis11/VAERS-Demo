@@ -8,7 +8,10 @@ export interface AboutYouData {
   contactEmail: string;
   contactPhone: string;
   relationship: string;
-  mailingAddress: string;
+  mailingStreet: string;
+  mailingCity: string;
+  mailingState: string;
+  mailingZip: string;
   bestContactInfo: string;
 }
 

@@ -80,7 +80,10 @@ async function serializeReport(reportId: string) {
           contactEmail: report.submitter.contactEmail ?? "",
           contactPhone: report.submitter.contactPhone ?? "",
           relationship: report.submitter.relationship ?? "",
-          mailingAddress: report.submitter.mailingAddress ?? "",
+          mailingStreet: report.submitter.mailingStreet ?? "",
+          mailingCity: report.submitter.mailingCity ?? "",
+          mailingState: report.submitter.mailingState ?? "",
+          mailingZip: report.submitter.mailingZip ?? "",
           bestContactInfo: report.submitter.bestContactInfo ?? "",
         }
       : null,
@@ -525,7 +528,10 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             contactEmail: report.submitter.contactEmail ?? "",
             contactPhone: report.submitter.contactPhone ?? "",
             relationship: report.submitter.relationship ?? "",
-            mailingAddress: report.submitter.mailingAddress ?? "",
+            mailingStreet: report.submitter.mailingStreet ?? "",
+            mailingCity: report.submitter.mailingCity ?? "",
+            mailingState: report.submitter.mailingState ?? "",
+            mailingZip: report.submitter.mailingZip ?? "",
             bestContactInfo: report.submitter.bestContactInfo ?? "",
           }
         : null;
