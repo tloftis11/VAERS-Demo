@@ -17,7 +17,8 @@ export type ConversationalFieldKind =
   | "checkboxGroup"
   | "multiSelect"
   | "time12"
-  | "monthYear";
+  | "monthYear"
+  | "custom";
 
 export interface ConversationalOption {
   value: string;
@@ -36,6 +37,13 @@ export interface ConversationalFieldSpec {
   /** For kind "date"/"monthYear" — ISO "YYYY-MM-DD" bounds enforced by the input itself, not just the schema. */
   min?: string;
   max?: string;
+  /** kind "custom" only — the caller owns the entire input UI (e.g. a
+   * repeatable bundled-fields editor) instead of a single input control. */
+  render?: (value: unknown, onChange: (value: unknown) => void) => ReactNode;
+  /** kind "custom" only — how to summarize this field's value on the review
+   * screen, since formatValue's options-lookup doesn't apply to arbitrary
+   * custom data shapes (e.g. an array of rows). */
+  formatSummary?: (value: unknown) => string;
 }
 
 interface ConversationalStepProps {
@@ -73,12 +81,13 @@ function isEmptyValue(v: unknown): boolean {
 
 export function formatValue(field: ConversationalFieldSpec, value: unknown): string {
   if (isEmptyValue(value)) return "";
+  if (field.formatSummary) return field.formatSummary(value);
   if (Array.isArray(value)) {
     const opts = field.options ?? [];
     return value.map((v) => opts.find((o) => o.value === v)?.label ?? String(v)).join(", ");
   }
   if (field.options) {
-    // A yes/no "choice" field (e.g. vaccine2Given) stores string option
+    // A yes/no "choice" field (boolean-backed on the server) stores string option
     // values ("true"/"false") client-side, but a submitted report reads
     // back a real boolean from the API — compare against both forms so
     // review/follow-up display resolves "Yes"/"No" instead of falling back
@@ -353,6 +362,8 @@ export function ConversationalStep({
             max={field.max}
           />
         );
+      case "custom":
+        return field.render?.(value, (v) => setValue(field.id, v)) ?? null;
       case "select":
         return (
           <select
@@ -405,7 +416,8 @@ export function ConversationalStep({
     field.kind === "checkboxGroup" ||
     field.kind === "multiSelect" ||
     field.kind === "time12" ||
-    field.kind === "monthYear";
+    field.kind === "monthYear" ||
+    field.kind === "custom";
 
   return (
     <div className="convo-step convo-step--question">
@@ -484,11 +496,23 @@ export function ConversationalStep({
             ← Back
           </button>
           {isCardChoice
-            ? canSkip && (
-                <button type="button" className="button button--text" onClick={advance}>
-                  Skip →
+            ? (!isEmptyValue(value) ? (
+                // Revisiting an already-answered card-choice question (e.g.
+                // via Edit/jump-back) — clicking a card again would still
+                // work, but nothing here visibly indicates the existing
+                // answer already counts, so a required question with no
+                // Skip button left the user with no forward button at all
+                // unless they thought to re-click their own answer.
+                <button type="button" className="button button--primary" onClick={advance}>
+                  Next →
                 </button>
-              )
+              ) : (
+                canSkip && (
+                  <button type="button" className="button button--text" onClick={advance}>
+                    Skip →
+                  </button>
+                )
+              ))
             : (
               <button
                 type="button"

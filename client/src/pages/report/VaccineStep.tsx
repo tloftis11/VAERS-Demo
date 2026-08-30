@@ -7,12 +7,14 @@ import {
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
   getManufacturerOptions,
+  getManufacturerOptionsForHcpVaccine,
 } from "../../../../shared/src/schemas";
 import { suggestBodySiteMismatch, isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
-import type { VaccineData, VaccineOption } from "../../api/client";
+import type { VaccineData, VaccineOption, AdditionalVaccineRow, PriorVaccineRow } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { useVaccineOptions } from "../../hooks/useVaccineOptions";
+import { Combobox } from "../../components/Combobox";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 
 interface VaccineStepProps {
@@ -36,17 +38,22 @@ const EMPTY: VaccineData = {
   bodySite: "",
   administeringFacility: "",
   facilityType: "",
-  otherVaccinesRecentGiven: false,
   otherVaccinesRecent: "",
   otherVaccinesSameVisit: "",
-  vaccine2Given: false,
-  vaccine2Type: "",
-  vaccine2Manufacturer: "",
-  vaccine2LotNumber: "",
-  vaccine2Route: "",
-  vaccine2BodySite: "",
-  vaccine2DoseNumber: "",
+  additionalVaccines: [],
+  priorVaccines: [],
 };
+
+const EMPTY_ADDITIONAL_VACCINE: AdditionalVaccineRow = {
+  vaccineType: "",
+  manufacturer: "",
+  lotNumber: "",
+  route: "",
+  bodySite: "",
+  doseNumber: "",
+};
+
+const EMPTY_PRIOR_VACCINE: PriorVaccineRow = { vaccineName: "", administrationDate: "" };
 
 /**
  * Field set follows the official VAERS form's "WHICH VACCINES WERE GIVEN"
@@ -54,11 +61,8 @@ const EMPTY: VaccineData = {
  * route/body-site options match the real form's own categories (it groups
  * all injection types together rather than asking IM vs. SC, and lists
  * specific limb/side options for body site) rather than clinical shorthand.
- * Item 22 (other vaccines in the prior month) is a repeatable table on the
- * real form; simplified here to one free-text field.
  * Exported so the final review and the read-only follow-up lookup can show the same labels.
- */
-/**
+ *
  * `vaccineTypeOptions` defaults to the static seed lists (used by ReviewStep
  * and the read-only follow-up lookup, which only need to resolve a label for
  * an already-submitted value). The live wizard step passes the freshly
@@ -96,7 +100,16 @@ export function vaccineFieldSpecs(
     { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
     { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
     isHcp
-      ? { id: "manufacturer", label: "Manufacturer", required: true, kind: "text" }
+      ? {
+          id: "manufacturer",
+          label: "Manufacturer",
+          required: true,
+          kind: "choice",
+          // The selected vaccine already names a specific branded product,
+          // so this is normally a one-manufacturer pick plus Unknown —
+          // still shown as a picklist rather than silently auto-filled.
+          options: getManufacturerOptionsForHcpVaccine(selectedVaccineType ?? ""),
+        }
       : {
           id: "manufacturer",
           label: "Manufacturer (optional)",
@@ -117,49 +130,6 @@ export function vaccineFieldSpecs(
     { id: "route", label: "How was it given? (optional)", required: false, kind: "choice", options: ROUTE_OPTIONS },
     { id: "bodySite", label: "Where was it given? (optional)", required: false, kind: "choice", options: BODY_SITE_OPTIONS },
   ];
-  // HCP-only second-vaccine slot (see vaccine2Given in shared/src/schemas.ts)
-  // — its own sequential yes/no question followed by the same shape of
-  // questions asked for vaccine 1, rather than a checkbox bolted onto the
-  // bodySite question (which read as one omnibus block instead of a
-  // genuine second pass through "which vaccine, given how").
-  if (isHcp) {
-    fields.push(
-      {
-        id: "vaccine2Given",
-        label: "Did you administer another vaccine at this same visit?",
-        required: false,
-        kind: "choice",
-        options: [
-          { value: "true", label: "Yes" },
-          { value: "false", label: "No" },
-        ],
-      },
-      { id: "vaccine2Type", label: "Second vaccine", required: false, kind: "choice", options: vaccineTypeOptions },
-      { id: "vaccine2Manufacturer", label: "Manufacturer (second vaccine)", required: false, kind: "text" },
-      { id: "vaccine2LotNumber", label: "Lot number (second vaccine)", required: false, kind: "text" },
-      {
-        id: "vaccine2Route",
-        label: "How was the second vaccine given? (optional)",
-        required: false,
-        kind: "choice",
-        options: ROUTE_OPTIONS,
-      },
-      {
-        id: "vaccine2BodySite",
-        label: "Where was the second vaccine given? (optional)",
-        required: false,
-        kind: "choice",
-        options: BODY_SITE_OPTIONS,
-      },
-      {
-        id: "vaccine2DoseNumber",
-        label: "Dose number for the second vaccine (optional)",
-        required: false,
-        kind: "choice",
-        options: DOSE_NUMBER_OPTIONS,
-      }
-    );
-  }
   fields.push(
     { id: "administeringFacility", label: "Facility or clinic name (optional)", required: false, kind: "text" },
     {
@@ -171,23 +141,31 @@ export function vaccineFieldSpecs(
     }
   );
   if (isHcp) {
+    // HCP-only: any number of additional vaccines at this same visit, and
+    // any number of other vaccines from the month before — each a single
+    // bundled question (all fields on one screen, add/remove rows) instead
+    // of a fixed one-extra-slot walked through as several separate
+    // sequential questions.
     fields.push(
       {
-        id: "otherVaccinesRecentGiven",
-        label: "Did the patient receive any other vaccines in the month before this one?",
+        id: "additionalVaccines",
+        label: "Additional vaccines given at this same visit (optional)",
         required: false,
-        kind: "choice",
-        options: [
-          { value: "true", label: "Yes" },
-          { value: "false", label: "No" },
-        ],
+        kind: "custom",
+        formatSummary: (v) => {
+          const rows = v as AdditionalVaccineRow[];
+          return rows.length === 0 ? "" : `${rows.length} additional vaccine${rows.length === 1 ? "" : "s"}`;
+        },
       },
       {
-        id: "otherVaccinesRecent",
-        label: "Which vaccine(s), and when?",
+        id: "priorVaccines",
+        label: "Other vaccines received in the month before this one (optional)",
         required: false,
-        kind: "textarea",
-        rows: 2,
+        kind: "custom",
+        formatSummary: (v) => {
+          const rows = v as PriorVaccineRow[];
+          return rows.length === 0 ? "" : `${rows.length} prior vaccine${rows.length === 1 ? "" : "s"}`;
+        },
       }
     );
   } else {
@@ -234,40 +212,39 @@ export function VaccineStep({
       : isHcp
         ? VACCINE_TYPES_HCP
         : VACCINE_TYPES;
-  // vaccine2Given/otherVaccinesRecentGiven are "choice" fields using string
-  // option values "true"/"false" (ConversationalOption.value must be a
-  // string) — comparing with a naive Boolean(...) would treat the string
-  // "false" as truthy, so check explicitly against both the real boolean
-  // and the "true" string the schema's transform also accepts.
-  const isYes = (v: unknown) => v === true || v === "true";
-  const vaccine2Given = isHcp && isYes(values.vaccine2Given);
-  const otherVaccinesRecentGiven = isHcp && isYes(values.otherVaccinesRecentGiven);
   const fields = (liveVaccineTypeOptions
     ? vaccineFieldSpecs(isHcp, vaccineTypeOptions, values.vaccineType as string)
     : []
-  ).filter((f) => {
-    if (f.id === "vaccineTypeOther") return values.vaccineType === "other" || values.vaccineType === "foreign";
-    if (f.id !== "vaccine2Given" && f.id.startsWith("vaccine2")) return vaccine2Given;
-    if (f.id === "otherVaccinesRecent" && isHcp) return otherVaccinesRecentGiven;
-    return true;
-  });
+  )
+    .filter((f) => {
+      if (f.id === "vaccineTypeOther") return values.vaccineType === "other" || values.vaccineType === "foreign";
+      return true;
+    })
+    .map((f) => {
+      // render is attached here, not in vaccineFieldSpecs, since it needs
+      // the live vaccineTypeOptions list in scope.
+      if (f.id === "additionalVaccines") {
+        return {
+          ...f,
+          render: (value: unknown, onChange: (v: unknown) => void) => (
+            <AdditionalVaccinesEditor value={value} onChange={onChange} vaccineTypeOptions={vaccineTypeOptions} />
+          ),
+        };
+      }
+      if (f.id === "priorVaccines") {
+        return {
+          ...f,
+          render: (value: unknown, onChange: (v: unknown) => void) => (
+            <PriorVaccinesEditor value={value} onChange={onChange} />
+          ),
+        };
+      }
+      return f;
+    });
   const siteMismatch = suggestBodySiteMismatch(values.route, values.bodySite);
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof VaccineData, value as any);
-    // Answering "no" (or clearing) shouldn't leave a stale, now-hidden answer
-    // behind to be silently submitted once its gate is off again.
-    if (id === "vaccine2Given" && !isYes(value)) {
-      setValue("vaccine2Type", "");
-      setValue("vaccine2Manufacturer", "");
-      setValue("vaccine2LotNumber", "");
-      setValue("vaccine2Route", "");
-      setValue("vaccine2BodySite", "");
-      setValue("vaccine2DoseNumber", "");
-    }
-    if (id === "otherVaccinesRecentGiven" && !isYes(value)) {
-      setValue("otherVaccinesRecent", "");
-    }
   }
 
   function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {
@@ -305,5 +282,209 @@ export function VaccineStep({
           ) : null,
       }}
     />
+  );
+}
+
+// ---- Bundled repeatable-row editors (kind "custom" — see ConversationalStep) ----
+
+function AdditionalVaccinesEditor({
+  value,
+  onChange,
+  vaccineTypeOptions,
+}: {
+  value: unknown;
+  onChange: (value: unknown) => void;
+  vaccineTypeOptions: readonly VaccineOption[];
+}) {
+  const rows = (value as AdditionalVaccineRow[] | undefined) ?? [];
+
+  function updateRow(index: number, patch: Partial<AdditionalVaccineRow>) {
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function removeRow(index: number) {
+    onChange(rows.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="vaccine-rows">
+      {rows.map((row, i) => {
+        const manufacturerOptions = getManufacturerOptionsForHcpVaccine(row.vaccineType);
+        return (
+          <div className="vaccine-row" key={i}>
+            <div className="vaccine-row__header">
+              <span>Vaccine {i + 2}</span>
+              <button type="button" className="button button--text" onClick={() => removeRow(i)}>
+                Remove
+              </button>
+            </div>
+            <div className="vaccine-row__grid">
+              <div className="field">
+                <label className="field__label" id={`additional-${i}-type-label`}>
+                  Vaccine
+                </label>
+                <Combobox
+                  id={`additional-${i}-type`}
+                  options={vaccineTypeOptions}
+                  value={row.vaccineType}
+                  labelledBy={`additional-${i}-type-label`}
+                  onSelect={(v) => updateRow(i, { vaccineType: v, manufacturer: "" })}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`additional-${i}-manufacturer`}>
+                  Manufacturer
+                </label>
+                <select
+                  id={`additional-${i}-manufacturer`}
+                  className="field__select"
+                  value={row.manufacturer}
+                  onChange={(e) => updateRow(i, { manufacturer: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {manufacturerOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`additional-${i}-lot`}>
+                  Lot number
+                </label>
+                <input
+                  id={`additional-${i}-lot`}
+                  className="field__input"
+                  value={row.lotNumber}
+                  onChange={(e) => updateRow(i, { lotNumber: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`additional-${i}-route`}>
+                  How was it given? (optional)
+                </label>
+                <select
+                  id={`additional-${i}-route`}
+                  className="field__select"
+                  value={row.route}
+                  onChange={(e) => updateRow(i, { route: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {ROUTE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`additional-${i}-site`}>
+                  Where was it given? (optional)
+                </label>
+                <select
+                  id={`additional-${i}-site`}
+                  className="field__select"
+                  value={row.bodySite}
+                  onChange={(e) => updateRow(i, { bodySite: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {BODY_SITE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`additional-${i}-dose`}>
+                  Dose number (optional)
+                </label>
+                <select
+                  id={`additional-${i}-dose`}
+                  className="field__select"
+                  value={row.doseNumber}
+                  onChange={(e) => updateRow(i, { doseNumber: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {DOSE_NUMBER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        className="button button--secondary"
+        onClick={() => onChange([...rows, { ...EMPTY_ADDITIONAL_VACCINE }])}
+      >
+        + Add another vaccine
+      </button>
+    </div>
+  );
+}
+
+function PriorVaccinesEditor({ value, onChange }: { value: unknown; onChange: (value: unknown) => void }) {
+  const rows = (value as PriorVaccineRow[] | undefined) ?? [];
+
+  function updateRow(index: number, patch: Partial<PriorVaccineRow>) {
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function removeRow(index: number) {
+    onChange(rows.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="vaccine-rows">
+      {rows.map((row, i) => (
+        <div className="vaccine-row" key={i}>
+          <div className="vaccine-row__header">
+            <span>Prior vaccine {i + 1}</span>
+            <button type="button" className="button button--text" onClick={() => removeRow(i)}>
+              Remove
+            </button>
+          </div>
+          <div className="vaccine-row__grid vaccine-row__grid--narrow">
+            <div className="field">
+              <label className="field__label" htmlFor={`prior-${i}-name`}>
+                Vaccine
+              </label>
+              <input
+                id={`prior-${i}-name`}
+                className="field__input"
+                value={row.vaccineName}
+                onChange={(e) => updateRow(i, { vaccineName: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor={`prior-${i}-date`}>
+                Date administered (optional)
+              </label>
+              <input
+                id={`prior-${i}-date`}
+                type="date"
+                className="field__input"
+                max={todayIsoDate()}
+                value={row.administrationDate}
+                onChange={(e) => updateRow(i, { administrationDate: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="button button--secondary"
+        onClick={() => onChange([...rows, { ...EMPTY_PRIOR_VACCINE }])}
+      >
+        + Add another vaccine
+      </button>
+    </div>
   );
 }

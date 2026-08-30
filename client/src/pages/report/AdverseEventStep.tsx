@@ -22,6 +22,8 @@ interface AdverseEventStepProps {
   vaccineAdministrationDate?: string;
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
+  /** Jumps back to the submitter-type step — see the self-report + "Patient died" notice below. */
+  onSwitchSubmitterType?: () => void;
 }
 
 const EMPTY: AdverseEventData = {
@@ -160,6 +162,7 @@ export function AdverseEventStep({
   vaccineAdministrationDate,
   onNext,
   onBack,
+  onSwitchSubmitterType,
 }: AdverseEventStepProps) {
   const schema = adverseEventSchema(submitterType);
   const initial = initialData ?? EMPTY;
@@ -169,6 +172,10 @@ export function AdverseEventStep({
   const showHospitalizationDetails =
     outcomes.includes("hospitalization") || outcomes.includes("hospitalization_prolonged");
   const showDateOfDeath = outcomes.includes("death");
+  // Same contradiction the cross-field review check (validationRules.ts)
+  // blocks submission on — surfaced live, right where it happens, instead
+  // of only at final review.
+  const selfReportDeathFlag = isSelfReport && outcomes.includes("death");
   const showPreviousDetails = values.previousAdverseEvent === "yes";
   const showSymptomsOther = (values.symptoms as string[]).includes("other");
 
@@ -300,6 +307,17 @@ export function AdverseEventStep({
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extraFieldValidation={checkFieldLogic}
       extras={{
+        outcomes: () =>
+          selfReportDeathFlag ? (
+            <p className="notice notice--info" role="status">
+              A report submitted by the patient themselves can't also report that the patient
+              died. If you're filling this out on someone else's behalf,{" "}
+              <button type="button" className="button button--text" onClick={onSwitchSubmitterType}>
+                go back and let us know
+              </button>
+              .
+            </p>
+          ) : null,
         // Deliberately attached here, not to "description" — this compares
         // the narrative against outcomes/recovery status, and both of those
         // questions come *after* description in the sequence. Running the

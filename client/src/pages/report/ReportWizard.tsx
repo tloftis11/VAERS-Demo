@@ -248,6 +248,7 @@ export function ReportWizard() {
           vaccineAdministrationDate={report.vaccine?.administrationDate}
           onNext={handleNext}
           onBack={handleBack}
+          onSwitchSubmitterType={() => goTo("submitter-type")}
         />
       );
       break;

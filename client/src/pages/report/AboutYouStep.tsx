@@ -94,8 +94,21 @@ export function aboutYouFieldSpecs(
 export function AboutYouStep({ submitterType, initialData, relationshipHint = null, onNext, onBack }: AboutYouStepProps) {
   const schema = aboutYouSchema(submitterType);
   const initial = initialData ?? EMPTY;
+  // "self" is a valid *schema* value regardless of hint, so switching from
+  // Patient to Caregiver (e.g. after the self-report+death contradiction
+  // notice sends someone back to change who's filling this out) would
+  // otherwise leave a stale "self" answer that still passes validation —
+  // jumping straight to this step's review screen with a relationship
+  // question that was never actually re-asked, and "self" isn't even among
+  // the options shown under a caregiver hint, so revisiting it looked like
+  // nothing was selected with no way forward. Clearing it here forces a
+  // real re-answer instead of silently carrying the old one forward.
   const seededInitial =
-    relationshipHint === "patient" && !initial.relationship ? { ...initial, relationship: "self" } : initial;
+    relationshipHint === "patient" && !initial.relationship
+      ? { ...initial, relationship: "self" }
+      : relationshipHint === "caregiver" && initial.relationship === "self"
+        ? { ...initial, relationship: "" }
+        : initial;
   const { values, setValue, errors, validate } = useStepForm(schema, seededInitial);
   const [wantsMailedResponse, setWantsMailedResponse] = useState(
     () => !!(initial.mailingStreet || initial.mailingCity || initial.mailingState || initial.mailingZip)

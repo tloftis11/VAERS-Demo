@@ -45,7 +45,15 @@ function optionalEnum<T extends string>(values: readonly T[]) {
     .transform((v) => v ?? "");
 }
 
-const isValidDate = (v: string) => !Number.isNaN(Date.parse(v));
+// A native <input type="date"> happily accepts a year like "0990" — it
+// parses as a real (if absurd) Date, so isValidDate alone lets it through.
+// No one alive today was born before 1900, so that's a safe, generous floor
+// for every date field in the app (vaccination date, onset, DOB, etc.).
+const MIN_PLAUSIBLE_YEAR = 1900;
+const isValidDate = (v: string) => {
+  const t = Date.parse(v);
+  return !Number.isNaN(t) && new Date(t).getUTCFullYear() >= MIN_PLAUSIBLE_YEAR;
+};
 const notInFuture = (v: string) => new Date(v).getTime() <= Date.now();
 
 const dateSchema = (msg = "Enter a valid date") => z.string().refine(isValidDate, msg);
@@ -284,6 +292,103 @@ export function getManufacturerOptions(vaccineType: string): { value: string; la
   return MANUFACTURER_OPTIONS_BY_VACCINE[vaccineType] ?? UNKNOWN_MANUFACTURER_OPTIONS;
 }
 
+/**
+ * HCP path: unlike the public plain-language categories, a VACCINE_TYPES_HCP
+ * selection already names a specific branded product, so there's normally
+ * exactly one correct manufacturer — still shown as a picklist (not silently
+ * auto-filled) so the reporter confirms it, with "Unknown" always available
+ * as an out (compounded/relabeled product, unclear paperwork, etc.).
+ */
+const MANUFACTURER_BY_HCP_VACCINE: Record<string, string> = {
+  "Adenovirus (Types 4 & 7, No Brand Name)": "Teva Pharmaceuticals",
+  "Anthrax (BioThrax)": "Emergent BioSolutions",
+  "Anthrax (Cyfendus)": "Emergent BioSolutions",
+  "Chikungunya (Vimkunya)": "Bavarian Nordic",
+  "Chikungunya Live (Ixchiq)": "Valneva",
+  "Cholera (Vaxchora)": "Emergent BioSolutions",
+  "COVID19 (Moderna Mnexspike)": "Moderna",
+  "COVID19 (Moderna Spikevax)": "Moderna",
+  "COVID19 (Novavax Nuvaxovid)": "Novavax",
+  "COVID19 (Pfizer-BioNTech Comirnaty)": "Pfizer-BioNTech",
+  "Dengue Tetravalent (Dengvaxia)": "Sanofi Pasteur",
+  "DT Adsorbed (No Brand Name)": "Sanofi Pasteur",
+  "DTaP (Daptacel)": "Sanofi Pasteur",
+  "DTaP (Infanrix)": "GSK",
+  "DTaP + Hep B + IPV (Pediarix)": "GSK",
+  "DTaP + IPV (Kinrix)": "GSK",
+  "DTaP + IPV (Quadracel)": "Sanofi Pasteur",
+  "DTaP + IPV + Hib (Pentacel)": "Sanofi Pasteur",
+  "DTaP + IPV + Hib + HepB (Vaxelis)": "Merck/Sanofi (MSP Vaccine Company)",
+  "Ebola Zaire (Ervebo)": "Merck",
+  "Hep A (Havrix)": "GSK",
+  "Hep A (Vaqta)": "Merck",
+  "Hep A + Hep B (Twinrix)": "GSK",
+  "Hep B (Engerix-B)": "GSK",
+  "Hep B (HEPLISAV-B)": "Dynavax",
+  "Hep B (PreHevbrio)": "VBI Vaccines",
+  "Hep B (Recombivax HB)": "Merck",
+  "Hib Conjugate (ActHIB)": "Sanofi Pasteur",
+  "Hib Conjugate (Hiberix)": "GSK",
+  "Hib Conjugate (PedvaxHIB)": "Merck",
+  "HPV (Gardasil 9)": "Merck",
+  "Inactivated Polio Virus (IPOL)": "Sanofi Pasteur",
+  "Influenza (Seasonal) (Afluria)": "Seqirus",
+  "Influenza (Seasonal) (Fluad)": "Seqirus",
+  "Influenza (Seasonal) (Fluarix)": "GSK",
+  "Influenza (Seasonal) (Flublok)": "Sanofi Pasteur",
+  "Influenza (Seasonal) (Flucelvax)": "Seqirus",
+  "Influenza (Seasonal) (FluLaval)": "GSK",
+  "Influenza (Seasonal) (FluMist)": "AstraZeneca",
+  "Influenza (Seasonal) (Fluzone High-Dose)": "Sanofi Pasteur",
+  "Influenza (Seasonal) (Fluzone)": "Sanofi Pasteur",
+  "Japanese Encephalitis (Ixiaro)": "Valneva",
+  "Measles + Mumps + Rubella (MMR II)": "Merck",
+  "Measles + Mumps + Rubella (Priorix)": "GSK",
+  "Measles + Mumps + Rubella + Varicella (ProQuad)": "Merck",
+  "Meningococcal B (Bexsero)": "GSK",
+  "Meningococcal B (Trumenba)": "Pfizer",
+  "Meningococcal Conjugate (Menactra)": "Sanofi Pasteur",
+  "Meningococcal Conjugate (MenQuadfi)": "Sanofi Pasteur",
+  "Meningococcal Conjugate (Menveo)": "GSK",
+  "Meningococcal Conjugate (Penbraya)": "Pfizer",
+  "Meningococcal Conjugate (Penmenvy)": "GSK",
+  "Pneumo Conjugate (CAPVAXIVE)": "Merck",
+  "Pneumo Conjugate (Prevnar 13)": "Pfizer",
+  "Pneumo Conjugate (Prevnar 20)": "Pfizer",
+  "Pneumo Conjugate (Vaxneuvance)": "Merck",
+  "Pneumo Polysaccharide (Pneumovax 23)": "Merck",
+  "Rabies (Imovax)": "Sanofi Pasteur",
+  "Rabies (RabAvert)": "GSK",
+  "Rotavirus (Rotarix)": "GSK",
+  "Rotavirus (RotaTeq)": "Merck",
+  "RSV (Abrysvo)": "Pfizer",
+  "RSV (Arexvy)": "GSK",
+  "RSV (mRESVIA)": "Moderna",
+  "Smallpox (ACAM2000)": "Emergent BioSolutions",
+  "Smallpox + Monkeypox (Jynneos)": "Bavarian Nordic",
+  "Td Adsorbed (No Brand Name)": "Sanofi Pasteur",
+  "Td Adsorbed (TDVAX)": "Grifols",
+  "Td Adsorbed (Tenivac)": "Sanofi Pasteur",
+  "Tdap (Adacel)": "Sanofi Pasteur",
+  "Tdap (Boostrix)": "GSK",
+  "Tick-Borne Enceph (Ticovac)": "Pfizer",
+  "Typhoid Live Oral Ty21a (Vivotif)": "Emergent BioSolutions",
+  "Typhoid Vi (Typhim Vi)": "Sanofi Pasteur",
+  "Varicella (Varivax)": "Merck",
+  "Yellow Fever (Stamaril)": "Sanofi Pasteur",
+  "Yellow Fever (YF-Vax)": "Sanofi Pasteur",
+  "Zoster (Shingrix)": "GSK",
+};
+
+export function getManufacturerOptionsForHcpVaccine(vaccineType: string): { value: string; label: string }[] {
+  const manufacturer = MANUFACTURER_BY_HCP_VACCINE[vaccineType];
+  if (!manufacturer) return UNKNOWN_MANUFACTURER_OPTIONS;
+  return [
+    { value: manufacturer.toLowerCase().replace(/[^a-z0-9]+/g, "_"), label: manufacturer },
+    { value: "unknown", label: "Unknown" },
+  ];
+}
+
 /** Matches the real VAERS eSubmitter system's own dose-number dropdown exactly
  * (1-6, then "7+", then Unknown/N-A) — no separate "Booster" value there; a
  * booster is just whichever dose number it is in the series. */
@@ -444,6 +549,7 @@ const patientBase = z.object({
     .transform((v) => v ?? ""),
   patientState: optionalString(),
   pregnant: optionalEnum(["yes", "no", "unknown"]),
+  pregnancyDetails: optionalString(),
   medicationsAtVaccination: optionalString(),
   allergies: optionalString(),
   recentIllnesses: optionalString(),
@@ -478,6 +584,22 @@ export function patientSchema(_submitterType: SubmitterType) {
   });
 }
 
+/** One bundled row (all fields together, not a separate question each) — HCP path's "additional vaccines given at this same visit". */
+const additionalVaccineRowSchema = z.object({
+  vaccineType: optionalString(),
+  manufacturer: optionalString(),
+  lotNumber: optionalString(),
+  route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
+  bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
+  doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
+});
+
+/** One bundled row — HCP path's "other vaccines received in the month before this one" (real form item 22, a repeatable table). */
+const priorVaccineRowSchema = z.object({
+  vaccineName: optionalString(),
+  administrationDate: optionalDate(),
+});
+
 /** Items 4 (vaccination date/time), 15-16 (facility), 17 (vaccine given), 22 (other recent vaccines). */
 export function vaccineSchema(submitterType: SubmitterType) {
   const base = z.object({
@@ -495,32 +617,18 @@ export function vaccineSchema(submitterType: SubmitterType) {
     bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
     administeringFacility: optionalString(),
     facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
-    // HCP path only: an explicit yes/no gate before the free-text detail,
-    // instead of one always-visible optional textarea — mirrors
-    // vaccine2Given's boolean-ish pattern below.
-    otherVaccinesRecentGiven: z
-      .union([z.boolean(), z.string()])
-      .optional()
-      .transform((v) => v === true || v === "true"),
+    // Public path only: kept low-burden as one free-text question each,
+    // rather than the repeatable bundled rows the HCP path gets below —
+    // most public reporters won't have a second vaccine's manufacturer/lot
+    // on hand for every dose.
     otherVaccinesRecent: optionalString(),
-    // Public path only: a lightweight substitute for the HCP path's full
-    // second-vaccine slot below — most public reporters won't have a second
-    // vaccine's manufacturer/lot/route on hand, so this stays one free-text
-    // question instead of a repeated structured block.
     otherVaccinesSameVisit: optionalString(),
-    // HCP path only: one additional vaccine slot for the same visit (the
-    // real system supports up to 10 rows here; scoped down for the
-    // prototype — see VaccineAdministration.vaccine2* in schema.prisma).
-    vaccine2Given: z
-      .union([z.boolean(), z.string()])
-      .optional()
-      .transform((v) => v === true || v === "true"),
-    vaccine2Type: optionalString(),
-    vaccine2Manufacturer: optionalString(),
-    vaccine2LotNumber: optionalString(),
-    vaccine2Route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
-    vaccine2BodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
-    vaccine2DoseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
+    // HCP path only: any number of additional vaccines given at the same
+    // visit, and any number of other vaccines in the month before — each a
+    // full bundled row a reporter fills in and adds, not gated behind a
+    // yes/no plus a single fixed extra slot.
+    additionalVaccines: z.array(additionalVaccineRowSchema).optional().default([]),
+    priorVaccines: z.array(priorVaccineRowSchema).optional().default([]),
   });
   if (submitterType === "hcp") {
     // Not on the real form as a hard requirement, but a reasonable expectation
@@ -531,13 +639,15 @@ export function vaccineSchema(submitterType: SubmitterType) {
         lotNumber: requiredString("Lot number is required"),
       })
       .superRefine((data, ctx) => {
-        if (data.vaccine2Given && !data.vaccine2Type) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["vaccine2Type"],
-            message: "Select the second vaccine given, or go back and answer \"no\" above",
-          });
-        }
+        data.additionalVaccines.forEach((row, i) => {
+          if (!row.vaccineType) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["additionalVaccines", i, "vaccineType"],
+              message: "Select the vaccine for this row, or remove it",
+            });
+          }
+        });
       });
   }
   return base;

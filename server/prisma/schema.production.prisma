@@ -63,6 +63,7 @@ model Patient {
   ageMonths                Int?
   state                    String? // public-path only (PUB-002): patient's state of residence
   pregnant                 String?
+  pregnancyDetails         String?
   medicationsAtVaccination String?
   allergies                String?
   recentIllnesses          String?
@@ -86,16 +87,32 @@ model VaccineAdministration {
   bodySite              String?
   administeringFacility String?
   facilityType          String?
-  otherVaccinesRecentGiven Boolean @default(false)
   otherVaccinesRecent   String?
   otherVaccinesSameVisit String?
-  vaccine2Given         Boolean @default(false)
-  vaccine2Type          String?
-  vaccine2Manufacturer  String?
-  vaccine2LotNumber     String?
-  vaccine2Route         String?
-  vaccine2BodySite      String?
-  vaccine2DoseNumber    String?
+  additionalVaccines    AdditionalVaccine[]
+  priorVaccines         PriorVaccine[]
+}
+
+model AdditionalVaccine {
+  id           String                @id @default(cuid())
+  vaccineId    String
+  vaccine      VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder    Int                   @default(0)
+  vaccineType  String?
+  manufacturer String?
+  lotNumber    String?
+  route        String?
+  bodySite     String?
+  doseNumber   String?
+}
+
+model PriorVaccine {
+  id                 String                @id @default(cuid())
+  vaccineId          String
+  vaccine            VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder          Int                   @default(0)
+  vaccineName        String?
+  administrationDate String?
 }
 
 model AdverseEvent {

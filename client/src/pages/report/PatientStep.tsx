@@ -51,6 +51,7 @@ const EMPTY: PatientData = {
   ageMonths: "",
   patientState: "",
   pregnant: "",
+  pregnancyDetails: "",
   medicationsAtVaccination: "",
   allergies: "",
   recentIllnesses: "",
@@ -82,6 +83,7 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
       kind: dobPartialMode ? "monthYear" : "date",
       icon: "calendar",
       hint: "We use this to work out the patient's age at vaccination automatically.",
+      min: "1900-01-01",
       max: todayIsoDate(),
     },
     { id: "patientSex", label: "Sex", required: true, kind: "choice", options: SEX_OPTIONS },
@@ -118,7 +120,15 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
       required: false,
       kind: "choice",
       options: YES_NO_UNKNOWN_OPTIONS,
-      hint: "If yes, you'll be able to describe the pregnancy and any complications in the next step.",
+      hint: "If yes, you'll be able to describe the pregnancy and any complications next.",
+    },
+    {
+      id: "pregnancyDetails",
+      label: "Describe the pregnancy and any complications (optional)",
+      required: false,
+      kind: "textarea",
+      rows: 3,
+      hint: "e.g. trimester at vaccination, and any pregnancy-related complications since.",
     },
     {
       id: "medicationsAtVaccination",
@@ -225,9 +235,11 @@ export function PatientStep({
         ? "the patient's age makes this inapplicable"
         : null;
 
-  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter(
-    (f) => f.id !== "pregnant" || !pregnancySkipReason
-  );
+  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter((f) => {
+    if (f.id === "pregnant") return !pregnancySkipReason;
+    if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
+    return true;
+  });
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof PatientData, value as any);
@@ -242,6 +254,7 @@ export function PatientStep({
       const n = Number(value);
       if (value !== "" && Number.isFinite(n) && n < PREGNANCY_MIN_PLAUSIBLE_AGE) setValue("pregnant", "");
     }
+    if (id === "pregnant" && value !== "yes") setValue("pregnancyDetails", "");
   }
 
   function handleDobPartialToggle(checked: boolean) {
