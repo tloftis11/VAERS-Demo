@@ -168,3 +168,21 @@ model SurveyResponse {
   report    Report?  @relation(fields: [reportId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 }
+
+// Admin-managed reference data (see /admin) — replaces the old hardcoded
+// VACCINE_TYPES/VACCINE_TYPES_HCP arrays in shared/src/schemas.ts so adding a
+// newly-authorized vaccine no longer requires a code deploy. Soft-deleted via
+// `active` rather than removed outright, since a past report may reference a
+// value that's since been retired.
+model VaccineOption {
+  id        String   @id @default(cuid())
+  value     String
+  label     String
+  audience  String // public | hcp
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([audience, value])
+}

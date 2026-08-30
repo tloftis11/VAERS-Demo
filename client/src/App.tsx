@@ -27,6 +27,9 @@ const ReportWizard = lazy(() =>
 const Confirmation = lazy(() =>
   import("./pages/report/Confirmation").then((m) => ({ default: m.Confirmation }))
 );
+const AdminPage = lazy(() =>
+  import("./pages/admin/AdminPage").then((m) => ({ default: m.AdminPage }))
+);
 
 export function App() {
   return (
@@ -43,6 +46,7 @@ export function App() {
             <Route path="/report" element={<ReportEntry />} />
             <Route path="/report/:reportId/confirmation" element={<Confirmation />} />
             <Route path="/report/:reportId/:step" element={<ReportWizard />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </Suspense>
       </main>

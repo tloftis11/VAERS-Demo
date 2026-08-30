@@ -106,8 +106,66 @@ a {
   color: var(--color-primary);
 }
 
-.nav-bar__cta {
-  color: var(--color-primary-contrast) !important;
+.nav-bar__language {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.nav-bar__language:hover {
+  color: var(--color-primary);
+}
+
+/* Staff-only entry point to the admin portal — a thin strip of its own
+   above the main nav row (not squeezed into the flex-wrapping links row),
+   deliberately muted and desktop-only so it reads like a real production
+   system's low-key internal link rather than a feature aimed at the public
+   reporter (see plan Phase 4). */
+.nav-bar__admin-row {
+  display: none;
+}
+
+@media (min-width: 1000px) {
+  .nav-bar__admin-row {
+    display: block;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  .nav-bar__admin-row-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: var(--space-1) var(--space-4);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .nav-bar__admin-link {
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-decoration: none;
+  }
+
+  .nav-bar__admin-link:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+  }
+}
+
+.nav-bar__links a.button--primary.nav-bar__cta {
+  color: var(--color-primary-contrast);
+}
+
+.nav-bar__links a.button--secondary.nav-bar__cta {
+  color: var(--color-primary);
 }
 
 /* Buttons */
@@ -171,6 +229,51 @@ a {
 .button--large {
   font-size: 1.1rem;
   padding: var(--space-3) var(--space-6);
+}
+
+/* Admin portal (see AdminPage.tsx) */
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.admin-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  margin: var(--space-5) 0;
+}
+
+.admin-add-form .field__input {
+  width: auto;
+  flex: 1 1 200px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table__row--inactive {
+  color: var(--color-text-muted);
+}
+
+.admin-table__actions {
+  display: flex;
+  gap: var(--space-2);
+  white-space: nowrap;
 }
 
 /* Page layout */
