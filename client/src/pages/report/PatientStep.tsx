@@ -6,7 +6,7 @@ import {
   RACE_OPTIONS,
   ETHNICITY_OPTIONS,
 } from "../../../../shared/src/schemas";
-import { todayIsoDate } from "../../../../shared/src/liveChecks";
+import { ageInYears, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -14,10 +14,31 @@ import { ConversationalStep, type ConversationalFieldSpec } from "../../componen
 
 interface PatientStepProps {
   submitterType: SubmitterType;
+  /** True only for a "public" submitter who told us (in About You) that
+   * they're reporting for themselves — the only case where the person
+   * filling this out and the patient are guaranteed to be the same person. */
+  isSelfReport: boolean;
   initialData: PatientData | null;
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
+  /** Jumps back to the very first step so a self-reporting adult who's actually
+   * filling this out for someone else (see the young-self-report notice below)
+   * can restart as the right submitter type, instead of just going back one step. */
+  onSwitchSubmitterType: () => void;
 }
+
+/** Below this age, someone filling out their *own* VAERS report is
+ * implausible enough to be worth a gentle "are you sure?" flag — not a
+ * hard block, since edge cases exist and we never want to prevent a real
+ * report from being filed. */
+const SELF_REPORT_MIN_PLAUSIBLE_AGE = 10;
+
+/** A biologically-implausible age for pregnancy (e.g. an infant) skips the
+ * question outright rather than just marking it optional — asking it at
+ * all reads as a mistake, not a real question. Deliberately conservative
+ * (well below the youngest plausible age) so this only ever fires for
+ * clear-cut cases, never a real early-adolescent report. */
+const PREGNANCY_MIN_PLAUSIBLE_AGE = 9;
 
 const EMPTY: PatientData = {
   patientFirstName: "",
@@ -131,7 +152,7 @@ export function patientFieldSpecs(dateOfBirthUnknown = true): ConversationalFiel
       id: "patientRace",
       label: "Patient's race (optional, select all that apply)",
       required: false,
-      kind: "multiSelect",
+      kind: "checkboxGroup",
       options: RACE_OPTIONS,
     },
     {
@@ -145,15 +166,63 @@ export function patientFieldSpecs(dateOfBirthUnknown = true): ConversationalFiel
   return fields;
 }
 
-export function PatientStep({ submitterType, initialData, onNext, onBack }: PatientStepProps) {
+export function PatientStep({
+  submitterType,
+  isSelfReport,
+  initialData,
+  onNext,
+  onBack,
+  onSwitchSubmitterType,
+}: PatientStepProps) {
   const schema = patientSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
-  const dateOfBirthUnknown = Boolean(values.dateOfBirthUnknown);
-  const fields = patientFieldSpecs(dateOfBirthUnknown);
+  // Reporting for yourself means you inherently know your own exact
+  // birthdate — the "I don't know" escape hatch only makes sense for a
+  // caregiver or HCP reporting on someone else's behalf.
+  const dateOfBirthUnknown = !isSelfReport && Boolean(values.dateOfBirthUnknown);
+
+  // Best age estimate available at this point in the flow: age *at
+  // vaccination* when it was entered directly (DOB unknown), otherwise age
+  // *today* from DOB — the actual vaccination date isn't known until the
+  // next step, so DOB-derived age is an approximation, but it's already
+  // close enough to catch the clear-cut cases these checks care about.
+  const bestAgeEstimate = dateOfBirthUnknown
+    ? (() => {
+        const n = Number(values.ageYears);
+        return values.ageYears !== "" && Number.isFinite(n) ? n : null;
+      })()
+    : values.patientDateOfBirth
+      ? ageInYears(values.patientDateOfBirth)
+      : null;
+
+  const selfReportAgeFlag =
+    isSelfReport && bestAgeEstimate !== null && bestAgeEstimate < SELF_REPORT_MIN_PLAUSIBLE_AGE;
+
+  const pregnancySkipReason =
+    values.patientSex === "male"
+      ? "the patient is recorded as male"
+      : bestAgeEstimate !== null && bestAgeEstimate < PREGNANCY_MIN_PLAUSIBLE_AGE
+        ? "the patient's age makes this inapplicable"
+        : null;
+
+  const fields = patientFieldSpecs(dateOfBirthUnknown).filter(
+    (f) => f.id !== "pregnant" || !pregnancySkipReason
+  );
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof PatientData, value as any);
+    // A field hidden because it's no longer applicable shouldn't leave a
+    // stale answer behind to be silently submitted once it's out of view.
+    if (id === "patientSex" && value === "male") setValue("pregnant", "");
+    if (id === "patientDateOfBirth") {
+      const age = ageInYears(String(value));
+      if (age !== null && age < PREGNANCY_MIN_PLAUSIBLE_AGE) setValue("pregnant", "");
+    }
+    if (id === "ageYears") {
+      const n = Number(value);
+      if (value !== "" && Number.isFinite(n) && n < PREGNANCY_MIN_PLAUSIBLE_AGE) setValue("pregnant", "");
+    }
   }
 
   return (
@@ -169,15 +238,35 @@ export function PatientStep({ submitterType, initialData, onNext, onBack }: Pati
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extras={{
         patientDateOfBirth: () => (
-          <label className="field__inline-toggle">
-            <input
-              type="checkbox"
-              checked={dateOfBirthUnknown}
-              onChange={(e) => handleSetValue("dateOfBirthUnknown", e.target.checked)}
-            />
-            I don't know the exact date of birth
-          </label>
+          <>
+            {!isSelfReport && (
+              <label className="field__inline-toggle">
+                <input
+                  type="checkbox"
+                  checked={dateOfBirthUnknown}
+                  onChange={(e) => handleSetValue("dateOfBirthUnknown", e.target.checked)}
+                />
+                I don't know the exact date of birth
+              </label>
+            )}
+            {selfReportAgeFlag && (
+              <p className="notice notice--info" role="status">
+                This date of birth suggests the patient is younger than {SELF_REPORT_MIN_PLAUSIBLE_AGE}. If
+                you're filling this out on someone else's behalf,{" "}
+                <button type="button" className="button button--text" onClick={onSwitchSubmitterType}>
+                  go back and let us know
+                </button>
+                .
+              </p>
+            )}
+          </>
         ),
+        patientState: () =>
+          pregnancySkipReason ? (
+            <p className="field__hint" role="status">
+              We'll skip asking about pregnancy — {pregnancySkipReason}.
+            </p>
+          ) : null,
       }}
     />
   );

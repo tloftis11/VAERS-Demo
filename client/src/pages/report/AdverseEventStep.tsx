@@ -79,7 +79,7 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
       id: "symptoms",
       label: "Did any of these symptoms occur? (optional, select all that apply)",
       required: false,
-      kind: "multiSelect",
+      kind: "checkboxGroup",
       options: SYMPTOM_OPTIONS,
       hint: "This is a quick-select shortcut — it doesn't replace the description above.",
     },
@@ -101,7 +101,7 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
       id: "outcomes",
       label: "Did any of these occur? (optional, select all that apply)",
       required: false,
-      kind: "multiSelect",
+      kind: "checkboxGroup",
       options: OUTCOME_OPTIONS,
     },
     {
@@ -178,6 +178,16 @@ export function AdverseEventStep({
       if (onsetDate && Number.isFinite(days)) {
         const message = hospitalizationExceedsElapsed(onsetDate, days);
         if (message) return message;
+      }
+    }
+    if (fieldId === "dateOfDeath") {
+      const dateOfDeath = String(liveValues.dateOfDeath ?? "");
+      const onsetDate = String(liveValues.onsetDate ?? "");
+      if (dateOfDeath && vaccineAdministrationDate && isDateBefore(dateOfDeath, vaccineAdministrationDate)) {
+        return "Date of death can't be before the vaccination date.";
+      }
+      if (dateOfDeath && onsetDate && isDateBefore(dateOfDeath, onsetDate)) {
+        return "Date of death can't be before the symptom onset date.";
       }
     }
     return null;

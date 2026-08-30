@@ -220,9 +220,11 @@ export function ReportWizard() {
       stepContent = (
         <PatientStep
           submitterType={report.submitterType!}
+          isSelfReport={report.aboutYou?.relationship === "self"}
           initialData={report.patient}
           onNext={handleNext}
           onBack={handleBack}
+          onSwitchSubmitterType={() => goTo("submitter-type")}
         />
       );
       break;

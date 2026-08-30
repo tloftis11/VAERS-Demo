@@ -26,11 +26,18 @@ export function Confirmation() {
         Your report has been received and is now part of the national effort to keep vaccines
         safe. Reports like yours are what make this system work.
       </p>
+      <p className="confirmation__lead">
+        <strong>You're done — there's nothing else you need to do</strong> unless we contact you
+        for more information.
+      </p>
 
       <div className="confirmation__reference">
         <span className="confirmation__reference-label">Your reference number</span>
         <span className="confirmation__reference-value">{reportId}</span>
-        <span className="confirmation__reference-hint">Save this — you'll need it to add documents later.</span>
+        <span className="confirmation__reference-hint">
+          Write this down or take a screenshot — you'll need it if you want to add documents or
+          updates to this report later.
+        </span>
       </div>
 
       {report?.duplicateFlag && (

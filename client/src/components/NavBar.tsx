@@ -18,6 +18,9 @@ export function NavBar() {
           <Link to="/report" className="button button--primary nav-bar__cta">
             Report an Event
           </Link>
+          <Link to="/follow-up" className="button button--secondary nav-bar__cta">
+            Provide Follow-up Info
+          </Link>
         </nav>
       </div>
     </header>

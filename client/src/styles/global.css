@@ -175,10 +175,24 @@ a {
 
 /* Page layout */
 
+/* The Feedback button (bottom-left) and FAQ mascot (bottom-right) are
+   fixed at the viewport bottom on every screen size. On mobile, short pages
+   (e.g. "Before You Start") don't scroll, so their in-flow "Continue"/"Back"
+   buttons land at the same height as those fixed corner buttons and get
+   covered. Reserving extra bottom padding pushes real content — including
+   those buttons — up clear of that zone; on desktop the corner buttons are
+   rarely an issue (pages are wider and taller relative to the buttons), so
+   padding reverts to the original amount there. */
 .page {
   max-width: var(--max-content-width);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4) var(--space-8);
+  padding: var(--space-6) var(--space-4) 96px;
+}
+
+@media (min-width: 640px) {
+  .page {
+    padding-bottom: var(--space-8);
+  }
 }
 
 .page--wizard {
@@ -621,6 +635,7 @@ a {
   }
 
   .convo-step--question .recap-pill-list {
+    display: flex;
     grid-area: recap;
     position: sticky;
     top: var(--space-6);
@@ -642,8 +657,13 @@ a {
   margin: 0 0 var(--space-4);
 }
 
+/* Mobile: the full past/current/upcoming question list ate too much
+   vertical space above the actual question and read like a form to fill in
+   on its own — hidden below the desktop breakpoint, where the more specific
+   ".convo-step--question .recap-pill-list" rule above turns it back on as a
+   sticky sidebar. */
 .recap-pill-list {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: var(--space-2);
 }
