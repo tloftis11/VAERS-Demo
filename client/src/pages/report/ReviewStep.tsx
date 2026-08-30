@@ -34,7 +34,9 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
     () =>
       checkCrossFieldRules({
         vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate } : null,
-        adverseEvent: report.adverseEvent ? { onsetDate: report.adverseEvent.onsetDate } : null,
+        adverseEvent: report.adverseEvent
+          ? { onsetDate: report.adverseEvent.onsetDate, dateOfDeath: report.adverseEvent.dateOfDeath }
+          : null,
         errorDetail: report.errorDetail
           ? { errorDiscoveredDate: report.errorDetail.errorDiscoveredDate }
           : null,

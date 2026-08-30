@@ -29,6 +29,23 @@ export function isDateBefore(a: string, b: string): boolean {
 }
 
 /**
+ * Whole years between two ISO "YYYY-MM-DD" dates — used for age-based UI
+ * logic (flagging an implausible self-report age, deciding whether the
+ * pregnancy question applies). Uses UTC field getters since Date.parse of a
+ * date-only string is UTC midnight — mixing in local-time getters could
+ * shift the result by a day depending on the browser's timezone.
+ */
+export function ageInYears(dobIso: string, atIso: string = todayIsoDate()): number | null {
+  if (parsedDate(dobIso) === null || parsedDate(atIso) === null) return null;
+  const dob = new Date(dobIso);
+  const at = new Date(atIso);
+  let years = at.getUTCFullYear() - dob.getUTCFullYear();
+  const monthDiff = at.getUTCMonth() - dob.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && at.getUTCDate() < dob.getUTCDate())) years -= 1;
+  return years < 0 ? null : years;
+}
+
+/**
  * A hospitalization can't have lasted longer than the time that has actually
  * elapsed since the symptoms it followed began. Returns an error message if
  * so, else null. `today` is injectable for testability.

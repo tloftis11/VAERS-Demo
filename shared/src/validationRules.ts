@@ -18,7 +18,7 @@ export interface ValidationFinding {
 
 export interface CrossFieldCheckInput {
   vaccine: { administrationDate: string } | null;
-  adverseEvent: { onsetDate: string } | null;
+  adverseEvent: { onsetDate: string; dateOfDeath?: string } | null;
   errorDetail: { errorDiscoveredDate: string } | null;
 }
 
@@ -55,6 +55,29 @@ export function checkCrossFieldRules(report: CrossFieldCheckInput): ValidationFi
         step: "error-detail",
         field: "errorDiscoveredDate",
         message: "The error-discovered date is before the vaccination date.",
+      });
+    }
+  }
+
+  const dateOfDeath = report.adverseEvent?.dateOfDeath;
+  if (dateOfDeath) {
+    if (administrationDate && isBefore(dateOfDeath, administrationDate)) {
+      findings.push({
+        severity: "ERROR",
+        step: "adverse-event",
+        field: "dateOfDeath",
+        message: "Date of death is before the vaccination date.",
+      });
+    } else if (report.adverseEvent?.onsetDate && isBefore(dateOfDeath, report.adverseEvent.onsetDate)) {
+      // Only checked when the vaccination-date comparison above didn't already
+      // fire — a date that's before administration is necessarily also before
+      // onset (onset can't precede administration either), so this avoids
+      // surfacing two findings for what's really one impossible date.
+      findings.push({
+        severity: "ERROR",
+        step: "adverse-event",
+        field: "dateOfDeath",
+        message: "Date of death is before the symptom onset date.",
       });
     }
   }
