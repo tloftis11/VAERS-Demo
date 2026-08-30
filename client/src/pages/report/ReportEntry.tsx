@@ -15,49 +15,53 @@ const DRAFT_KEY = "vaers_draft_report_id";
 export function ReportEntry() {
   const [draft, setDraft] = useState<ClientReport | null>(null);
   const [target, setTarget] = useState<string | null>(null);
-  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function checkForDraft() {
+    async function init() {
       const existingId = localStorage.getItem(DRAFT_KEY);
-      if (existingId) {
-        try {
-          const report = await getReport(existingId);
-          if (report.status === "draft" && !cancelled) {
-            setDraft(report);
-            setChecked(true);
-            return;
-          }
-        } catch {
-          // Draft no longer exists server-side; fall through to starting fresh.
-        }
+
+      if (!existingId) {
+        const report = await createReport();
+        if (cancelled) return;
+        localStorage.setItem(DRAFT_KEY, report.id);
+        setTarget(`/report/${report.id}/submitter-type`);
+        return;
       }
-      if (!cancelled) setChecked(true);
+
+      // Check the leftover local draft and start a fresh report at the same
+      // time, instead of one after the other — most of the time that local
+      // id points at an already-submitted or long-gone draft, so waiting on
+      // the check before even starting the new report doubles a slow
+      // request for nothing.
+      const [existing, fresh] = await Promise.all([
+        getReport(existingId).catch(() => null),
+        createReport(),
+      ]);
+      if (cancelled) return;
+
+      if (existing?.status === "draft") {
+        setDraft(existing);
+        return;
+      }
+
+      localStorage.setItem(DRAFT_KEY, fresh.id);
+      setTarget(`/report/${fresh.id}/submitter-type`);
     }
 
-    checkForDraft();
+    init();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (!checked || draft) return;
-    let cancelled = false;
+  function startNew() {
+    setDraft(null);
     createReport().then((report) => {
-      if (cancelled) return;
       localStorage.setItem(DRAFT_KEY, report.id);
       setTarget(`/report/${report.id}/submitter-type`);
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [checked, draft]);
-
-  function startNew() {
-    setDraft(null);
   }
 
   function resumeDraft() {
