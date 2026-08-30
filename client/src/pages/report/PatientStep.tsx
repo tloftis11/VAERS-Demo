@@ -6,6 +6,7 @@ import {
   RACE_OPTIONS,
   ETHNICITY_OPTIONS,
 } from "../../../../shared/src/schemas";
+import { useState } from "react";
 import { ageInYears, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
@@ -70,7 +71,7 @@ const EMPTY: PatientData = {
  * the same human-readable labels instead of raw field keys — those callers
  * pass no argument, which shows the full superset for display purposes.
  */
-export function patientFieldSpecs(dateOfBirthUnknown = true): ConversationalFieldSpec[] {
+export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = false): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     { id: "patientFirstName", label: "Patient's first name", required: true, kind: "text", icon: "person" },
     { id: "patientLastName", label: "Patient's last name", required: true, kind: "text", icon: "person" },
@@ -78,7 +79,7 @@ export function patientFieldSpecs(dateOfBirthUnknown = true): ConversationalFiel
       id: "patientDateOfBirth",
       label: "Date of birth",
       required: !dateOfBirthUnknown,
-      kind: "date",
+      kind: dobPartialMode ? "monthYear" : "date",
       icon: "calendar",
       hint: "We use this to work out the patient's age at vaccination automatically.",
       max: todayIsoDate(),
@@ -181,12 +182,20 @@ export function PatientStep({
   // birthdate — the "I don't know" escape hatch only makes sense for a
   // caregiver or HCP reporting on someone else's behalf.
   const dateOfBirthUnknown = !isSelfReport && Boolean(values.dateOfBirthUnknown);
+  // "Only know the month and year" is available to everyone (matches the
+  // real VAERS eSubmitter system's own mm/yyyy option) — infer the initial
+  // toggle state from whatever's already stored, so revisiting the question
+  // doesn't silently switch modes on someone.
+  const [dobPartialMode, setDobPartialMode] = useState(
+    () => /^\d{4}-\d{2}$/.test(String(initial.patientDateOfBirth ?? ""))
+  );
 
   // Best age estimate available at this point in the flow: age *at
   // vaccination* when it was entered directly (DOB unknown), otherwise age
-  // *today* from DOB — the actual vaccination date isn't known until the
-  // next step, so DOB-derived age is an approximation, but it's already
-  // close enough to catch the clear-cut cases these checks care about.
+  // *today* from DOB (partial "YYYY-MM" values parse fine here, just assumed
+  // to be the 1st of the month) — the actual vaccination date isn't known
+  // until the next step, so DOB-derived age is an approximation, but it's
+  // already close enough to catch the clear-cut cases these checks care about.
   const bestAgeEstimate = dateOfBirthUnknown
     ? (() => {
         const n = Number(values.ageYears);
@@ -198,6 +207,16 @@ export function PatientStep({
 
   const selfReportAgeFlag =
     isSelfReport && bestAgeEstimate !== null && bestAgeEstimate < SELF_REPORT_MIN_PLAUSIBLE_AGE;
+  // A second, independent signal: an adult reporting for *themselves* should
+  // always know at least the month and year they were born, even if not the
+  // exact day — not knowing that much at all is itself a sign this might
+  // actually be a caregiver report.
+  const selfReportPartialDobFlag = isSelfReport && dobPartialMode && Boolean(values.patientDateOfBirth);
+  const selfReportRedirectMessage = selfReportAgeFlag
+    ? `This date of birth suggests the patient is younger than ${SELF_REPORT_MIN_PLAUSIBLE_AGE}.`
+    : selfReportPartialDobFlag
+      ? "Not knowing your own exact date of birth is unusual for a self-report."
+      : null;
 
   const pregnancySkipReason =
     values.patientSex === "male"
@@ -206,7 +225,7 @@ export function PatientStep({
         ? "the patient's age makes this inapplicable"
         : null;
 
-  const fields = patientFieldSpecs(dateOfBirthUnknown).filter(
+  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter(
     (f) => f.id !== "pregnant" || !pregnancySkipReason
   );
 
@@ -225,6 +244,18 @@ export function PatientStep({
     }
   }
 
+  function handleDobPartialToggle(checked: boolean) {
+    setDobPartialMode(checked);
+    const current = String(values.patientDateOfBirth ?? "");
+    if (checked && /^\d{4}-\d{2}-\d{2}$/.test(current)) {
+      // Keep whatever month/year they'd already entered, just drop the day.
+      handleSetValue("patientDateOfBirth", current.slice(0, 7));
+    } else if (!checked && /^\d{4}-\d{2}$/.test(current)) {
+      // Can't recover a day that was never entered — start the full picker fresh.
+      handleSetValue("patientDateOfBirth", "");
+    }
+  }
+
   return (
     <ConversationalStep
       stepTitle="About the patient"
@@ -239,6 +270,14 @@ export function PatientStep({
       extras={{
         patientDateOfBirth: () => (
           <>
+            <label className="field__inline-toggle">
+              <input
+                type="checkbox"
+                checked={dobPartialMode}
+                onChange={(e) => handleDobPartialToggle(e.target.checked)}
+              />
+              I only know the month and year
+            </label>
             {!isSelfReport && (
               <label className="field__inline-toggle">
                 <input
@@ -249,10 +288,9 @@ export function PatientStep({
                 I don't know the exact date of birth
               </label>
             )}
-            {selfReportAgeFlag && (
+            {selfReportRedirectMessage && (
               <p className="notice notice--info" role="status">
-                This date of birth suggests the patient is younger than {SELF_REPORT_MIN_PLAUSIBLE_AGE}. If
-                you're filling this out on someone else's behalf,{" "}
+                {selfReportRedirectMessage} If you're filling this out on someone else's behalf,{" "}
                 <button type="button" className="button button--text" onClick={onSwitchSubmitterType}>
                   go back and let us know
                 </button>

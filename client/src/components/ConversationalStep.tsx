@@ -4,6 +4,7 @@ import { FieldIcon, type FieldIconName } from "./illustrations";
 import { Combobox } from "./Combobox";
 import { MultiSelect } from "./MultiSelect";
 import { TimeInput12 } from "./TimeInput12";
+import { MonthYearInput } from "./MonthYearInput";
 
 export type ConversationalFieldKind =
   | "text"
@@ -15,7 +16,8 @@ export type ConversationalFieldKind =
   | "choice"
   | "checkboxGroup"
   | "multiSelect"
-  | "time12";
+  | "time12"
+  | "monthYear";
 
 export interface ConversationalOption {
   value: string;
@@ -31,7 +33,7 @@ export interface ConversationalFieldSpec {
   options?: readonly ConversationalOption[];
   rows?: number;
   icon?: FieldIconName;
-  /** For kind "date" — ISO "YYYY-MM-DD" bounds enforced by the native picker itself, not just the schema. */
+  /** For kind "date"/"monthYear" — ISO "YYYY-MM-DD" bounds enforced by the input itself, not just the schema. */
   min?: string;
   max?: string;
 }
@@ -318,6 +320,16 @@ export function ConversationalStep({
             labelledBy={labelId}
           />
         );
+      case "monthYear":
+        return (
+          <MonthYearInput
+            id={controlId}
+            value={typeof value === "string" ? value : ""}
+            onChange={(v) => setValue(field.id, v)}
+            labelledBy={labelId}
+            max={field.max}
+          />
+        );
       case "select":
         return (
           <select
@@ -366,7 +378,11 @@ export function ConversationalStep({
   }
 
   const isGroupControl =
-    field.kind === "choice" || field.kind === "checkboxGroup" || field.kind === "multiSelect" || field.kind === "time12";
+    field.kind === "choice" ||
+    field.kind === "checkboxGroup" ||
+    field.kind === "multiSelect" ||
+    field.kind === "time12" ||
+    field.kind === "monthYear";
 
   return (
     <div className="convo-step convo-step--question">

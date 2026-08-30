@@ -133,6 +133,9 @@ export const VACCINE_TYPES = [
   { value: "unknown", label: "Not sure" },
 ] as const;
 
+/** Matches the real VAERS eSubmitter system's own dose-number dropdown exactly
+ * (1-6, then "7+", then Unknown/N-A) — no separate "Booster" value there; a
+ * booster is just whichever dose number it is in the series. */
 export const DOSE_NUMBER_OPTIONS = [
   { value: "1", label: "1st dose" },
   { value: "2", label: "2nd dose" },
@@ -140,11 +143,9 @@ export const DOSE_NUMBER_OPTIONS = [
   { value: "4", label: "4th dose" },
   { value: "5", label: "5th dose" },
   { value: "6", label: "6th dose" },
-  { value: "7", label: "7th dose" },
-  { value: "8", label: "8th dose" },
-  { value: "9", label: "9th dose" },
-  { value: "booster", label: "Booster" },
+  { value: "7+", label: "7th dose or later" },
   { value: "unknown", label: "Unknown" },
+  { value: "n/a", label: "Not applicable" },
 ] as const;
 
 /** Matches the real form's own grouping — it does not ask laypeople to distinguish IM/SC/ID. */
@@ -176,6 +177,7 @@ export const FACILITY_TYPE_OPTIONS = [
   { value: "public_health_clinic", label: "Public health clinic" },
   { value: "nursing_home_senior_living", label: "Nursing home or senior living facility" },
   { value: "school_student_health_clinic", label: "School or student health clinic" },
+  { value: "home", label: "Home" },
   { value: "other", label: "Other" },
   { value: "unknown", label: "Unknown" },
 ] as const;
@@ -190,13 +192,15 @@ export const OUTCOME_OPTIONS = [
   { value: "disability", label: "Disability or permanent damage" },
   { value: "death", label: "Patient died" },
   { value: "birth_defect", label: "Congenital anomaly or birth defect" },
+  { value: "none", label: "None of the above" },
 ] as const;
 
+/** Matches the real form's item 20 exactly — just Yes/No/Unknown; "none of
+ * the above" belongs to outcomes (item 21, see OUTCOME_OPTIONS), not here. */
 export const RECOVERY_OPTIONS = [
   { value: "yes", label: "Yes, fully recovered" },
   { value: "no", label: "No, not yet recovered" },
   { value: "unknown", label: "Unknown" },
-  { value: "none", label: "None of the above" },
 ] as const;
 
 /** PUB-003: quick-select symptom chips, complementing (not replacing) the free-text description. */

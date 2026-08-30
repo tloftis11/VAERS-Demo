@@ -410,11 +410,16 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   const crossFieldFindings: ValidationFinding[] = checkCrossFieldRules({
     vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate ?? "" } : null,
     adverseEvent: report.adverseEvent
-      ? { onsetDate: report.adverseEvent.onsetDate ?? "", dateOfDeath: report.adverseEvent.dateOfDeath ?? "" }
+      ? {
+          onsetDate: report.adverseEvent.onsetDate ?? "",
+          dateOfDeath: report.adverseEvent.dateOfDeath ?? "",
+          outcomes: report.adverseEvent.outcomes ? (JSON.parse(report.adverseEvent.outcomes) as string[]) : [],
+        }
       : null,
     errorDetail: report.errorDetail
       ? { errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "" }
       : null,
+    aboutYou: report.submitter ? { relationship: report.submitter.relationship ?? "" } : null,
   });
   const blockingFindings = crossFieldFindings.filter((f) => f.severity === "ERROR");
   if (blockingFindings.length > 0) {
