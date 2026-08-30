@@ -31,14 +31,16 @@ export function NavBar() {
           <Link to="/follow-up" className="button button--secondary nav-bar__cta">
             {t("nav.followUp")}
           </Link>
-          <button
-            type="button"
-            className="nav-bar__language"
-            onClick={() => setLanguage(language === "en" ? "es" : "en")}
-            aria-label={language === "en" ? "Switch to Spanish" : "Cambiar a inglés"}
-          >
-            {t("nav.languageToggle")}
-          </button>
+          <label className="nav-bar__language">
+            <span className="sr-only">{t("nav.languageSelectLabel")}</span>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as "en" | "es")}
+            >
+              <option value="en">{t("nav.languageEnglish")}</option>
+              <option value="es">{t("nav.languageSpanish")}</option>
+            </select>
+          </label>
         </nav>
       </div>
     </header>

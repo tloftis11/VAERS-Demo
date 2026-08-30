@@ -13,12 +13,19 @@ export type Language = "en" | "es";
  * of the wizard is exactly the same pattern: add more keys here.
  */
 export const translations = {
-  "nav.faq": { en: "FAQ", es: "Preguntas frecuentes" },
+  // Nav labels specifically stay short in both languages — even though
+  // "FAQ" has a much fuller Spanish translation elsewhere (the FAQ page's
+  // own heading), using it here made the Spanish nav row's total width
+  // cross the wrap threshold at viewport widths where English didn't,
+  // which changed the header's height when switching languages.
+  "nav.faq": { en: "FAQ", es: "Preguntas" },
   "nav.about": { en: "About VAERS", es: "Acerca de VAERS" },
   "nav.accessibility": { en: "Accessibility", es: "Accesibilidad" },
   "nav.reportEvent": { en: "Report an Event", es: "Reportar un evento" },
   "nav.followUp": { en: "Provide Follow-up Info", es: "Información de seguimiento" },
-  "nav.languageToggle": { en: "Español", es: "English" },
+  "nav.languageEnglish": { en: "English", es: "English" },
+  "nav.languageSpanish": { en: "Español", es: "Español" },
+  "nav.languageSelectLabel": { en: "Language", es: "Idioma" },
 
   "landing.heading": {
     en: "Report a possible vaccine adverse event or administration error",

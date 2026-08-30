@@ -6,6 +6,7 @@ import {
   ROUTE_OPTIONS,
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
+  getManufacturerOptions,
 } from "../../../../shared/src/schemas";
 import { suggestBodySiteMismatch, isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
@@ -35,6 +36,7 @@ const EMPTY: VaccineData = {
   bodySite: "",
   administeringFacility: "",
   facilityType: "",
+  otherVaccinesRecentGiven: false,
   otherVaccinesRecent: "",
   otherVaccinesSameVisit: "",
   vaccine2Given: false,
@@ -65,7 +67,9 @@ const EMPTY: VaccineData = {
  */
 export function vaccineFieldSpecs(
   isHcp: boolean,
-  vaccineTypeOptions: readonly VaccineOption[] = isHcp ? VACCINE_TYPES_HCP : VACCINE_TYPES
+  vaccineTypeOptions: readonly VaccineOption[] = isHcp ? VACCINE_TYPES_HCP : VACCINE_TYPES,
+  /** Only used to seed the public path's manufacturer picklist (see below) — unused for HCP. */
+  selectedVaccineType?: string
 ): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     {
@@ -91,7 +95,18 @@ export function vaccineFieldSpecs(
     },
     { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
     { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
-    { id: "manufacturer", label: "Manufacturer", required: isHcp, kind: "text" },
+    isHcp
+      ? { id: "manufacturer", label: "Manufacturer", required: true, kind: "text" }
+      : {
+          id: "manufacturer",
+          label: "Manufacturer (optional)",
+          required: false,
+          kind: "choice",
+          // A public reporter picked a plain-language category, not a brand —
+          // seed the picklist with just the manufacturers that actually make
+          // that vaccine, so this is a quick pick instead of a guessing game.
+          options: getManufacturerOptions(selectedVaccineType ?? ""),
+        },
     {
       id: "lotNumber",
       label: "Lot number",
@@ -103,14 +118,25 @@ export function vaccineFieldSpecs(
     { id: "bodySite", label: "Where was it given? (optional)", required: false, kind: "choice", options: BODY_SITE_OPTIONS },
   ];
   // HCP-only second-vaccine slot (see vaccine2Given in shared/src/schemas.ts)
-  // — gated behind a checkbox on the bodySite question (extras.bodySite in
-  // VaccineStep below) rather than its own yes/no question screen, matching
-  // the same pattern as PatientStep's dateOfBirthUnknown checkbox.
+  // — its own sequential yes/no question followed by the same shape of
+  // questions asked for vaccine 1, rather than a checkbox bolted onto the
+  // bodySite question (which read as one omnibus block instead of a
+  // genuine second pass through "which vaccine, given how").
   if (isHcp) {
     fields.push(
-      { id: "vaccine2Type", label: "Second vaccine given at this same visit", required: false, kind: "choice", options: vaccineTypeOptions },
-      { id: "vaccine2Manufacturer", label: "Manufacturer (second vaccine, optional)", required: false, kind: "text" },
-      { id: "vaccine2LotNumber", label: "Lot number (second vaccine, optional)", required: false, kind: "text" },
+      {
+        id: "vaccine2Given",
+        label: "Did you administer another vaccine at this same visit?",
+        required: false,
+        kind: "choice",
+        options: [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ],
+      },
+      { id: "vaccine2Type", label: "Second vaccine", required: false, kind: "choice", options: vaccineTypeOptions },
+      { id: "vaccine2Manufacturer", label: "Manufacturer (second vaccine)", required: false, kind: "text" },
+      { id: "vaccine2LotNumber", label: "Lot number (second vaccine)", required: false, kind: "text" },
       {
         id: "vaccine2Route",
         label: "How was the second vaccine given? (optional)",
@@ -142,23 +168,45 @@ export function vaccineFieldSpecs(
       required: false,
       kind: "choice",
       options: FACILITY_TYPE_OPTIONS,
-    },
-    {
-      id: "otherVaccinesRecent",
-      label: "Any other vaccines received in the month before this one? (optional)",
-      required: false,
-      kind: "textarea",
-      rows: 2,
     }
   );
-  if (!isHcp) {
-    fields.push({
-      id: "otherVaccinesSameVisit",
-      label: "Did you receive any other vaccines at this same visit? If so, which ones? (optional)",
-      required: false,
-      kind: "textarea",
-      rows: 2,
-    });
+  if (isHcp) {
+    fields.push(
+      {
+        id: "otherVaccinesRecentGiven",
+        label: "Did the patient receive any other vaccines in the month before this one?",
+        required: false,
+        kind: "choice",
+        options: [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ],
+      },
+      {
+        id: "otherVaccinesRecent",
+        label: "Which vaccine(s), and when?",
+        required: false,
+        kind: "textarea",
+        rows: 2,
+      }
+    );
+  } else {
+    fields.push(
+      {
+        id: "otherVaccinesRecent",
+        label: "Any other vaccines received in the month before this one? (optional)",
+        required: false,
+        kind: "textarea",
+        rows: 2,
+      },
+      {
+        id: "otherVaccinesSameVisit",
+        label: "Did you receive any other vaccines at this same visit? If so, which ones? (optional)",
+        required: false,
+        kind: "textarea",
+        rows: 2,
+      }
+    );
   }
   return fields;
 }
@@ -186,25 +234,39 @@ export function VaccineStep({
       : isHcp
         ? VACCINE_TYPES_HCP
         : VACCINE_TYPES;
-  const vaccine2Given = isHcp && Boolean(values.vaccine2Given);
-  const fields = (liveVaccineTypeOptions ? vaccineFieldSpecs(isHcp, vaccineTypeOptions) : []).filter((f) => {
+  // vaccine2Given/otherVaccinesRecentGiven are "choice" fields using string
+  // option values "true"/"false" (ConversationalOption.value must be a
+  // string) — comparing with a naive Boolean(...) would treat the string
+  // "false" as truthy, so check explicitly against both the real boolean
+  // and the "true" string the schema's transform also accepts.
+  const isYes = (v: unknown) => v === true || v === "true";
+  const vaccine2Given = isHcp && isYes(values.vaccine2Given);
+  const otherVaccinesRecentGiven = isHcp && isYes(values.otherVaccinesRecentGiven);
+  const fields = (liveVaccineTypeOptions
+    ? vaccineFieldSpecs(isHcp, vaccineTypeOptions, values.vaccineType as string)
+    : []
+  ).filter((f) => {
     if (f.id === "vaccineTypeOther") return values.vaccineType === "other" || values.vaccineType === "foreign";
-    if (f.id.startsWith("vaccine2")) return vaccine2Given;
+    if (f.id !== "vaccine2Given" && f.id.startsWith("vaccine2")) return vaccine2Given;
+    if (f.id === "otherVaccinesRecent" && isHcp) return otherVaccinesRecentGiven;
     return true;
   });
   const siteMismatch = suggestBodySiteMismatch(values.route, values.bodySite);
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof VaccineData, value as any);
-    // Unchecking "a second vaccine was given" shouldn't leave a stale
-    // second-vaccine answer behind, hidden but still submitted.
-    if (id === "vaccine2Given" && !value) {
+    // Answering "no" (or clearing) shouldn't leave a stale, now-hidden answer
+    // behind to be silently submitted once its gate is off again.
+    if (id === "vaccine2Given" && !isYes(value)) {
       setValue("vaccine2Type", "");
       setValue("vaccine2Manufacturer", "");
       setValue("vaccine2LotNumber", "");
       setValue("vaccine2Route", "");
       setValue("vaccine2BodySite", "");
       setValue("vaccine2DoseNumber", "");
+    }
+    if (id === "otherVaccinesRecentGiven" && !isYes(value)) {
+      setValue("otherVaccinesRecent", "");
     }
   }
 
@@ -235,25 +297,12 @@ export function VaccineStep({
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extraFieldValidation={checkFieldLogic}
       extras={{
-        bodySite: () => (
-          <>
-            {siteMismatch && (
-              <p role="status" className="field__advisory">
-                {siteMismatch}
-              </p>
-            )}
-            {isHcp && (
-              <label className="field__inline-toggle">
-                <input
-                  type="checkbox"
-                  checked={vaccine2Given}
-                  onChange={(e) => handleSetValue("vaccine2Given", e.target.checked)}
-                />
-                A second vaccine was given at this same visit
-              </label>
-            )}
-          </>
-        ),
+        bodySite: () =>
+          siteMismatch ? (
+            <p role="status" className="field__advisory">
+              {siteMismatch}
+            </p>
+          ) : null,
       }}
     />
   );

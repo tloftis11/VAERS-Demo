@@ -175,59 +175,75 @@ function VaccineOptionsAdmin({ token, onSignOut }: { token: string; onSignOut: (
       </form>
       {error && <p className="field__error">{error}</p>}
 
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Value</th>
-            <th>Label</th>
-            <th>Audience</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {options.map((option) => (
-            <tr key={option.id} className={option.active ? "" : "admin-table__row--inactive"}>
-              <td>{option.value}</td>
-              <td>
-                {editingId === option.id ? (
-                  <input
-                    className="field__input"
-                    value={editingLabel}
-                    onChange={(e) => setEditingLabel(e.target.value)}
-                    autoFocus
-                  />
-                ) : (
-                  option.label
-                )}
-              </td>
-              <td>{option.audience === "hcp" ? "HCP" : "Public"}</td>
-              <td>{option.active ? "Active" : "Inactive"}</td>
-              <td className="admin-table__actions">
-                {editingId === option.id ? (
-                  <>
-                    <button type="button" className="button button--text" onClick={() => saveEdit(option.id)}>
-                      Save
-                    </button>
-                    <button type="button" className="button button--text" onClick={() => setEditingId(null)}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="button button--text" onClick={() => startEdit(option)}>
-                      Edit
-                    </button>
-                    <button type="button" className="button button--text" onClick={() => handleToggleActive(option)}>
-                      {option.active ? "Deactivate" : "Activate"}
-                    </button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {(["public", "hcp"] as const).map((audience) => (
+        <section key={audience} className="admin-audience-group">
+          <h2 className="admin-audience-group__heading">
+            {audience === "hcp" ? "Healthcare provider list" : "Public list"}
+          </h2>
+          <p className="field__hint">
+            {audience === "hcp"
+              ? "Shown to reporters who identified as a healthcare professional."
+              : "Shown to reporters filing on their own or a family member's behalf — kept short and plain-language, distinct from the HCP list above."}
+          </p>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Value</th>
+                <th>Label</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {options
+                .filter((o) => o.audience === audience)
+                .map((option) => (
+                  <tr key={option.id} className={option.active ? "" : "admin-table__row--inactive"}>
+                    <td>{option.value}</td>
+                    <td>
+                      {editingId === option.id ? (
+                        <input
+                          className="field__input"
+                          value={editingLabel}
+                          onChange={(e) => setEditingLabel(e.target.value)}
+                          autoFocus
+                        />
+                      ) : (
+                        option.label
+                      )}
+                    </td>
+                    <td>{option.active ? "Active" : "Inactive"}</td>
+                    <td className="admin-table__actions">
+                      {editingId === option.id ? (
+                        <>
+                          <button type="button" className="button button--text" onClick={() => saveEdit(option.id)}>
+                            Save
+                          </button>
+                          <button type="button" className="button button--text" onClick={() => setEditingId(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" className="button button--text" onClick={() => startEdit(option)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--text"
+                            onClick={() => handleToggleActive(option)}
+                          >
+                            {option.active ? "Deactivate" : "Activate"}
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
     </div>
   );
 }

@@ -88,6 +88,8 @@ model VaccineAdministration {
   bodySite              String?
   administeringFacility String?
   facilityType          String?
+  // HCP path only: explicit yes/no gate before the free-text detail below.
+  otherVaccinesRecentGiven Boolean @default(false)
   otherVaccinesRecent   String?
   // Public path only (see vaccineSchema in shared/src/schemas.ts).
   otherVaccinesSameVisit String?

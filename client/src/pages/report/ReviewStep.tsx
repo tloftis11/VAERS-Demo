@@ -27,6 +27,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
   const [certified, setCertified] = useState(false);
   const alertRef = useRef<HTMLDivElement>(null);
   const isHcp = report.submitterType === "hcp";
+  const isSelfReport = report.aboutYou?.relationship === "self";
 
   // VAL-001/003: computed on every render so the checklist below is
   // proactive — it reflects what a submit attempt *would* find, before the
@@ -131,12 +132,12 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
       <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
       <ReportSummarySection
         title="Vaccine information"
-        fields={vaccineFieldSpecs(isHcp)}
+        fields={vaccineFieldSpecs(isHcp, undefined, report.vaccine?.vaccineType)}
         values={report.vaccine}
       />
       <ReportSummarySection
         title="What happened"
-        fields={adverseEventFieldSpecs(isHcp)}
+        fields={adverseEventFieldSpecs(isHcp, isSelfReport)}
         values={report.adverseEvent}
       />
       <ReportSummarySection

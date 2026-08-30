@@ -243,6 +243,7 @@ export function ReportWizard() {
       stepContent = (
         <AdverseEventStep
           submitterType={report.submitterType!}
+          isSelfReport={report.aboutYou?.relationship === "self"}
           initialData={report.adverseEvent}
           vaccineAdministrationDate={report.vaccine?.administrationDate}
           onNext={handleNext}

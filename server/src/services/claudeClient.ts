@@ -75,8 +75,13 @@ export async function flagDescriptionInconsistencies(input: {
       "but 'hospitalization' isn't selected among outcomes, it mentions death but 'death' isn't " +
       "selected, or it says the patient fully recovered but recovery status is marked 'No, not " +
       "yet recovered'. Be conservative: if nothing is inconsistent, return an empty issues array. " +
-      "Never invent issues, and never provide a medical diagnosis, treatment advice, or an " +
-      "opinion on whether the vaccine caused the event.",
+      "The reporter has already answered outcomes and recovery status by the time this runs, so " +
+      "'(none selected)'/'(none given)' means they deliberately left it blank, not that they " +
+      "haven't gotten to it yet. Write `suggestion` as a gentle, second-person prompt to the " +
+      "reporter (who may be a layperson, not a clinician) — e.g. 'You might mention whether the " +
+      "palpitations have resolved' rather than a command like 'Select a recovery status' or " +
+      "'Expand the description to include...'. Never invent issues, and never provide a medical " +
+      "diagnosis, treatment advice, or an opinion on whether the vaccine caused the event.",
     messages: [
       {
         role: "user",

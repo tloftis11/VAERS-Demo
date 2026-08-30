@@ -234,6 +234,56 @@ export const VACCINE_TYPES_HCP = [
     { value: "unknown", label: "Unknown Vaccine" },
   ]);
 
+/**
+ * Public path only: a self-reporter usually can't name the exact product
+ * (see VACCINE_TYPES above), but manufacturer is still useful safety
+ * signal — so instead of a blank free-text field, seed a short picklist of
+ * the actual manufacturers for whichever plain-language category they
+ * picked, always with an "Unknown" out. HCP already selects a specific
+ * branded product in VACCINE_TYPES_HCP, so manufacturer stays free text
+ * there (see vaccineSchema/VaccineStep.tsx).
+ */
+export const MANUFACTURER_OPTIONS_BY_VACCINE: Record<string, { value: string; label: string }[]> = {
+  covid19: [
+    { value: "pfizer", label: "Pfizer-BioNTech" },
+    { value: "moderna", label: "Moderna" },
+    { value: "novavax", label: "Novavax" },
+    { value: "unknown", label: "Unknown" },
+  ],
+  influenza: [
+    { value: "seqirus", label: "Seqirus (Afluria, Flucelvax, Fluad)" },
+    { value: "sanofi", label: "Sanofi (Fluzone)" },
+    { value: "gsk", label: "GSK (FluLaval)" },
+    { value: "astrazeneca", label: "AstraZeneca (FluMist)" },
+    { value: "unknown", label: "Unknown" },
+  ],
+  mmr: [
+    { value: "merck", label: "Merck (MMR II)" },
+    { value: "gsk", label: "GSK (Priorix)" },
+    { value: "unknown", label: "Unknown" },
+  ],
+  tdap: [
+    { value: "sanofi", label: "Sanofi (Adacel)" },
+    { value: "gsk", label: "GSK (Boostrix)" },
+    { value: "unknown", label: "Unknown" },
+  ],
+  hpv: [
+    { value: "merck", label: "Merck (Gardasil 9)" },
+    { value: "unknown", label: "Unknown" },
+  ],
+  shingles: [
+    { value: "gsk", label: "GSK (Shingrix)" },
+    { value: "unknown", label: "Unknown" },
+  ],
+};
+
+const UNKNOWN_MANUFACTURER_OPTIONS = [{ value: "unknown", label: "Unknown" }];
+
+/** Falls back to just "Unknown" for "other"/"unknown"/unmapped vaccine values. */
+export function getManufacturerOptions(vaccineType: string): { value: string; label: string }[] {
+  return MANUFACTURER_OPTIONS_BY_VACCINE[vaccineType] ?? UNKNOWN_MANUFACTURER_OPTIONS;
+}
+
 /** Matches the real VAERS eSubmitter system's own dose-number dropdown exactly
  * (1-6, then "7+", then Unknown/N-A) — no separate "Booster" value there; a
  * booster is just whichever dose number it is in the series. */
@@ -445,6 +495,13 @@ export function vaccineSchema(submitterType: SubmitterType) {
     bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
     administeringFacility: optionalString(),
     facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
+    // HCP path only: an explicit yes/no gate before the free-text detail,
+    // instead of one always-visible optional textarea — mirrors
+    // vaccine2Given's boolean-ish pattern below.
+    otherVaccinesRecentGiven: z
+      .union([z.boolean(), z.string()])
+      .optional()
+      .transform((v) => v === true || v === "true"),
     otherVaccinesRecent: optionalString(),
     // Public path only: a lightweight substitute for the HCP path's full
     // second-vaccine slot below — most public reporters won't have a second
