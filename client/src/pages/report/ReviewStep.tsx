@@ -9,6 +9,7 @@ import { patientFieldSpecs } from "./PatientStep";
 import { vaccineFieldSpecs } from "./VaccineStep";
 import { adverseEventFieldSpecs } from "./AdverseEventStep";
 import { ERROR_DETAIL_FIELD_SPECS } from "./ErrorDetailStep";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 interface ReviewStepProps {
   report: ClientReport;
@@ -18,6 +19,7 @@ interface ReviewStepProps {
 }
 
 export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepProps) {
+  const { t } = useLanguage();
   const [incompleteSteps, setIncompleteSteps] = useState<StepId[]>([]);
   const [findings, setFindings] = useState<ValidationFinding[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -159,11 +161,9 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
 
       <label className="review-certify">
         <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} />
-        <span>I certify that the information provided is accurate to the best of my knowledge.</span>
+        <span>{t("legal.certify")}</span>
       </label>
-      <p className="review-certify__warning">
-        Knowingly submitting false information is a federal crime under 18 U.S.C. § 1001.
-      </p>
+      <p className="review-certify__warning">{t("legal.falseReportWarning")}</p>
 
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>

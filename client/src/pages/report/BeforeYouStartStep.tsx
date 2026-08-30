@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 interface BeforeYouStartStepProps {
   onNext: () => Promise<void>;
@@ -7,53 +8,50 @@ interface BeforeYouStartStepProps {
 
 /** Informational screen before the form begins (FLOW-004): what the report is used for, and what's helpful to have on hand. Nothing here is required. */
 export function BeforeYouStartStep({ onNext, onBack }: BeforeYouStartStepProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="step-form">
-      <h1>Before You Start</h1>
+      <h1>{t("beforeYouStart.heading")}</h1>
 
       <div className="notice notice--navy before-you-start__notice">
         <span className="before-you-start__icon" aria-hidden="true">
           <ShieldIcon />
         </span>
         <div className="before-you-start__notice-body">
-          <h2>How Your Report Is Used</h2>
-          <p>
-            Your report helps CDC and FDA monitor vaccine safety. Personal information is only
-            used for follow-up if necessary and is protected.
-          </p>
+          <h2>{t("beforeYouStart.notice.title")}</h2>
+          <p>{t("beforeYouStart.notice.body")}</p>
         </div>
         <Link to="/about" className="before-you-start__learn-more">
-          Learn More ›
+          {t("beforeYouStart.learnMore")}
         </Link>
       </div>
 
-      <h2 className="before-you-start__section-title">Information Needed</h2>
-      <p>Having this information will help you complete your report faster.</p>
+      <h2 className="before-you-start__section-title">{t("beforeYouStart.infoNeeded")}</h2>
+      <p>{t("beforeYouStart.infoNeededLead")}</p>
 
       <ul className="checklist">
         <li className="checklist__item">
           <VaccineIcon />
-          Vaccine name
+          {t("beforeYouStart.checklist.vaccine")}
         </li>
         <li className="checklist__item">
           <CalendarIcon />
-          Date of vaccination
+          {t("beforeYouStart.checklist.date")}
         </li>
         <li className="checklist__item">
           <SymptomIcon />
-          Symptoms experienced
+          {t("beforeYouStart.checklist.symptoms")}
         </li>
       </ul>
-      <p className="field__hint">
-        These are helpful to have on hand — nothing here is required to start your report.
-      </p>
+      <p className="field__hint">{t("beforeYouStart.hint")}</p>
 
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
-          ← Back
+          {t("common.back")}
         </button>
         <button type="button" className="button button--primary" onClick={() => onNext()}>
-          Continue
+          {t("common.continue")}
         </button>
       </div>
     </div>
