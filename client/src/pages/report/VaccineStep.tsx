@@ -1,6 +1,7 @@
 import {
   vaccineSchema,
   VACCINE_TYPES,
+  DOSE_NUMBER_OPTIONS,
   ROUTE_OPTIONS,
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
@@ -58,7 +59,7 @@ export function vaccineFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
       max: todayIsoDate(),
     },
     { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
-    { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "text", hint: "e.g. 1st, 2nd, booster" },
+    { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
     { id: "manufacturer", label: "Manufacturer", required: isHcp, kind: "text" },
     {
       id: "lotNumber",
