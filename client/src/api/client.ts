@@ -8,6 +8,8 @@ export interface AboutYouData {
   contactEmail: string;
   contactPhone: string;
   relationship: string;
+  mailingAddress: string;
+  bestContactInfo: string;
 }
 
 export interface PatientData {
@@ -41,6 +43,14 @@ export interface VaccineData {
   administeringFacility: string;
   facilityType: string;
   otherVaccinesRecent: string;
+  otherVaccinesSameVisit: string;
+  vaccine2Given: boolean;
+  vaccine2Type: string;
+  vaccine2Manufacturer: string;
+  vaccine2LotNumber: string;
+  vaccine2Route: string;
+  vaccine2BodySite: string;
+  vaccine2DoseNumber: string;
 }
 
 export interface AdverseEventData {
