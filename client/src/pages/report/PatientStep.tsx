@@ -270,23 +270,36 @@ export function PatientStep({
       extras={{
         patientDateOfBirth: () => (
           <>
+            {!isSelfReport && (
+              <p className="field__hint">
+                These two options are different: one still lets us estimate age automatically, the
+                other asks for age directly instead.
+              </p>
+            )}
             <label className="field__inline-toggle">
               <input
                 type="checkbox"
                 checked={dobPartialMode}
                 onChange={(e) => handleDobPartialToggle(e.target.checked)}
               />
-              I only know the month and year
+              I know the birth month and year, just not the exact day
             </label>
+            <p className="field__hint field__hint--nested">We'll still estimate age automatically from this.</p>
             {!isSelfReport && (
-              <label className="field__inline-toggle">
-                <input
-                  type="checkbox"
-                  checked={dateOfBirthUnknown}
-                  onChange={(e) => handleSetValue("dateOfBirthUnknown", e.target.checked)}
-                />
-                I don't know the exact date of birth
-              </label>
+              <>
+                <label className="field__inline-toggle">
+                  <input
+                    type="checkbox"
+                    checked={dateOfBirthUnknown}
+                    onChange={(e) => handleSetValue("dateOfBirthUnknown", e.target.checked)}
+                  />
+                  I don't know any part of the date of birth
+                </label>
+                <p className="field__hint field__hint--nested">
+                  We'll ask for the patient's age directly instead — skip this if you were able to
+                  give a month and year above.
+                </p>
+              </>
             )}
             {selfReportRedirectMessage && (
               <p className="notice notice--info" role="status">

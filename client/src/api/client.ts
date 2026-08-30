@@ -45,6 +45,7 @@ export interface VaccineData {
   bodySite: string;
   administeringFacility: string;
   facilityType: string;
+  otherVaccinesRecentGiven: boolean;
   otherVaccinesRecent: string;
   otherVaccinesSameVisit: string;
   vaccine2Given: boolean;

@@ -274,12 +274,12 @@ export function FollowUp() {
           <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
           <ReportSummarySection
             title="Vaccine information"
-            fields={vaccineFieldSpecs(report.submitterType === "hcp")}
+            fields={vaccineFieldSpecs(report.submitterType === "hcp", undefined, report.vaccine?.vaccineType)}
             values={report.vaccine}
           />
           <ReportSummarySection
             title="What happened"
-            fields={adverseEventFieldSpecs(report.submitterType === "hcp")}
+            fields={adverseEventFieldSpecs(report.submitterType === "hcp", report.aboutYou?.relationship === "self")}
             values={report.adverseEvent}
           />
           <ReportSummarySection

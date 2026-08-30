@@ -22,6 +22,35 @@
   box-sizing: border-box;
 }
 
+/* Browsers give native form controls their own default UI font instead of
+   inheriting the page's — without this, any button/input/select/table
+   introduced without its own explicit font-family override silently renders
+   in the OS font, not Public Sans (hit twice already: the nav language
+   toggle, then the admin table's inputs/select). One rule here fixes the
+   whole class of bug instead of patching each new control as it's found. */
+button,
+input,
+select,
+textarea,
+table {
+  font-family: inherit;
+}
+
+/* Visually hidden but still readable by screen readers — for a label whose
+   sighted meaning is already obvious from context (e.g. a select showing
+   its own selected value) but that still needs an accessible name. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html,
 body {
   margin: 0;
@@ -74,7 +103,7 @@ a {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .nav-bar__brand {
@@ -91,7 +120,7 @@ a {
 .nav-bar__links {
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -106,20 +135,19 @@ a {
   color: var(--color-primary);
 }
 
-.nav-bar__language {
+.nav-bar__language select {
   background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
-  text-decoration: none;
   color: var(--color-text);
-  font-family: inherit;
   font-weight: 600;
   font-size: 0.95rem;
 }
 
-.nav-bar__language:hover {
+.nav-bar__language select:hover {
+  border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
@@ -166,6 +194,16 @@ a {
 
 .nav-bar__links a.button--secondary.nav-bar__cta {
   color: var(--color-primary);
+}
+
+/* Tighter horizontal padding than a normal .button — the two CTA pills are
+   the single biggest contributor to how wide this row gets, and the
+   Spanish translations are both longer than their English counterparts;
+   without this, the whole nav-bar__links row crossed the wrap threshold in
+   Spanish at viewport widths where English still fit on one line, changing
+   the header's height when the language was switched. */
+.nav-bar__links a.button.nav-bar__cta {
+  padding: var(--space-2) var(--space-3);
 }
 
 /* Buttons */
@@ -253,17 +291,48 @@ a {
   flex: 1 1 200px;
 }
 
+.admin-audience-group {
+  margin-top: var(--space-8);
+}
+
+.admin-audience-group__heading {
+  margin-bottom: var(--space-1);
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
-.admin-table th,
+.admin-table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
 .admin-table td {
   text-align: left;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr:nth-child(even) {
+  background: var(--color-surface);
 }
 
 .admin-table__row--inactive {
@@ -577,19 +646,24 @@ a {
    clean, always-visible checklist rather than toggle pills, so every option
    is readable at a glance instead of requiring a hover/press to tell
    selected from unselected. */
+/* Two independent stacked columns (CSS multi-column), not a 2-col grid —
+   a grid ties each row's height to whichever cell in that row wraps to two
+   lines, which looked ragged and randomly spaced once labels of very
+   different lengths (e.g. "White" next to "Native Hawaiian or Other
+   Pacific Islander") landed in the same row. Columns avoid that entirely:
+   each one just flows independently. */
 .checkbox-table {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-1);
+  columns: 1;
   margin: var(--space-3) 0 var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2);
 }
 
 @media (min-width: 480px) {
   .checkbox-table {
-    grid-template-columns: 1fr 1fr;
+    columns: 2;
+    column-gap: var(--space-4);
   }
 }
 
@@ -597,10 +671,11 @@ a {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   border-radius: var(--radius-sm);
   font-weight: 400;
   cursor: pointer;
+  break-inside: avoid;
 }
 
 .checkbox-table__option:hover {
@@ -1152,6 +1227,13 @@ a {
   font-size: 0.9rem;
 }
 
+/* Sits directly under one specific checkbox (see .field__inline-toggle) to
+   explain what it does, rather than a general hint for the whole question. */
+.field__hint--nested {
+  margin: 0 0 var(--space-3) var(--space-6);
+  font-size: 0.85rem;
+}
+
 .field__input,
 .field__select,
 .field__textarea {
@@ -1680,6 +1762,11 @@ a {
 .confirmation__reference-hint {
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+.confirmation__print-button {
+  display: block;
+  margin: var(--space-5) auto var(--space-2);
 }
 
 .confirmation__duplicate-detail {

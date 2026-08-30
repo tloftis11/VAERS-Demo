@@ -15,6 +15,8 @@ import { ConversationalStep, type ConversationalFieldSpec } from "../../componen
 
 interface AdverseEventStepProps {
   submitterType: SubmitterType;
+  /** True only for a "public" submitter reporting for themselves — see PatientStep for the same flag. */
+  isSelfReport?: boolean;
   initialData: AdverseEventData | null;
   /** From the Vaccine step, for live "onset can't be before vaccination" checks. */
   vaccineAdministrationDate?: string;
@@ -56,7 +58,7 @@ const EMPTY: AdverseEventData = {
  * AdverseEventStep below), while the final review and read-only follow-up
  * lookup use it unfiltered and simply skip whichever fields are empty.
  */
-export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[] {
+export function adverseEventFieldSpecs(isHcp: boolean, isSelfReport = false): ConversationalFieldSpec[] {
   return [
     {
       id: "onsetDate",
@@ -106,7 +108,7 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
     },
     {
       id: "recoveryStatus",
-      label: "Has the patient recovered? (optional)",
+      label: isSelfReport ? "Have you recovered? (optional)" : "Has the patient recovered? (optional)",
       required: false,
       kind: "choice",
       options: RECOVERY_OPTIONS,
@@ -116,7 +118,9 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
       label: "Number of days hospitalized",
       required: true,
       kind: "number",
-      hint: "If the patient is still hospitalized, enter the number of days so far — you can update this later with a follow-up note.",
+      hint: isSelfReport
+        ? "If you're still hospitalized, enter the number of days so far — you can update this later with a follow-up note."
+        : "If the patient is still hospitalized, enter the number of days so far — you can update this later with a follow-up note.",
     },
     { id: "hospitalName", label: "Hospital name (optional)", required: false, kind: "text" },
     { id: "hospitalCity", label: "Hospital city (optional)", required: false, kind: "text" },
@@ -132,7 +136,9 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
     },
     {
       id: "previousAdverseEvent",
-      label: "Has the patient ever had an adverse event after any previous vaccine? (optional)",
+      label: isSelfReport
+        ? "Have you ever had an adverse event after any previous vaccine? (optional)"
+        : "Has the patient ever had an adverse event after any previous vaccine? (optional)",
       required: false,
       kind: "choice",
       options: YES_NO_UNKNOWN_OPTIONS,
@@ -149,6 +155,7 @@ export function adverseEventFieldSpecs(isHcp: boolean): ConversationalFieldSpec[
 
 export function AdverseEventStep({
   submitterType,
+  isSelfReport = false,
   initialData,
   vaccineAdministrationDate,
   onNext,
@@ -256,7 +263,7 @@ export function AdverseEventStep({
     }
   }
 
-  const fields = adverseEventFieldSpecs(isHcp).filter((f) => {
+  const fields = adverseEventFieldSpecs(isHcp, isSelfReport).filter((f) => {
     switch (f.id) {
       case "symptomsOther":
         return showSymptomsOther;
@@ -293,7 +300,17 @@ export function AdverseEventStep({
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extraFieldValidation={checkFieldLogic}
       extras={{
-        description: () => (
+        // Deliberately attached here, not to "description" — this compares
+        // the narrative against outcomes/recovery status, and both of those
+        // questions come *after* description in the sequence. Running the
+        // check right after description meant those fields were always
+        // still blank, so the AI routinely (and correctly, given what it
+        // was told) flagged "no recovery status selected" as if something
+        // had been skipped, when the reporter simply hadn't reached that
+        // question yet. previousAdverseEvent is the first field after both
+        // outcomes and recoveryStatus that's always shown regardless of
+        // branch (recoveryStatus itself is hidden when death is recorded).
+        previousAdverseEvent: () => (
           <div className="consistency-check">
             <button
               type="button"
@@ -301,8 +318,12 @@ export function AdverseEventStep({
               onClick={handleCheckDescription}
               disabled={checking || !values.description.trim()}
             >
-              {checking ? "Checking…" : "Check my description"}
+              {checking ? "Checking…" : "Check my answers for consistency"}
             </button>
+            <p className="field__hint">
+              Compares what you described in "What happened?" against the outcomes and recovery
+              status you selected.
+            </p>
             {checkError && (
               <p role="alert" className="field__error">
                 {checkError}

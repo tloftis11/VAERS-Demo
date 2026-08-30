@@ -86,6 +86,7 @@ model VaccineAdministration {
   bodySite              String?
   administeringFacility String?
   facilityType          String?
+  otherVaccinesRecentGiven Boolean @default(false)
   otherVaccinesRecent   String?
   otherVaccinesSameVisit String?
   vaccine2Given         Boolean @default(false)

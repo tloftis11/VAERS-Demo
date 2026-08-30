@@ -78,7 +78,12 @@ export function formatValue(field: ConversationalFieldSpec, value: unknown): str
     return value.map((v) => opts.find((o) => o.value === v)?.label ?? String(v)).join(", ");
   }
   if (field.options) {
-    return field.options.find((o) => o.value === value)?.label ?? String(value);
+    // A yes/no "choice" field (e.g. vaccine2Given) stores string option
+    // values ("true"/"false") client-side, but a submitted report reads
+    // back a real boolean from the API — compare against both forms so
+    // review/follow-up display resolves "Yes"/"No" instead of falling back
+    // to the raw "true"/"false" string.
+    return field.options.find((o) => o.value === value || o.value === String(value))?.label ?? String(value);
   }
   return String(value);
 }
