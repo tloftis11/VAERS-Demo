@@ -21,7 +21,11 @@ services:
   - type: web
     name: vaers-api
     runtime: node
-    plan: free
+    # Paid tier (Render's current cheapest, replacing the old "starter" name)
+    # so the API never spins down on 15-minute idle — the free plan's cold
+    # start (Render docs: "about one minute") was landing squarely on
+    # "Start a Report", since that's usually the first API call of a visit.
+    plan: 0.5c-512mb
     # On a first-time blueprint sync the database can still be provisioning
     # when this build starts, so `db push` retries for a couple of minutes
     # instead of failing on the first "can't reach database server" error.
