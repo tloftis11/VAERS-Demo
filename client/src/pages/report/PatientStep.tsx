@@ -315,13 +315,12 @@ export function PatientStep({
               </>
             )}
             {selfReportRedirectMessage && (
-              <p className="notice notice--info" role="status">
-                {selfReportRedirectMessage} If you're filling this out on someone else's behalf,{" "}
-                <button type="button" className="button button--text" onClick={onSwitchSubmitterType}>
-                  go back and let us know
+              <div className="notice notice--warning" role="status">
+                <p>{selfReportRedirectMessage}</p>
+                <button type="button" className="button button--secondary" onClick={onSwitchSubmitterType}>
+                  Change who's filling out this report
                 </button>
-                .
-              </p>
+              </div>
             )}
           </>
         ),
