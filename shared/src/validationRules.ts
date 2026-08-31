@@ -14,6 +14,14 @@ export interface ValidationFinding {
   step: StepId;
   field: string;
   message: string;
+  /** Label for the "go fix this" button (see ReviewStep.tsx) — defaults to
+   * a generic label when omitted, since most findings' `step`/`field`
+   * already point straight at the problem field itself. Set this
+   * explicitly when the fix isn't at that field but somewhere else
+   * entirely (e.g. changing who's filling out the report), so the button
+   * says what it actually does instead of reading like restating the
+   * problem. */
+  actionLabel?: string;
 }
 
 export interface CrossFieldCheckInput {
@@ -89,14 +97,14 @@ export function checkCrossFieldRules(report: CrossFieldCheckInput): ValidationFi
   if (report.aboutYou?.relationship === "self" && report.adverseEvent?.outcomes?.includes("death")) {
     findings.push({
       severity: "ERROR",
-      // Routes to "submitter-type", not "adverse-event" — the message
-      // tells the reporter to go change *who's filling this out*, so the
-      // "go back" link needs to land where that's actually editable, not
-      // back on the very outcomes checkbox that triggered the finding.
+      // Routes to "submitter-type", not "adverse-event" — the fix isn't on
+      // the outcomes checkbox that triggered this, it's changing *who's
+      // filling this out*, so the button needs to land where that's
+      // actually editable and say what it does, not restate the problem.
       step: "submitter-type",
       field: "outcomes",
-      message:
-        "A report submitted by the patient themselves can't also report that the patient died — if you're reporting on behalf of someone else, go back and update who's filling out this report.",
+      message: "A report submitted by the patient themselves can't also report that the patient died.",
+      actionLabel: "Change who's filling out this report",
     });
   }
 

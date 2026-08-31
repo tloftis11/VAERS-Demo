@@ -309,14 +309,15 @@ export function AdverseEventStep({
       extras={{
         outcomes: () =>
           selfReportDeathFlag ? (
-            <p className="notice notice--info" role="status">
-              A report submitted by the patient themselves can't also report that the patient
-              died. If you're filling this out on someone else's behalf,{" "}
-              <button type="button" className="button button--text" onClick={onSwitchSubmitterType}>
-                go back and let us know
+            <div className="notice notice--warning" role="status">
+              <p>
+                A report submitted by the patient themselves can't also report that the patient
+                died.
+              </p>
+              <button type="button" className="button button--secondary" onClick={onSwitchSubmitterType}>
+                Change who's filling out this report
               </button>
-              .
-            </p>
+            </div>
           ) : null,
         // Deliberately attached here, not to "description" — this compares
         // the narrative against outcomes/recovery status, and both of those

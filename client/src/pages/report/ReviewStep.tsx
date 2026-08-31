@@ -101,19 +101,20 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
           {displayedFindings.length > 0 && (
             <>
               <p>Please fix the following before submitting:</p>
-              <ul>
+              <div className="review-findings">
                 {displayedFindings.map((finding, i) => (
-                  <li key={i}>
+                  <div className="review-finding" key={i}>
+                    <p className="review-finding__message">{finding.message}</p>
                     <button
                       type="button"
-                      className="button button--text"
+                      className="button button--secondary"
                       onClick={() => onGoToStep(finding.step)}
                     >
-                      {finding.message}
+                      {finding.actionLabel ?? "Go fix this"} →
                     </button>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </>
           )}
         </div>
