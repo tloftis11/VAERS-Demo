@@ -7,5 +7,7 @@ server/uploads/*
 !server/uploads/.gitkeep
 server/prisma/dev.db
 server/prisma/dev.db-journal
+server/test.db
+server/test.db-journal
 *.log
 .DS_Store

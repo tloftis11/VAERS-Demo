@@ -12,10 +12,13 @@ import {
 import { suggestBodySiteMismatch, isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { VaccineData, VaccineOption, AdditionalVaccineRow, PriorVaccineRow } from "../../api/client";
+import { useEffect, useRef } from "react";
 import { useStepForm } from "../../hooks/useStepForm";
 import { useVaccineOptions } from "../../hooks/useVaccineOptions";
 import { Combobox } from "../../components/Combobox";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
+
+const OTHER_OR_FOREIGN = new Set(["other", "foreign"]);
 
 interface VaccineStepProps {
   submitterType: SubmitterType;
@@ -46,12 +49,21 @@ const EMPTY: VaccineData = {
 
 const EMPTY_ADDITIONAL_VACCINE: AdditionalVaccineRow = {
   vaccineType: "",
+  vaccineTypeOther: "",
   manufacturer: "",
   lotNumber: "",
   route: "",
   bodySite: "",
   doseNumber: "",
 };
+
+function describeAdditionalVaccineError(relativePath: string, message: string): string {
+  const [rowIndexStr, field] = relativePath.split(".");
+  const rowNumber = Number(rowIndexStr) + 2;
+  if (field === "vaccineType") return `Additional vaccine ${rowNumber}: select a vaccine.`;
+  if (field === "vaccineTypeOther") return `Additional vaccine ${rowNumber}: enter the vaccine name.`;
+  return `Additional vaccine ${rowNumber}: ${message}`;
+}
 
 const EMPTY_PRIOR_VACCINE: PriorVaccineRow = { vaccineName: "", administrationDate: "" };
 
@@ -102,12 +114,15 @@ export function vaccineFieldSpecs(
     isHcp
       ? {
           id: "manufacturer",
-          label: "Manufacturer",
-          required: true,
+          label: "Manufacturer (optional)",
+          required: false,
           kind: "choice",
           // The selected vaccine already names a specific branded product,
-          // so this is normally a one-manufacturer pick plus Unknown —
-          // still shown as a picklist rather than silently auto-filled.
+          // so this is normally a one-manufacturer pick plus Unknown — a
+          // reporter genuinely may not have it on hand even when they know
+          // the vaccine itself, so it stays skippable like every other
+          // vaccine-detail field here (never required merely because a
+          // vaccine was selected).
           options: getManufacturerOptionsForHcpVaccine(selectedVaccineType ?? ""),
         }
       : {
@@ -122,10 +137,10 @@ export function vaccineFieldSpecs(
         },
     {
       id: "lotNumber",
-      label: "Lot number",
-      required: isHcp,
+      label: "Lot number (optional)",
+      required: false,
       kind: "text",
-      hint: !isHcp ? "Check your vaccination card if you have it — otherwise leave blank." : undefined,
+      hint: "Check your vaccination card if you have it — otherwise leave blank.",
     },
     { id: "route", label: "How was it given? (optional)", required: false, kind: "choice", options: ROUTE_OPTIONS },
     { id: "bodySite", label: "Where was it given? (optional)", required: false, kind: "choice", options: BODY_SITE_OPTIONS },
@@ -156,6 +171,7 @@ export function vaccineFieldSpecs(
           const rows = v as AdditionalVaccineRow[];
           return rows.length === 0 ? "" : `${rows.length} additional vaccine${rows.length === 1 ? "" : "s"}`;
         },
+        describeError: describeAdditionalVaccineError,
       },
       {
         id: "priorVaccines",
@@ -226,8 +242,13 @@ export function VaccineStep({
       if (f.id === "additionalVaccines") {
         return {
           ...f,
-          render: (value: unknown, onChange: (v: unknown) => void) => (
-            <AdditionalVaccinesEditor value={value} onChange={onChange} vaccineTypeOptions={vaccineTypeOptions} />
+          render: (value: unknown, onChange: (v: unknown) => void, rowErrors: Record<string, string>) => (
+            <AdditionalVaccinesEditor
+              value={value}
+              onChange={onChange}
+              vaccineTypeOptions={vaccineTypeOptions}
+              errors={rowErrors}
+            />
           ),
         };
       }
@@ -287,29 +308,67 @@ export function VaccineStep({
 
 // ---- Bundled repeatable-row editors (kind "custom" — see ConversationalStep) ----
 
-function AdditionalVaccinesEditor({
+export function AdditionalVaccinesEditor({
   value,
   onChange,
   vaccineTypeOptions,
+  errors,
 }: {
   value: unknown;
   onChange: (value: unknown) => void;
   vaccineTypeOptions: readonly VaccineOption[];
+  errors: Record<string, string>;
 }) {
   const rows = (value as AdditionalVaccineRow[] | undefined) ?? [];
+  const hasFocusedRef = useRef(false);
 
   function updateRow(index: number, patch: Partial<AdditionalVaccineRow>) {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function selectVaccineType(index: number, newValue: string) {
+    updateRow(index, {
+      vaccineType: newValue,
+      manufacturer: "",
+      // "Other"/"Foreign" free text is only meaningful for those two
+      // selections — clear it the moment the row moves to anything else so
+      // a stale name from a prior choice never lingers or gets submitted.
+      ...(OTHER_OR_FOREIGN.has(newValue) ? {} : { vaccineTypeOther: "" }),
+    });
   }
 
   function removeRow(index: number) {
     onChange(rows.filter((_, i) => i !== index));
   }
 
+  // Move focus to the first row/field with an error the first time this
+  // editor sees one — e.g. after the reporter clicks a review-summary error
+  // and lands back on this question. Runs once per error set, not on every
+  // keystroke (guarded by hasFocusedRef, reset whenever errors go away).
+  useEffect(() => {
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length === 0) {
+      hasFocusedRef.current = false;
+      return;
+    }
+    if (hasFocusedRef.current) return;
+    hasFocusedRef.current = true;
+    const [firstRowIndex, firstField] = errorKeys[0].split(".");
+    const targetId =
+      firstField === "vaccineType"
+        ? `additional-${firstRowIndex}-type`
+        : `additional-${firstRowIndex}-type-other`;
+    document.getElementById(targetId)?.focus();
+  }, [errors]);
+
   return (
     <div className="vaccine-rows">
       {rows.map((row, i) => {
         const manufacturerOptions = getManufacturerOptionsForHcpVaccine(row.vaccineType);
+        const typeError = errors[`${i}.vaccineType`];
+        const typeOtherError = errors[`${i}.vaccineTypeOther`];
+        const typeErrorId = `additional-${i}-type-error`;
+        const typeOtherErrorId = `additional-${i}-type-other-error`;
         return (
           <div className="vaccine-row" key={i}>
             <div className="vaccine-row__header">
@@ -328,9 +387,36 @@ function AdditionalVaccinesEditor({
                   options={vaccineTypeOptions}
                   value={row.vaccineType}
                   labelledBy={`additional-${i}-type-label`}
-                  onSelect={(v) => updateRow(i, { vaccineType: v, manufacturer: "" })}
+                  onSelect={(v) => selectVaccineType(i, v)}
+                  invalid={!!typeError}
+                  describedBy={typeError ? typeErrorId : undefined}
                 />
+                {typeError && (
+                  <p id={typeErrorId} role="alert" className="field__error">
+                    {typeError}
+                  </p>
+                )}
               </div>
+              {OTHER_OR_FOREIGN.has(row.vaccineType) && (
+                <div className="field">
+                  <label className="field__label" htmlFor={`additional-${i}-type-other`}>
+                    Please specify the vaccine
+                  </label>
+                  <input
+                    id={`additional-${i}-type-other`}
+                    className="field__input"
+                    value={row.vaccineTypeOther}
+                    onChange={(e) => updateRow(i, { vaccineTypeOther: e.target.value })}
+                    aria-invalid={!!typeOtherError}
+                    aria-describedby={typeOtherError ? typeOtherErrorId : undefined}
+                  />
+                  {typeOtherError && (
+                    <p id={typeOtherErrorId} role="alert" className="field__error">
+                      {typeOtherError}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-manufacturer`}>
                   Manufacturer

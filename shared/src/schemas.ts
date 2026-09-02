@@ -587,6 +587,10 @@ export function patientSchema(_submitterType: SubmitterType) {
 /** One bundled row (all fields together, not a separate question each) — HCP path's "additional vaccines given at this same visit". */
 const additionalVaccineRowSchema = z.object({
   vaccineType: optionalString(),
+  // Mirrors the primary vaccineTypeOther field — required only when
+  // vaccineType is "other"/"foreign" (superRefine below), same as the
+  // primary vaccine.
+  vaccineTypeOther: optionalString(),
   manufacturer: optionalString(),
   lotNumber: optionalString(),
   route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
@@ -594,63 +598,117 @@ const additionalVaccineRowSchema = z.object({
   doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
 });
 
+/** A row the reporter added (e.g. via "+ Add another vaccine") and then
+ * never touched — every field still at its default empty value. This must
+ * never block submission or be persisted; only a row with *something*
+ * entered is held to "you must at least pick a vaccine". */
+function isBlankAdditionalVaccineRow(row: {
+  vaccineType: string;
+  vaccineTypeOther: string;
+  manufacturer: string;
+  lotNumber: string;
+  route: string;
+  bodySite: string;
+  doseNumber: string;
+}): boolean {
+  return (
+    !row.vaccineType &&
+    !row.vaccineTypeOther &&
+    !row.manufacturer &&
+    !row.lotNumber &&
+    !row.route &&
+    !row.bodySite &&
+    !row.doseNumber
+  );
+}
+
+const OTHER_OR_FOREIGN_VACCINE_VALUES = new Set(["other", "foreign"]);
+
 /** One bundled row — HCP path's "other vaccines received in the month before this one" (real form item 22, a repeatable table). */
 const priorVaccineRowSchema = z.object({
   vaccineName: optionalString(),
   administrationDate: optionalDate(),
 });
 
-/** Items 4 (vaccination date/time), 15-16 (facility), 17 (vaccine given), 22 (other recent vaccines). */
-export function vaccineSchema(submitterType: SubmitterType) {
-  const base = z.object({
-    vaccineType: requiredString("Select the vaccine given"),
-    vaccineTypeOther: optionalString(),
-    doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
-    administrationDate: dateSchema("Enter the vaccination date").refine(
-      notInFuture,
-      "Vaccination date cannot be in the future"
-    ),
-    administrationTime: optionalString(),
-    manufacturer: optionalString(),
-    lotNumber: optionalString(),
-    route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
-    bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
-    administeringFacility: optionalString(),
-    facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
-    // Public path only: kept low-burden as one free-text question each,
-    // rather than the repeatable bundled rows the HCP path gets below —
-    // most public reporters won't have a second vaccine's manufacturer/lot
-    // on hand for every dose.
-    otherVaccinesRecent: optionalString(),
-    otherVaccinesSameVisit: optionalString(),
-    // HCP path only: any number of additional vaccines given at the same
-    // visit, and any number of other vaccines in the month before — each a
-    // full bundled row a reporter fills in and adds, not gated behind a
-    // yes/no plus a single fixed extra slot.
-    additionalVaccines: z.array(additionalVaccineRowSchema).optional().default([]),
-    priorVaccines: z.array(priorVaccineRowSchema).optional().default([]),
-  });
-  if (submitterType === "hcp") {
-    // Not on the real form as a hard requirement, but a reasonable expectation
-    // when the clinic itself is filing — kept as our own addition, not essential.
-    return base
-      .extend({
-        manufacturer: requiredString("Manufacturer is required"),
-        lotNumber: requiredString("Lot number is required"),
-      })
-      .superRefine((data, ctx) => {
-        data.additionalVaccines.forEach((row, i) => {
-          if (!row.vaccineType) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["additionalVaccines", i, "vaccineType"],
-              message: "Select the vaccine for this row, or remove it",
-            });
-          }
+/**
+ * Items 4 (vaccination date/time), 15-16 (facility), 17 (vaccine given), 22
+ * (other recent vaccines).
+ *
+ * Manufacturer and lot number are deliberately optional for both submitter
+ * types — a reporter (including a clinic) genuinely may not know either,
+ * and a vaccine selection alone doesn't imply that information is on hand.
+ * `submitterType` stays part of the signature (every other per-step schema
+ * takes it, and additionalVaccines/priorVaccines are HCP-UI-only even
+ * though harmless to validate for public too) even though it doesn't
+ * currently branch the rules here.
+ */
+export function vaccineSchema(_submitterType: SubmitterType) {
+  return z
+    .object({
+      vaccineType: requiredString("Select the vaccine given"),
+      vaccineTypeOther: optionalString(),
+      doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
+      administrationDate: dateSchema("Enter the vaccination date").refine(
+        notInFuture,
+        "Vaccination date cannot be in the future"
+      ),
+      administrationTime: optionalString(),
+      manufacturer: optionalString(),
+      lotNumber: optionalString(),
+      route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
+      bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
+      administeringFacility: optionalString(),
+      facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
+      // Public path only: kept low-burden as one free-text question each,
+      // rather than the repeatable bundled rows the HCP path gets below —
+      // most public reporters won't have a second vaccine's manufacturer/lot
+      // on hand for every dose.
+      otherVaccinesRecent: optionalString(),
+      otherVaccinesSameVisit: optionalString(),
+      // HCP path only: any number of additional vaccines given at the same
+      // visit, and any number of other vaccines in the month before — each a
+      // full bundled row a reporter fills in and adds, not gated behind a
+      // yes/no plus a single fixed extra slot.
+      additionalVaccines: z.array(additionalVaccineRowSchema).optional().default([]),
+      priorVaccines: z.array(priorVaccineRowSchema).optional().default([]),
+    })
+    .superRefine((data, ctx) => {
+      if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(data.vaccineType) && !data.vaccineTypeOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["vaccineTypeOther"],
+          message: "Enter the vaccine name",
         });
+      }
+      data.additionalVaccines.forEach((row, i) => {
+        // A row nobody has touched yet must never block submission (and is
+        // stripped entirely during normalization — see reports.ts) — only a
+        // row with *something* entered is held to "you must pick a vaccine".
+        if (isBlankAdditionalVaccineRow(row)) return;
+        if (!row.vaccineType) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["additionalVaccines", i, "vaccineType"],
+            message: "Select the vaccine for this row, or remove it",
+          });
+        } else if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["additionalVaccines", i, "vaccineTypeOther"],
+            message: "Enter the vaccine name for this row",
+          });
+        }
       });
-  }
-  return base;
+    })
+    // Runs only once superRefine has already passed (a partially-filled row
+    // failed validation above and never reaches here) — so this only ever
+    // strips rows that were blank from the start. One shared transform means
+    // the client (useStepForm.validate()) and server (validateStep) always
+    // agree on what "normalized" means, since both call this exact function.
+    .transform((data) => ({
+      ...data,
+      additionalVaccines: data.additionalVaccines.filter((row) => !isBlankAdditionalVaccineRow(row)),
+    }));
 }
 
 /** Items 5 (onset), 18 (essential description), 19 (labs), 20 (recovery), 21 (essential outcomes), 23 (prior AE history). */

@@ -36,6 +36,7 @@ export interface PatientData {
 
 export interface AdditionalVaccineRow {
   vaccineType: string;
+  vaccineTypeOther: string;
   manufacturer: string;
   lotNumber: string;
   route: string;

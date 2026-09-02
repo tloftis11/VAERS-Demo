@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ZodType } from "zod";
+import { errorBelongsToField } from "../utils/fieldErrors";
 
 function isEmptyFieldValue(v: unknown): boolean {
   if (v === null || v === undefined) return true;
@@ -39,17 +40,28 @@ export function useStepForm<T extends object>(schema: ZodType, initialValues: T)
 
   function setValue<K extends keyof T>(key: K, value: T[K]) {
     setValues((v) => ({ ...v, [key]: value }));
-    // Editing a field is a signal its old error may no longer apply — clear
-    // it now rather than waiting for the next validate() call, which some
-    // navigation paths (e.g. a choice-card selection that both sets the
-    // value and advances in one go) never trigger. Full re-validation still
-    // happens at Next/Continue, so a genuinely still-invalid value gets
-    // re-flagged then.
+    // Editing a field is a signal its old error(s) may no longer apply —
+    // clear them now rather than waiting for the next validate() call,
+    // which some navigation paths (e.g. a choice-card selection that both
+    // sets the value and advances in one go) never trigger. Full
+    // re-validation still happens at Next/Continue, so a genuinely
+    // still-invalid value gets re-flagged then. Uses errorBelongsToField
+    // (not `key in e`) so replacing a whole array field (e.g.
+    // additionalVaccines) also clears every nested per-row error under it —
+    // otherwise a stale "additionalVaccines.0.vaccineType" error could keep
+    // pointing at a row that no longer exists after the array changed.
     setErrors((e) => {
-      if (!(key in e)) return e;
-      const next = { ...e };
-      delete next[key as string];
-      return next;
+      const keyStr = String(key);
+      const next: Record<string, string> = {};
+      let changed = false;
+      for (const [path, message] of Object.entries(e)) {
+        if (errorBelongsToField(path, keyStr)) {
+          changed = true;
+        } else {
+          next[path] = message;
+        }
+      }
+      return changed ? next : e;
     });
   }
 

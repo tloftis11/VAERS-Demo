@@ -5,6 +5,7 @@ import { Combobox } from "./Combobox";
 import { MultiSelect } from "./MultiSelect";
 import { TimeInput12 } from "./TimeInput12";
 import { MonthYearInput } from "./MonthYearInput";
+import { errorsForField, firstErrorForField, relativeErrorsForField } from "../utils/fieldErrors";
 
 export type ConversationalFieldKind =
   | "text"
@@ -38,8 +39,20 @@ export interface ConversationalFieldSpec {
   min?: string;
   max?: string;
   /** kind "custom" only — the caller owns the entire input UI (e.g. a
-   * repeatable bundled-fields editor) instead of a single input control. */
-  render?: (value: unknown, onChange: (value: unknown) => void) => ReactNode;
+   * repeatable bundled-fields editor) instead of a single input control.
+   * `errors` is pre-scoped and re-based to this field (see
+   * relativeErrorsForField) — e.g. for field id "additionalVaccines", a
+   * zod error at "additionalVaccines.2.vaccineType" arrives here as
+   * "2.vaccineType", so the editor can look itself up by row index without
+   * knowing its own top-level field id. */
+  render?: (value: unknown, onChange: (value: unknown) => void, errors: Record<string, string>) => ReactNode;
+  /** kind "custom" only — describes ONE nested error for the review-screen
+   * summary, given its path relative to this field (e.g. "0.vaccineType",
+   * or "" for a top-level error on this field itself) and its message.
+   * Return a human-readable line identifying which row/field it's about,
+   * e.g. "Additional vaccine 2: select a vaccine." Falls back to
+   * `${field.label}: ${message}` when omitted. */
+  describeError?: (relativePath: string, message: string) => string;
   /** kind "custom" only — how to summarize this field's value on the review
    * screen, since formatValue's options-lookup doesn't apply to arbitrary
    * custom data shapes (e.g. an array of rows). */
@@ -150,7 +163,7 @@ export function ConversationalStep({
       return;
     }
     const prevField = fields[index - 1];
-    setActiveError(errors[prevField.id] ?? null);
+    setActiveError(firstErrorForField(errors, prevField.id) ?? null);
     setIndex(index - 1);
   }
 
@@ -161,7 +174,7 @@ export function ConversationalStep({
 
   function jumpTo(targetIndex: number) {
     const targetField = fields[targetIndex];
-    setActiveError((targetField && errors[targetField.id]) ?? null);
+    setActiveError((targetField && firstErrorForField(errors, targetField.id)) ?? null);
     setIndex(targetIndex);
   }
 
@@ -180,29 +193,42 @@ export function ConversationalStep({
   }
 
   if (reviewing) {
-    const errorFieldIds = Object.keys(errors).filter((key) => fields.some((f) => f.id === key));
+    // One summary row per underlying error, not per field — a field like
+    // additionalVaccines can have several distinct nested problems (e.g.
+    // row 2 needs a vaccine, row 3 needs its "Other" detail), and each
+    // needs its own identifiable, clickable line rather than being
+    // collapsed into one generic "additionalVaccines: <first message>".
+    const errorRows = fields.flatMap((field, fieldIdx) =>
+      errorsForField(errors, field.id).map(({ path, message }) => {
+        const relativePath =
+          path === field.id
+            ? ""
+            : path.startsWith(`${field.id}[`)
+              ? path.slice(field.id.length)
+              : path.slice(field.id.length + 1);
+        const summary = field.describeError
+          ? field.describeError(relativePath, message)
+          : `${field.label}: ${message}`;
+        return { key: path, fieldIdx, summary };
+      })
+    );
     return (
       <div className="convo-step convo-step--review">
         <h1 className="convo-step__review-title" ref={questionHeadingRef as never} tabIndex={-1}>
           Review: {stepTitle}
         </h1>
 
-        {errorFieldIds.length > 0 && (
+        {errorRows.length > 0 && (
           <div className="review-error" role="alert">
             <p>Please fix the following before continuing:</p>
             <ul>
-              {errorFieldIds.map((id) => {
-                const fieldIdx = fields.findIndex((f) => f.id === id);
-                const field = fields[fieldIdx];
-                if (!field) return null;
-                return (
-                  <li key={id}>
-                    <button type="button" className="button button--text" onClick={() => jumpTo(fieldIdx)}>
-                      {field.label}: {errors[id]}
-                    </button>
-                  </li>
-                );
-              })}
+              {errorRows.map(({ key, fieldIdx, summary }) => (
+                <li key={key}>
+                  <button type="button" className="button button--text" onClick={() => jumpTo(fieldIdx)}>
+                    {summary}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
         )}
@@ -263,9 +289,16 @@ export function ConversationalStep({
   // more questions and have to navigate back to fix it.
   function handleNextClick() {
     const result = validate();
-    if (!result.success && result.errors[field.id]) {
-      setActiveError(result.errors[field.id]);
-      return;
+    if (!result.success) {
+      // Exact match only would miss a nested error like
+      // "additionalVaccines.0.vaccineType" entirely — Continue stayed
+      // blocked (validate() still failed) but nothing ever told the user
+      // why, since no top-level key matched.
+      const message = firstErrorForField(result.errors, field.id);
+      if (message) {
+        setActiveError(message);
+        return;
+      }
     }
     const extraMessage = extraFieldValidation?.(field.id, values);
     if (extraMessage) {
@@ -363,7 +396,7 @@ export function ConversationalStep({
           />
         );
       case "custom":
-        return field.render?.(value, (v) => setValue(field.id, v)) ?? null;
+        return field.render?.(value, (v) => setValue(field.id, v), relativeErrorsForField(errors, field.id)) ?? null;
       case "select":
         return (
           <select

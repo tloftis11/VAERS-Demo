@@ -129,6 +129,7 @@ async function serializeReport(reportId: string) {
           otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
           additionalVaccines: report.vaccine.additionalVaccines.map((row) => ({
             vaccineType: row.vaccineType ?? "",
+            vaccineTypeOther: row.vaccineTypeOther ?? "",
             manufacturer: row.manufacturer ?? "",
             lotNumber: row.lotNumber ?? "",
             route: row.route ?? "",
@@ -195,7 +196,28 @@ async function serializeReport(reportId: string) {
 
 reportsRouter.post("/", async (_req, res) => {
   const report = await prisma.report.create({ data: {} });
-  res.status(201).json(await serializeReport(report.id));
+  // A brand-new report has no sub-records yet, so its serialized shape is
+  // entirely knowable without a query — skip serializeReport()'s heavy
+  // multi-relation re-fetch (submitter/patient/vaccine+rows/adverseEvent/
+  // errorDetail/attachments/followUpNotes) for what's otherwise a second
+  // round trip to confirm everything is null/empty.
+  res.status(201).json({
+    id: report.id,
+    status: report.status,
+    submitterType: null,
+    administrationError: null,
+    adverseEventOccurred: null,
+    duplicateFlag: report.duplicateFlag,
+    submittedAt: null,
+    aboutYou: null,
+    patient: null,
+    vaccine: null,
+    adverseEvent: null,
+    errorDetail: null,
+    documents: { supplementalNotes: "" },
+    attachments: [],
+    followUpNotes: [],
+  });
 });
 
 reportsRouter.get("/:id", async (req, res) => {
@@ -611,6 +633,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
             additionalVaccines: (report.vaccine.additionalVaccines ?? []).map((row: any) => ({
               vaccineType: row.vaccineType ?? "",
+              vaccineTypeOther: row.vaccineTypeOther ?? "",
               manufacturer: row.manufacturer ?? "",
               lotNumber: row.lotNumber ?? "",
               route: row.route ?? "",

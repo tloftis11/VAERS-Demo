@@ -110,6 +110,9 @@ model AdditionalVaccine {
   vaccine      VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
   sortOrder    Int                   @default(0)
   vaccineType  String?
+  // Detail text when vaccineType is "other"/"foreign" — mirrors
+  // VaccineAdministration.vaccineTypeOther for the primary vaccine.
+  vaccineTypeOther String?
   manufacturer String?
   lotNumber    String?
   route        String?

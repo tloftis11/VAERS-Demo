@@ -1,0 +1,129 @@
+import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { AdditionalVaccinesEditor } from "./VaccineStep";
+import type { AdditionalVaccineRow } from "../../api/client";
+
+const VACCINE_OPTIONS = [
+  { value: "covid19", label: "COVID-19" },
+  { value: "flu", label: "Influenza (Flu)" },
+  { value: "other", label: "Other" },
+];
+
+function blankRow(overrides: Partial<AdditionalVaccineRow> = {}): AdditionalVaccineRow {
+  return {
+    vaccineType: "",
+    vaccineTypeOther: "",
+    manufacturer: "",
+    lotNumber: "",
+    route: "",
+    bodySite: "",
+    doseNumber: "",
+    ...overrides,
+  };
+}
+
+describe("AdditionalVaccinesEditor", () => {
+  it("a blank row shows no error and is not marked invalid", () => {
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow()]}
+        onChange={() => {}}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        errors={{}}
+      />
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Vaccine" })).not.toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("REGRESSION: a partial row's error is visible with an accessible message identifying the row", () => {
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ manufacturer: "moderna" })]}
+        onChange={() => {}}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        errors={{ "0.vaccineType": "Select the vaccine for this row, or remove it" }}
+      />
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Select the vaccine for this row, or remove it");
+    expect(screen.getByRole("combobox", { name: "Vaccine" })).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("REGRESSION: the first invalid row's control receives focus", () => {
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ manufacturer: "moderna" }), blankRow({ vaccineType: "flu" })]}
+        onChange={() => {}}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        errors={{ "0.vaccineType": "Select the vaccine for this row, or remove it" }}
+      />
+    );
+    expect(document.activeElement).toHaveAttribute("id", "additional-0-type");
+  });
+
+  it("correcting the row (selecting a vaccine) reports the fix to the parent", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ manufacturer: "moderna" })]}
+        onChange={onChange}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        errors={{ "0.vaccineType": "Select the vaccine for this row, or remove it" }}
+      />
+    );
+    const combobox = screen.getByRole("combobox", { name: "Vaccine" });
+    await user.click(combobox);
+    await user.type(combobox, "Flu");
+    await user.click(screen.getByRole("option", { name: "Influenza (Flu)" }));
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({ vaccineType: "flu", manufacturer: "" }),
+    ]);
+  });
+
+  it("removing a row reports the remaining row(s), correctly re-indexed", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const rows = [blankRow({ vaccineType: "covid19" }), blankRow({ vaccineType: "flu" })];
+    render(
+      <AdditionalVaccinesEditor value={rows} onChange={onChange} vaccineTypeOptions={VACCINE_OPTIONS} errors={{}} />
+    );
+    const removeButtons = screen.getAllByRole("button", { name: "Remove" });
+    await user.click(removeButtons[0]);
+    expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ vaccineType: "flu" })]);
+  });
+
+  it("selecting 'Other' reveals a plain-text vaccine-name field", () => {
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ vaccineType: "other" })]}
+        onChange={() => {}}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        errors={{}}
+      />
+    );
+    expect(screen.getByLabelText("Please specify the vaccine")).toBeInTheDocument();
+  });
+
+  it("changing away from 'Other' clears the stale vaccine-name text", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ vaccineType: "other", vaccineTypeOther: "Some old brand" })]}
+        onChange={onChange}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        errors={{}}
+      />
+    );
+    const combobox = screen.getByRole("combobox", { name: "Vaccine" });
+    await user.click(combobox);
+    await user.clear(combobox);
+    await user.type(combobox, "Flu");
+    await user.click(screen.getByRole("option", { name: "Influenza (Flu)" }));
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({ vaccineType: "flu", vaccineTypeOther: "" }),
+    ]);
+  });
+});
