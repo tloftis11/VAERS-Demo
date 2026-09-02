@@ -22,7 +22,8 @@ async function startHcpReportToVaccineStep(page: import("@playwright/test").Page
   await fillAndAdvance(page, "Your email", "e2e.tester@example.com");
   await fillAndAdvance(page, "Confirm your email", "e2e.tester@example.com");
   await skipQuestion(page); // phone
-  await skipQuestion(page); // best contact info
+  await skipQuestion(page); // best contact name
+  await skipQuestion(page); // best contact phone
   await clickContinueOnReview(page);
 
   // About the patient

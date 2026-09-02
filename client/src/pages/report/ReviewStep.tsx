@@ -138,7 +138,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
       />
       <ReportSummarySection
         title="What happened"
-        fields={adverseEventFieldSpecs(isHcp, isSelfReport)}
+        fields={adverseEventFieldSpecs(isHcp, isSelfReport, report.adverseEvent?.symptomsOther)}
         values={report.adverseEvent}
       />
       <ReportSummarySection

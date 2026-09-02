@@ -12,7 +12,7 @@ test.describe("About You — email confirmation and phone validation", () => {
     await page.getByLabel("Confirm your email", { exact: true }).fill("typo@example.com");
     await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click();
 
-    await expect(page.getByRole("alert")).toHaveText("This doesn't match the email address above");
+    await expect(page.getByRole("alert")).toHaveText("This doesn't match the email you entered previously");
   });
 
   test("an impossible phone number blocks with specific guidance; a valid formatted number passes", async ({
@@ -32,7 +32,8 @@ test.describe("About You — email confirmation and phone validation", () => {
 
     await page.getByLabel("Your phone (optional)", { exact: true }).fill("(404) 555-1212");
     await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click();
-    await skipQuestion(page); // best contact info
+    await skipQuestion(page); // best contact name
+    await skipQuestion(page); // best contact phone
 
     await expect(page.getByRole("heading", { name: "Review: About you" })).toBeVisible();
     await expect(page.getByText("(404) 555-1212")).toBeVisible();

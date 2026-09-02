@@ -97,7 +97,8 @@ async function serializeReport(reportId: string) {
           mailingCity: report.submitter.mailingCity ?? "",
           mailingState: report.submitter.mailingState ?? "",
           mailingZip: report.submitter.mailingZip ?? "",
-          bestContactInfo: report.submitter.bestContactInfo ?? "",
+          bestContactName: report.submitter.bestContactName ?? "",
+          bestContactPhone: report.submitter.bestContactPhone ?? "",
         }
       : null,
     patient: report.patient
@@ -338,6 +339,20 @@ reportsRouter.patch("/:id", async (req, res) => {
               update: { firstName, lastName },
             });
           }
+        }
+        // Reporting for yourself means the contact email IS the patient's
+        // email — carry it over so it isn't retyped from scratch a few
+        // questions later (they still have to type it again on the
+        // confirmation question, same as they did here). Only fills a
+        // blank patient email, so it never clobbers a manual edit made
+        // after this point, and never applies to a caregiver/HCP report
+        // where the patient is a different person from the reporter.
+        if (!existingPatient?.email && validated.contactEmail) {
+          await prisma.patient.upsert({
+            where: { reportId: id },
+            create: { reportId: id, email: String(validated.contactEmail) },
+            update: { email: String(validated.contactEmail) },
+          });
         }
       }
       break;
@@ -642,7 +657,8 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             mailingCity: report.submitter.mailingCity ?? "",
             mailingState: report.submitter.mailingState ?? "",
             mailingZip: report.submitter.mailingZip ?? "",
-            bestContactInfo: report.submitter.bestContactInfo ?? "",
+            bestContactName: report.submitter.bestContactName ?? "",
+          bestContactPhone: report.submitter.bestContactPhone ?? "",
           }
         : null;
     case "patient":

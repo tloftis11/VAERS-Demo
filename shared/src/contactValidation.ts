@@ -3,7 +3,7 @@
 // client page that touches a phone field, so the full ~360KB metadata build
 // would be a real, avoidable bundle-size regression for a validation this
 // forgiving in nature (just "is this plausibly dialable").
-import { isValidPhoneNumber } from "libphonenumber-js/min";
+import { isPossiblePhoneNumber } from "libphonenumber-js/min";
 import { z } from "zod";
 
 /**
@@ -13,13 +13,21 @@ import { z } from "zod";
  */
 
 /**
- * Accepts any format libphonenumber-js recognizes as a real, dialable
+ * Accepts any format libphonenumber-js recognizes as a plausibly-dialable
  * number: "(404) 555-1212", "404-555-1212", "+1 404 555 1212", with or
  * without an extension. A leading "+" always wins over the US default, so a
  * foreign number entered with its own country code (e.g. "+44 20 7946
  * 0958") validates correctly regardless of whether the associated address
  * is foreign — there's no separate "is this address foreign" branch needed
  * here, unlike postal codes below.
+ *
+ * Deliberately uses isPossiblePhoneNumber (length/pattern plausibility)
+ * rather than isValidPhoneNumber (checks the number against real assigned
+ * carrier ranges) — the stricter check rejected legitimate-looking numbers
+ * that just aren't in libphonenumber's assigned-range data (e.g. any
+ * "555" area code, common in examples/testing), which is far more
+ * "impossible number" false-positives than this form should risk. Garbage
+ * input and obviously-too-short/long strings are still rejected either way.
  *
  * Deliberately does NOT reformat the stored value to E.164 — the field
  * keeps exactly what the reporter typed, so re-opening a draft never shows
@@ -28,7 +36,7 @@ import { z } from "zod";
 export function isValidPhone(raw: string): boolean {
   const trimmed = raw.trim();
   if (!trimmed) return true;
-  return isValidPhoneNumber(trimmed, "US");
+  return isPossiblePhoneNumber(trimmed, "US");
 }
 
 export function optionalPhone(message = "Enter a valid phone number, e.g. (404) 555-1212 or +1 404 555 1212") {

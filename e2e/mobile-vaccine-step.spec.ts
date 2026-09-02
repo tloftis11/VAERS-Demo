@@ -19,8 +19,9 @@ test("HCP vaccine section is usable on a mobile viewport — no horizontal scrol
   await fillAndAdvance(page, "Your name", "Mobile Tester");
   await fillAndAdvance(page, "Your email", "mobile.tester@example.com");
   await fillAndAdvance(page, "Confirm your email", "mobile.tester@example.com");
-  await skipQuestion(page);
-  await skipQuestion(page);
+  await skipQuestion(page); // phone
+  await skipQuestion(page); // best contact name
+  await skipQuestion(page); // best contact phone
   await clickContinueOnReview(page);
 
   await fillAndAdvance(page, "Patient's first name", "Test");

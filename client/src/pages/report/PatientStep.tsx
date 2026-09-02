@@ -108,7 +108,13 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
     );
   }
   fields.push(
-    { id: "patientStreet", label: "Patient's street address (optional)", required: false, kind: "text" },
+    {
+      id: "patientStreet",
+      label: "Patient's street address (optional)",
+      required: false,
+      kind: "text",
+      hint: "Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B.",
+    },
     { id: "patientCity", label: "Patient's city (optional)", required: false, kind: "text" },
     {
       id: "patientState",
@@ -257,7 +263,14 @@ export function PatientStep({
         ? "the patient's age makes this inapplicable"
         : null;
 
+  // Once the patient is clearly past toddlerhood, "additional months" has
+  // nothing left to add — asking it anyway reads as a mistake, not a real
+  // question (matches the pregnancy-skip treatment below).
+  const ageMonthsSkipReason =
+    bestAgeEstimate !== null && bestAgeEstimate > 2 ? "the patient's age makes this inapplicable" : null;
+
   const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter((f) => {
+    if (f.id === "ageMonths") return !ageMonthsSkipReason;
     if (f.id === "pregnant") return !pregnancySkipReason;
     if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
     if (f.id === "patientRaceOther") return (values.patientRace as string[]).includes("other");
@@ -277,6 +290,7 @@ export function PatientStep({
     if (id === "ageYears") {
       const n = Number(value);
       if (value !== "" && Number.isFinite(n) && n < PREGNANCY_MIN_PLAUSIBLE_AGE) setValue("pregnant", "");
+      if (value !== "" && Number.isFinite(n) && n > 2) setValue("ageMonths", "");
     }
     if (id === "pregnant" && value !== "yes") setValue("pregnancyDetails", "");
     if (id === "patientRace" && !(value as string[]).includes("other")) setValue("patientRaceOther", "");

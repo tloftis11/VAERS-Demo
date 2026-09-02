@@ -14,7 +14,8 @@ export interface AboutYouData {
   mailingCity: string;
   mailingState: string;
   mailingZip: string;
-  bestContactInfo: string;
+  bestContactName: string;
+  bestContactPhone: string;
 }
 
 export interface PatientData {

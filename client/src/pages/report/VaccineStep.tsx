@@ -4,7 +4,7 @@ import {
   VACCINE_TYPES_HCP,
   DOSE_NUMBER_OPTIONS,
   ROUTE_OPTIONS,
-  BODY_SITE_OPTIONS,
+  getBodySiteOptionsForRoute,
   FACILITY_TYPE_OPTIONS,
   STATE_OR_FOREIGN_OPTIONS,
   getManufacturerOptions,
@@ -93,7 +93,9 @@ export function vaccineFieldSpecs(
   isHcp: boolean,
   vaccineTypeOptions: readonly VaccineOption[] = isHcp ? VACCINE_TYPES_HCP : VACCINE_TYPES,
   /** Only used to seed the public path's manufacturer picklist (see below) — unused for HCP. */
-  selectedVaccineType?: string
+  selectedVaccineType?: string,
+  /** Narrows "where was it given?" to sites actually possible for this route. */
+  selectedRoute?: string
 ): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     {
@@ -151,11 +153,23 @@ export function vaccineFieldSpecs(
       hint: "Check your vaccination card if you have it — otherwise leave blank.",
     },
     { id: "route", label: "How was it given? (optional)", required: false, kind: "choice", options: ROUTE_OPTIONS },
-    { id: "bodySite", label: "Where was it given? (optional)", required: false, kind: "choice", options: BODY_SITE_OPTIONS },
+    {
+      id: "bodySite",
+      label: "Where was it given? (optional)",
+      required: false,
+      kind: "choice",
+      options: getBodySiteOptionsForRoute(selectedRoute ?? ""),
+    },
   ];
   fields.push(
     { id: "administeringFacility", label: "Facility or clinic name (optional)", required: false, kind: "text" },
-    { id: "facilityStreet", label: "Facility street address (optional)", required: false, kind: "text" },
+    {
+      id: "facilityStreet",
+      label: "Facility street address (optional)",
+      required: false,
+      kind: "text",
+      hint: "Street number and name, plus suite/unit if any — e.g. 123 Main St, Suite 200.",
+    },
     { id: "facilityCity", label: "Facility city (optional)", required: false, kind: "text" },
     {
       id: "facilityState",
@@ -183,53 +197,38 @@ export function vaccineFieldSpecs(
     },
     { id: "facilityTypeOther", label: "Please describe the type of facility", required: false, kind: "text" }
   );
-  if (isHcp) {
-    // HCP-only: any number of additional vaccines at this same visit, and
-    // any number of other vaccines from the month before — each a single
-    // bundled question (all fields on one screen, add/remove rows) instead
-    // of a fixed one-extra-slot walked through as several separate
-    // sequential questions.
-    fields.push(
-      {
-        id: "additionalVaccines",
-        label: "Additional vaccines given at this same visit (optional)",
-        required: false,
-        kind: "custom",
-        formatSummary: (v) => {
-          const rows = v as AdditionalVaccineRow[];
-          return rows.length === 0 ? "" : `${rows.length} additional vaccine${rows.length === 1 ? "" : "s"}`;
-        },
-        describeError: describeAdditionalVaccineError,
+  // Same structured, repeatable-row format for every submitter type — not
+  // just HCP — so "what else did you get" is captured with the same
+  // vaccine/manufacturer/lot/route/site/dose detail regardless of who's
+  // reporting, instead of a public reporter's answer landing as a single
+  // unparseable paragraph of free text. The vaccine-type options list still
+  // differs by path (plain-language for public, full brand list for HCP —
+  // see `vaccineTypeOptions` above), matching the primary vaccine question.
+  // Same-visit vaccines are asked before prior-month ones (matches the real
+  // form's own item order: item 17 before item 22).
+  fields.push(
+    {
+      id: "additionalVaccines",
+      label: "Additional vaccines given at this same visit (optional)",
+      required: false,
+      kind: "custom",
+      formatSummary: (v) => {
+        const rows = v as AdditionalVaccineRow[];
+        return rows.length === 0 ? "" : `${rows.length} additional vaccine${rows.length === 1 ? "" : "s"}`;
       },
-      {
-        id: "priorVaccines",
-        label: "Other vaccines received in the month before this one (optional)",
-        required: false,
-        kind: "custom",
-        formatSummary: (v) => {
-          const rows = v as PriorVaccineRow[];
-          return rows.length === 0 ? "" : `${rows.length} prior vaccine${rows.length === 1 ? "" : "s"}`;
-        },
-      }
-    );
-  } else {
-    fields.push(
-      {
-        id: "otherVaccinesRecent",
-        label: "Any other vaccines received in the month before this one? (optional)",
-        required: false,
-        kind: "textarea",
-        rows: 2,
+      describeError: describeAdditionalVaccineError,
+    },
+    {
+      id: "priorVaccines",
+      label: "Other vaccines received in the month before this one (optional)",
+      required: false,
+      kind: "custom",
+      formatSummary: (v) => {
+        const rows = v as PriorVaccineRow[];
+        return rows.length === 0 ? "" : `${rows.length} prior vaccine${rows.length === 1 ? "" : "s"}`;
       },
-      {
-        id: "otherVaccinesSameVisit",
-        label: "Did you receive any other vaccines at this same visit? If so, which ones? (optional)",
-        required: false,
-        kind: "textarea",
-        rows: 2,
-      }
-    );
-  }
+    }
+  );
   return fields;
 }
 
@@ -257,7 +256,7 @@ export function VaccineStep({
         ? VACCINE_TYPES_HCP
         : VACCINE_TYPES;
   const fields = (liveVaccineTypeOptions
-    ? vaccineFieldSpecs(isHcp, vaccineTypeOptions, values.vaccineType as string)
+    ? vaccineFieldSpecs(isHcp, vaccineTypeOptions, values.vaccineType as string, values.route as string)
     : []
   )
     .filter((f) => {
@@ -296,6 +295,13 @@ export function VaccineStep({
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof VaccineData, value as any);
     if (id === "facilityType" && value !== "other") setValue("facilityTypeOther", "");
+    // A body site that's no longer possible for the newly-selected route
+    // (e.g. switching from "injection" to "oral" with "Left arm" already
+    // picked) shouldn't linger as a stale, now-nonsensical answer.
+    if (id === "route") {
+      const stillValid = getBodySiteOptionsForRoute(String(value)).some((o) => o.value === values.bodySite);
+      if (!stillValid) setValue("bodySite", "");
+    }
   }
 
   function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {
@@ -484,7 +490,11 @@ export function AdditionalVaccinesEditor({
                   id={`additional-${i}-route`}
                   className="field__select"
                   value={row.route}
-                  onChange={(e) => updateRow(i, { route: e.target.value })}
+                  onChange={(e) => {
+                    const newRoute = e.target.value;
+                    const stillValid = getBodySiteOptionsForRoute(newRoute).some((o) => o.value === row.bodySite);
+                    updateRow(i, { route: newRoute, ...(stillValid ? {} : { bodySite: "" }) });
+                  }}
                 >
                   <option value="">Select…</option>
                   {ROUTE_OPTIONS.map((o) => (
@@ -505,7 +515,7 @@ export function AdditionalVaccinesEditor({
                   onChange={(e) => updateRow(i, { bodySite: e.target.value })}
                 >
                   <option value="">Select…</option>
-                  {BODY_SITE_OPTIONS.map((o) => (
+                  {getBodySiteOptionsForRoute(row.route).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>

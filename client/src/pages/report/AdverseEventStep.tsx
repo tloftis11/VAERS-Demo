@@ -60,7 +60,11 @@ const EMPTY: AdverseEventData = {
  * AdverseEventStep below), while the final review and read-only follow-up
  * lookup use it unfiltered and simply skip whichever fields are empty.
  */
-export function adverseEventFieldSpecs(isHcp: boolean, isSelfReport = false): ConversationalFieldSpec[] {
+export function adverseEventFieldSpecs(
+  isHcp: boolean,
+  isSelfReport = false,
+  symptomsOtherValue?: string
+): ConversationalFieldSpec[] {
   return [
     {
       id: "onsetDate",
@@ -85,13 +89,28 @@ export function adverseEventFieldSpecs(isHcp: boolean, isSelfReport = false): Co
       required: false,
       kind: "checkboxGroup",
       options: SYMPTOM_OPTIONS,
-      hint: "This is a quick-select shortcut — it doesn't replace the description above.",
-    },
-    {
-      id: "symptomsOther",
-      label: "Describe the \"Other\" symptom",
-      required: false,
-      kind: "text",
+      hint: "This is a quick-select shortcut — it doesn't replace the description above. Selecting \"Other\" adds a field to name it, right here.",
+      // The "Other, please describe" field lives inline under this same
+      // question (see the `extras` render in AdverseEventStep) rather than
+      // as its own separate sequential question — this just makes sure its
+      // validation error still shows up correctly here (live blocking,
+      // review-summary row, back-navigation) even though it's a distinct
+      // top-level schema field.
+      alsoValidates: ["symptomsOther"],
+      describeError: (relativePath, message) =>
+        relativePath === "symptomsOther" ? message : `Symptoms: ${message}`,
+      // Without this, the review screen's recap of a checkboxGroup falls
+      // back to the plain option label ("Other") with no indication of
+      // what the reporter actually typed for it — the same visibility gap
+      // that alsoValidates exists to prevent for errors, just for the
+      // recap value instead.
+      formatSummary: (value) =>
+        ((value as string[]) ?? [])
+          .map((v) => {
+            const label = SYMPTOM_OPTIONS.find((o) => o.value === v)?.label ?? v;
+            return v === "other" && symptomsOtherValue ? `${label} (${symptomsOtherValue})` : label;
+          })
+          .join(", "),
     },
     {
       id: "labResults",
@@ -270,10 +289,8 @@ export function AdverseEventStep({
     }
   }
 
-  const fields = adverseEventFieldSpecs(isHcp, isSelfReport).filter((f) => {
+  const fields = adverseEventFieldSpecs(isHcp, isSelfReport, values.symptomsOther as string).filter((f) => {
     switch (f.id) {
-      case "symptomsOther":
-        return showSymptomsOther;
       case "recoveryStatus":
         // Asking "has the patient recovered?" doesn't make sense once
         // "Patient died" is already recorded as an outcome.
@@ -307,6 +324,27 @@ export function AdverseEventStep({
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extraFieldValidation={checkFieldLogic}
       extras={{
+        symptoms: () =>
+          showSymptomsOther ? (
+            <div className="field field--nested">
+              <label className="field__label" htmlFor="symptoms-other-input">
+                Describe the "Other" symptom
+              </label>
+              <input
+                id="symptoms-other-input"
+                className="field__input"
+                value={values.symptomsOther}
+                onChange={(e) => handleSetValue("symptomsOther", e.target.value)}
+                aria-invalid={!!errors.symptomsOther}
+                aria-describedby={errors.symptomsOther ? "symptoms-other-error" : undefined}
+              />
+              {errors.symptomsOther && (
+                <p id="symptoms-other-error" role="alert" className="field__error">
+                  {errors.symptomsOther}
+                </p>
+              )}
+            </div>
+          ) : null,
         outcomes: () =>
           selfReportDeathFlag ? (
             <div className="notice notice--warning" role="status">

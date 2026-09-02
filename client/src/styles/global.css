@@ -192,16 +192,12 @@ a {
   color: var(--color-primary-contrast);
 }
 
-.nav-bar__links a.button--secondary.nav-bar__cta {
-  color: var(--color-primary);
-}
-
-/* Tighter horizontal padding than a normal .button — the two CTA pills are
-   the single biggest contributor to how wide this row gets, and the
-   Spanish translations are both longer than their English counterparts;
-   without this, the whole nav-bar__links row crossed the wrap threshold in
-   Spanish at viewport widths where English still fit on one line, changing
-   the header's height when the language was switched. */
+/* Tighter horizontal padding than a normal .button — the CTA pill is a
+   sizable contributor to how wide this row gets, and the Spanish
+   translation is longer than the English one; without this, the whole
+   nav-bar__links row crossed the wrap threshold in Spanish at viewport
+   widths where English still fit on one line, changing the header's
+   height when the language was switched. */
 .nav-bar__links a.button.nav-bar__cta {
   padding: var(--space-2) var(--space-3);
 }
@@ -1243,6 +1239,15 @@ a {
 
 .field {
   margin-bottom: var(--space-5);
+}
+
+/* A field rendered inline under another question (e.g. a conditional
+ * "Other, please specify" input under a checkbox group) via ConversationalStep's
+ * `extras` — needs separation from what's above it, not below (that's
+ * already the surrounding layout's job). */
+.field--nested {
+  margin-top: var(--space-3);
+  margin-bottom: 0;
 }
 
 .field__label {

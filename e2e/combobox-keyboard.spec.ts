@@ -17,7 +17,8 @@ test("vaccine Combobox: ArrowDown highlights the first option, keyboard and mous
   await page.getByLabel("Confirm your email", { exact: true }).fill("kb.tester@example.com");
   await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click();
   await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click(); // phone
-  await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click(); // best contact info
+  await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click(); // best contact name
+  await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click(); // best contact phone
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 
   // Patient basics, minimal path to the vaccine step.

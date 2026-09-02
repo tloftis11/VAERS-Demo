@@ -25,11 +25,14 @@ export function NavBar() {
           <Link to="/faq">{t("nav.faq")}</Link>
           <Link to="/about">{t("nav.about")}</Link>
           <Link to="/accessibility">{t("nav.accessibility")}</Link>
+          {/* A plain text link, not a button — reporting a new event is the
+              one action this nav bar should read as a call to action;
+              follow-up is a real but secondary path, and giving it equal
+              pill-button weight made the header look like two co-equal
+              CTAs instead of one primary action plus ordinary wayfinding. */}
+          <Link to="/follow-up">{t("nav.followUp")}</Link>
           <Link to="/report" className="button button--primary nav-bar__cta">
             {t("nav.reportEvent")}
-          </Link>
-          <Link to="/follow-up" className="button button--secondary nav-bar__cta">
-            {t("nav.followUp")}
           </Link>
           <label className="nav-bar__language">
             <span className="sr-only">{t("nav.languageSelectLabel")}</span>
