@@ -8,6 +8,7 @@ export interface AboutYouData {
   contactEmail: string;
   contactPhone: string;
   relationship: string;
+  relationshipOther: string;
   mailingStreet: string;
   mailingCity: string;
   mailingState: string;
@@ -31,6 +32,7 @@ export interface PatientData {
   recentIllnesses: string;
   chronicConditions: string;
   patientRace: string[];
+  patientRaceOther: string;
   patientEthnicity: string;
 }
 
@@ -61,6 +63,7 @@ export interface VaccineData {
   bodySite: string;
   administeringFacility: string;
   facilityType: string;
+  facilityTypeOther: string;
   otherVaccinesRecent: string;
   otherVaccinesSameVisit: string;
   additionalVaccines: AdditionalVaccineRow[];
@@ -89,6 +92,7 @@ export interface AdverseEventData {
 
 export interface ErrorDetailData {
   errorType: string;
+  errorTypeOther: string;
   errorDescription: string;
   errorDiscoveredDate: string;
   correctiveActionTaken: string;

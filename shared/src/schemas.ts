@@ -28,6 +28,7 @@
  */
 import { z } from "zod";
 import type { StepId, SubmitterType } from "./branchingRules";
+import { ageInYears, PREGNANCY_MIN_PLAUSIBLE_AGE } from "./liveChecks";
 
 const requiredString = (msg = "This field is required") => z.string().trim().min(1, msg);
 const optionalString = () =>
@@ -502,6 +503,7 @@ export function aboutYouSchema(submitterType: SubmitterType) {
     contactEmail: z.string().trim().email("Enter a valid email address"),
     contactPhone: optionalString(),
     relationship: optionalString(),
+    relationshipOther: optionalString(),
     mailingStreet: optionalString(),
     mailingCity: optionalString(),
     mailingState: optionalEnum(STATE_OPTIONS.map((o) => o.value)),
@@ -509,12 +511,22 @@ export function aboutYouSchema(submitterType: SubmitterType) {
     bestContactInfo: optionalString(),
   });
   if (submitterType === "hcp") return base;
-  return base.extend({
-    relationship: selectEnum(
-      ["self", "parent_guardian_caregiver", "other"],
-      "Select your relationship to the patient"
-    ),
-  });
+  return base
+    .extend({
+      relationship: selectEnum(
+        ["self", "parent_guardian_caregiver", "other"],
+        "Select your relationship to the patient"
+      ),
+    })
+    .superRefine((data, ctx) => {
+      if (data.relationship === "other" && !data.relationshipOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["relationshipOther"],
+          message: "Please describe your relationship to the patient",
+        });
+      }
+    });
 }
 
 /**
@@ -555,33 +567,72 @@ const patientBase = z.object({
   recentIllnesses: optionalString(),
   chronicConditions: optionalString(),
   patientRace: z.array(z.string()).optional().default([]),
+  patientRaceOther: optionalString(),
   patientEthnicity: optionalEnum(ETHNICITY_OPTIONS.map((o) => o.value)),
 });
 
+/** Same "best estimate available at this point in the flow" logic the live
+ * UI uses (PatientStep.tsx) to decide whether the pregnancy question
+ * applies — duplicated here (not imported) only because it operates on the
+ * already-parsed schema shape rather than raw form values. */
+function bestAgeEstimate(data: {
+  dateOfBirthUnknown: boolean;
+  ageYears: number | "";
+  patientDateOfBirth: string;
+}): number | null {
+  if (data.dateOfBirthUnknown) {
+    const n = Number(data.ageYears);
+    return data.ageYears !== "" && Number.isFinite(n) ? n : null;
+  }
+  return data.patientDateOfBirth ? ageInYears(data.patientDateOfBirth) : null;
+}
+
 export function patientSchema(_submitterType: SubmitterType) {
-  return patientBase.superRefine((data, ctx) => {
-    if (!data.dateOfBirthUnknown) {
-      if (!data.patientDateOfBirth) {
+  return patientBase
+    .superRefine((data, ctx) => {
+      if (!data.dateOfBirthUnknown) {
+        if (!data.patientDateOfBirth) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["patientDateOfBirth"],
+            message: "Enter the patient's date of birth, or mark it as unknown",
+          });
+        } else if (!isValidDate(data.patientDateOfBirth)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["patientDateOfBirth"], message: "Enter a valid date" });
+        } else if (!notInFuture(data.patientDateOfBirth)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["patientDateOfBirth"],
+            message: "Date of birth cannot be in the future",
+          });
+        }
+        // ageYears/ageMonths are computed server-side once the vaccination
+        // date is known (see reports.ts) — nothing to validate here.
+      } else if (data.ageYears === "" || data.ageYears === undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ageYears"], message: "Enter age in years" });
+      }
+      if (data.patientRace.includes("other") && !data.patientRaceOther) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["patientDateOfBirth"],
-          message: "Enter the patient's date of birth, or mark it as unknown",
-        });
-      } else if (!isValidDate(data.patientDateOfBirth)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["patientDateOfBirth"], message: "Enter a valid date" });
-      } else if (!notInFuture(data.patientDateOfBirth)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["patientDateOfBirth"],
-          message: "Date of birth cannot be in the future",
+          path: ["patientRaceOther"],
+          message: "Please describe the patient's race",
         });
       }
-      // ageYears/ageMonths are computed server-side once the vaccination
-      // date is known (see reports.ts) — nothing to validate here.
-    } else if (data.ageYears === "" || data.ageYears === undefined) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ageYears"], message: "Enter age in years" });
-    }
-  });
+    })
+    .transform((data) => {
+      // A hidden field (pregnancy no longer applicable because sex or age
+      // changed) must never be silently submitted — strip it here as a
+      // server-side guarantee, not just a client-side UI nicety, so a
+      // client bug or a stale pre-fix draft can't leak it through.
+      const age = bestAgeEstimate(data);
+      const pregnancyApplicable = data.patientSex !== "male" && !(age !== null && age < PREGNANCY_MIN_PLAUSIBLE_AGE);
+      return {
+        ...data,
+        pregnant: pregnancyApplicable ? data.pregnant : "",
+        pregnancyDetails: pregnancyApplicable && data.pregnant === "yes" ? data.pregnancyDetails : "",
+        patientRaceOther: data.patientRace.includes("other") ? data.patientRaceOther : "",
+      };
+    });
 }
 
 /** One bundled row (all fields together, not a separate question each) — HCP path's "additional vaccines given at this same visit". */
@@ -659,6 +710,7 @@ export function vaccineSchema(_submitterType: SubmitterType) {
       bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
       administeringFacility: optionalString(),
       facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
+      facilityTypeOther: optionalString(),
       // Public path only: kept low-burden as one free-text question each,
       // rather than the repeatable bundled rows the HCP path gets below —
       // most public reporters won't have a second vaccine's manufacturer/lot
@@ -678,6 +730,13 @@ export function vaccineSchema(_submitterType: SubmitterType) {
           code: z.ZodIssueCode.custom,
           path: ["vaccineTypeOther"],
           message: "Enter the vaccine name",
+        });
+      }
+      if (data.facilityType === "other" && !data.facilityTypeOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["facilityTypeOther"],
+          message: "Please describe the facility type",
         });
       }
       data.additionalVaccines.forEach((row, i) => {
@@ -707,6 +766,7 @@ export function vaccineSchema(_submitterType: SubmitterType) {
     // agree on what "normalized" means, since both call this exact function.
     .transform((data) => ({
       ...data,
+      facilityTypeOther: data.facilityType === "other" ? data.facilityTypeOther : "",
       additionalVaccines: data.additionalVaccines.filter((row) => !isBlankAdditionalVaccineRow(row)),
     }));
 }
@@ -762,21 +822,67 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
         message: "Date of death cannot be in the future",
       });
     }
-  });
+    if (data.symptoms.includes("other") && !data.symptomsOther) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["symptomsOther"],
+        message: "Please describe the other symptom",
+      });
+    }
+    // "None of the above" only makes sense alone — selecting it alongside a
+    // real outcome (or a real outcome alongside it) is a contradiction, not
+    // just a redundant answer. The UI clears the opposite side immediately
+    // on selection (see AdverseEventStep.tsx); this is the server-side
+    // guarantee that a stale/bypassed client can't submit both anyway.
+    if (data.outcomes.includes("none") && data.outcomes.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outcomes"],
+        message: "\"None of the above\" can't be selected along with another outcome",
+      });
+    }
+    if (data.previousAdverseEvent === "yes" && !data.previousAdverseEventDetails) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["previousAdverseEventDetails"],
+        message: "Please describe the previous adverse event",
+      });
+    }
+  })
+    .transform((data) => ({
+      ...data,
+      symptomsOther: data.symptoms.includes("other") ? data.symptomsOther : "",
+      previousAdverseEventDetails: data.previousAdverseEvent === "yes" ? data.previousAdverseEventDetails : "",
+    }));
 }
 
-export const errorDetailSchema = z.object({
-  errorType: selectEnum(ERROR_TYPES.map((o) => o.value), "Select the type of error"),
-  errorDescription: requiredString("Please describe the error").min(
-    10,
-    "Please provide a bit more detail (at least 10 characters)"
-  ),
-  errorDiscoveredDate: dateSchema("Enter when the error was discovered").refine(
-    notInFuture,
-    "Date cannot be in the future"
-  ),
-  correctiveActionTaken: optionalString(),
-});
+export const errorDetailSchema = z
+  .object({
+    errorType: selectEnum(ERROR_TYPES.map((o) => o.value), "Select the type of error"),
+    errorTypeOther: optionalString(),
+    errorDescription: requiredString("Please describe the error").min(
+      10,
+      "Please provide a bit more detail (at least 10 characters)"
+    ),
+    errorDiscoveredDate: dateSchema("Enter when the error was discovered").refine(
+      notInFuture,
+      "Date cannot be in the future"
+    ),
+    correctiveActionTaken: optionalString(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.errorType === "other" && !data.errorTypeOther) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["errorTypeOther"],
+        message: "Please describe the error",
+      });
+    }
+  })
+  .transform((data) => ({
+    ...data,
+    errorTypeOther: data.errorType === "other" ? data.errorTypeOther : "",
+  }));
 
 export const documentsSchema = z.object({
   supplementalNotes: optionalString(),

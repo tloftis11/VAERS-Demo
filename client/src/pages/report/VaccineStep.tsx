@@ -41,6 +41,7 @@ const EMPTY: VaccineData = {
   bodySite: "",
   administeringFacility: "",
   facilityType: "",
+  facilityTypeOther: "",
   otherVaccinesRecent: "",
   otherVaccinesSameVisit: "",
   additionalVaccines: [],
@@ -153,7 +154,8 @@ export function vaccineFieldSpecs(
       required: false,
       kind: "choice",
       options: FACILITY_TYPE_OPTIONS,
-    }
+    },
+    { id: "facilityTypeOther", label: "Please describe the type of facility", required: false, kind: "text" }
   );
   if (isHcp) {
     // HCP-only: any number of additional vaccines at this same visit, and
@@ -234,6 +236,7 @@ export function VaccineStep({
   )
     .filter((f) => {
       if (f.id === "vaccineTypeOther") return values.vaccineType === "other" || values.vaccineType === "foreign";
+      if (f.id === "facilityTypeOther") return values.facilityType === "other";
       return true;
     })
     .map((f) => {
@@ -266,6 +269,7 @@ export function VaccineStep({
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof VaccineData, value as any);
+    if (id === "facilityType" && value !== "other") setValue("facilityTypeOther", "");
   }
 
   function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {

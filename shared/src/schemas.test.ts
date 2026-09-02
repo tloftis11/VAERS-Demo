@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { vaccineSchema } from "./schemas";
+import { vaccineSchema, aboutYouSchema, patientSchema, adverseEventSchema, errorDetailSchema } from "./schemas";
 
 /** Minimal valid HCP vaccine-step payload — every test below starts from
  * this and only varies additionalVaccines/manufacturer/lotNumber, so a
@@ -182,5 +182,293 @@ describe("vaccineSchema (HCP) — manufacturer/lot number", () => {
     const schema = vaccineSchema("hcp");
     const result = schema.safeParse(baseHcpVaccineData({ lotNumber: "" }));
     expect(result.success).toBe(true);
+  });
+});
+
+describe("vaccineSchema — facility type 'Other' detail", () => {
+  it("requires facilityTypeOther when facilityType is 'other'", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(baseHcpVaccineData({ facilityType: "other", facilityTypeOther: "" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("facilityTypeOther");
+    }
+  });
+
+  it("passes once facilityTypeOther is filled in, and strips it if facilityType changes away from 'other'", () => {
+    const schema = vaccineSchema("hcp");
+    const ok = schema.safeParse(baseHcpVaccineData({ facilityType: "other", facilityTypeOther: "Mobile clinic" }));
+    expect(ok.success).toBe(true);
+
+    const notOther = schema.safeParse(
+      baseHcpVaccineData({ facilityType: "home", facilityTypeOther: "stale leftover text" })
+    );
+    expect(notOther.success).toBe(true);
+    if (notOther.success) {
+      expect((notOther.data as { facilityTypeOther: string }).facilityTypeOther).toBe("");
+    }
+  });
+});
+
+describe("aboutYouSchema — relationship 'Other' detail (public/caregiver only)", () => {
+  function baseAboutYouData(overrides: Record<string, unknown> = {}) {
+    return {
+      contactName: "Jane Doe",
+      contactEmail: "jane@example.com",
+      contactPhone: "",
+      relationship: "self",
+      relationshipOther: "",
+      mailingStreet: "",
+      mailingCity: "",
+      mailingState: "",
+      mailingZip: "",
+      bestContactInfo: "",
+      ...overrides,
+    };
+  }
+
+  it("requires relationshipOther when relationship is 'other'", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ relationship: "other", relationshipOther: "" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("relationshipOther");
+    }
+  });
+
+  it("passes once relationshipOther is filled in", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ relationship: "other", relationshipOther: "Family friend" }));
+    expect(result.success).toBe(true);
+  });
+
+  it("HCP submitters have no relationship enum, so 'other' never applies", () => {
+    const schema = aboutYouSchema("hcp");
+    const result = schema.safeParse(baseAboutYouData({ relationship: "other", relationshipOther: "" }));
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("patientSchema — race 'Other' detail and pregnancy stale-data clearing", () => {
+  function basePatientData(overrides: Record<string, unknown> = {}) {
+    return {
+      patientFirstName: "Test",
+      patientLastName: "Patient",
+      patientDateOfBirth: "1990-01-01",
+      dateOfBirthUnknown: false,
+      patientSex: "female",
+      ageYears: "",
+      ageMonths: "",
+      patientState: "",
+      pregnant: "",
+      pregnancyDetails: "",
+      medicationsAtVaccination: "",
+      allergies: "",
+      recentIllnesses: "",
+      chronicConditions: "",
+      patientRace: [],
+      patientRaceOther: "",
+      patientEthnicity: "",
+      ...overrides,
+    };
+  }
+
+  it("requires patientRaceOther when patientRace includes 'other'", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(basePatientData({ patientRace: ["other"], patientRaceOther: "" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("patientRaceOther");
+    }
+  });
+
+  it("passes once patientRaceOther is filled in, and strips it if 'other' is deselected", () => {
+    const schema = patientSchema("public");
+    const ok = schema.safeParse(basePatientData({ patientRace: ["other"], patientRaceOther: "Multiracial" }));
+    expect(ok.success).toBe(true);
+
+    const deselected = schema.safeParse(
+      basePatientData({ patientRace: ["white"], patientRaceOther: "stale leftover text" })
+    );
+    expect(deselected.success).toBe(true);
+    if (deselected.success) {
+      expect((deselected.data as { patientRaceOther: string }).patientRaceOther).toBe("");
+    }
+  });
+
+  it("REGRESSION: pregnancy answers are stripped server-side when sex is male, even if the client somehow sent them", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientData({ patientSex: "male", pregnant: "yes", pregnancyDetails: "stale data that should never persist" })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const data = result.data as { pregnant: string; pregnancyDetails: string };
+      expect(data.pregnant).toBe("");
+      expect(data.pregnancyDetails).toBe("");
+    }
+  });
+
+  it("REGRESSION: pregnancy answers are stripped server-side when age is implausibly young", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientData({
+        patientDateOfBirth: "",
+        dateOfBirthUnknown: true,
+        ageYears: "3",
+        patientSex: "female",
+        pregnant: "yes",
+        pregnancyDetails: "stale data that should never persist",
+      })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const data = result.data as { pregnant: string; pregnancyDetails: string };
+      expect(data.pregnant).toBe("");
+      expect(data.pregnancyDetails).toBe("");
+    }
+  });
+
+  it("keeps pregnancyDetails only when pregnant is 'yes', clearing it for 'no'/'unknown'", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(basePatientData({ pregnant: "no", pregnancyDetails: "stale text" }));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as { pregnancyDetails: string }).pregnancyDetails).toBe("");
+    }
+  });
+
+  it("a plausible adult female patient's real pregnancy answer is preserved", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientData({ patientSex: "female", pregnant: "yes", pregnancyDetails: "Second trimester" })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const data = result.data as { pregnant: string; pregnancyDetails: string };
+      expect(data.pregnant).toBe("yes");
+      expect(data.pregnancyDetails).toBe("Second trimester");
+    }
+  });
+});
+
+describe("adverseEventSchema — symptoms 'Other', outcomes exclusivity, previous AE details", () => {
+  function baseAdverseEventData(overrides: Record<string, unknown> = {}) {
+    return {
+      onsetDate: "2026-01-02",
+      onsetTime: "",
+      description: "Patient developed a mild rash after vaccination.",
+      symptoms: [],
+      symptomsOther: "",
+      labResults: "",
+      recoveryStatus: "",
+      outcomes: [],
+      hospitalizationDays: "",
+      hospitalName: "",
+      hospitalCity: "",
+      hospitalState: "",
+      dateOfDeath: "",
+      treatmentGiven: "",
+      clinicalCourseNotes: "",
+      previousAdverseEvent: "",
+      previousAdverseEventDetails: "",
+      ...overrides,
+    };
+  }
+
+  it("requires symptomsOther when 'other' is among the selected symptoms", () => {
+    const schema = adverseEventSchema("public");
+    const result = schema.safeParse(baseAdverseEventData({ symptoms: ["fever", "other"], symptomsOther: "" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("symptomsOther");
+    }
+  });
+
+  it("passes once symptomsOther is filled in, and strips it if 'other' is deselected", () => {
+    const schema = adverseEventSchema("public");
+    const ok = schema.safeParse(baseAdverseEventData({ symptoms: ["other"], symptomsOther: "Metallic taste" }));
+    expect(ok.success).toBe(true);
+
+    const deselected = schema.safeParse(
+      baseAdverseEventData({ symptoms: ["fever"], symptomsOther: "stale leftover text" })
+    );
+    expect(deselected.success).toBe(true);
+    if (deselected.success) {
+      expect((deselected.data as { symptomsOther: string }).symptomsOther).toBe("");
+    }
+  });
+
+  it("REGRESSION: 'None of the above' is mutually exclusive with a real outcome", () => {
+    const schema = adverseEventSchema("public");
+    const result = schema.safeParse(baseAdverseEventData({ outcomes: ["none", "er_visit"] }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("outcomes");
+    }
+  });
+
+  it("'None of the above' alone, or a real outcome alone, both pass", () => {
+    const schema = adverseEventSchema("public");
+    expect(schema.safeParse(baseAdverseEventData({ outcomes: ["none"] })).success).toBe(true);
+    expect(schema.safeParse(baseAdverseEventData({ outcomes: ["er_visit"] })).success).toBe(true);
+  });
+
+  it("requires previousAdverseEventDetails when previousAdverseEvent is 'yes'", () => {
+    const schema = adverseEventSchema("public");
+    const result = schema.safeParse(
+      baseAdverseEventData({ previousAdverseEvent: "yes", previousAdverseEventDetails: "" })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("previousAdverseEventDetails");
+    }
+  });
+
+  it("strips previousAdverseEventDetails if previousAdverseEvent is changed away from 'yes'", () => {
+    const schema = adverseEventSchema("public");
+    const result = schema.safeParse(
+      baseAdverseEventData({ previousAdverseEvent: "no", previousAdverseEventDetails: "stale leftover text" })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as { previousAdverseEventDetails: string }).previousAdverseEventDetails).toBe("");
+    }
+  });
+});
+
+describe("errorDetailSchema — error type 'Other' detail", () => {
+  function baseErrorDetailData(overrides: Record<string, unknown> = {}) {
+    return {
+      errorType: "wrong_dose",
+      errorTypeOther: "",
+      errorDescription: "Patient received twice the intended dose.",
+      errorDiscoveredDate: "2026-01-02",
+      correctiveActionTaken: "",
+      ...overrides,
+    };
+  }
+
+  it("requires errorTypeOther when errorType is 'other'", () => {
+    const result = errorDetailSchema.safeParse(baseErrorDetailData({ errorType: "other", errorTypeOther: "" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("errorTypeOther");
+    }
+  });
+
+  it("passes once errorTypeOther is filled in, and strips it if errorType changes away from 'other'", () => {
+    const ok = errorDetailSchema.safeParse(
+      baseErrorDetailData({ errorType: "other", errorTypeOther: "Administered via wrong injection technique" })
+    );
+    expect(ok.success).toBe(true);
+
+    const notOther = errorDetailSchema.safeParse(
+      baseErrorDetailData({ errorType: "wrong_dose", errorTypeOther: "stale leftover text" })
+    );
+    expect(notOther.success).toBe(true);
+    if (notOther.success) {
+      expect((notOther.data as { errorTypeOther: string }).errorTypeOther).toBe("");
+    }
   });
 });

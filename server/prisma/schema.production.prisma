@@ -43,6 +43,7 @@ model Submitter {
   contactEmail    String?
   contactPhone    String?
   relationship    String?
+  relationshipOther String? // free-text detail when relationship is "other"
   mailingStreet   String?
   mailingCity     String?
   mailingState    String?
@@ -69,6 +70,7 @@ model Patient {
   recentIllnesses          String?
   chronicConditions        String?
   race                     String? // JSON-encoded string array (SQLite has no native array type)
+  raceOther                String? // free-text detail when "other" is among the selected races
   ethnicity                String?
 }
 
@@ -87,6 +89,7 @@ model VaccineAdministration {
   bodySite              String?
   administeringFacility String?
   facilityType          String?
+  facilityTypeOther     String? // free-text detail when facilityType is "other"
   otherVaccinesRecent   String?
   otherVaccinesSameVisit String?
   additionalVaccines    AdditionalVaccine[]
@@ -144,6 +147,7 @@ model ErrorDetail {
   reportId              String  @unique
   report                Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   errorType             String?
+  errorTypeOther        String? // free-text detail when errorType is "other"
   errorDescription      String?
   errorDiscoveredDate   String?
   correctiveActionTaken String?

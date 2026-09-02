@@ -85,6 +85,7 @@ async function serializeReport(reportId: string) {
           contactEmail: report.submitter.contactEmail ?? "",
           contactPhone: report.submitter.contactPhone ?? "",
           relationship: report.submitter.relationship ?? "",
+          relationshipOther: report.submitter.relationshipOther ?? "",
           mailingStreet: report.submitter.mailingStreet ?? "",
           mailingCity: report.submitter.mailingCity ?? "",
           mailingState: report.submitter.mailingState ?? "",
@@ -109,6 +110,7 @@ async function serializeReport(reportId: string) {
           recentIllnesses: report.patient.recentIllnesses ?? "",
           chronicConditions: report.patient.chronicConditions ?? "",
           patientRace: report.patient.race ? (JSON.parse(report.patient.race) as string[]) : [],
+          patientRaceOther: report.patient.raceOther ?? "",
           patientEthnicity: report.patient.ethnicity ?? "",
         }
       : null,
@@ -125,6 +127,7 @@ async function serializeReport(reportId: string) {
           bodySite: report.vaccine.bodySite ?? "",
           administeringFacility: report.vaccine.administeringFacility ?? "",
           facilityType: report.vaccine.facilityType ?? "",
+          facilityTypeOther: report.vaccine.facilityTypeOther ?? "",
           otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
           otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
           additionalVaccines: report.vaccine.additionalVaccines.map((row) => ({
@@ -170,6 +173,7 @@ async function serializeReport(reportId: string) {
     errorDetail: report.errorDetail
       ? {
           errorType: report.errorDetail.errorType ?? "",
+          errorTypeOther: report.errorDetail.errorTypeOther ?? "",
           errorDescription: report.errorDetail.errorDescription ?? "",
           errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "",
           correctiveActionTaken: report.errorDetail.correctiveActionTaken ?? "",
@@ -325,6 +329,7 @@ reportsRouter.patch("/:id", async (req, res) => {
         recentIllnesses: validated.recentIllnesses || null,
         chronicConditions: validated.chronicConditions || null,
         race: JSON.stringify(validated.patientRace ?? []),
+        raceOther: validated.patientRaceOther || null,
         ethnicity: validated.patientEthnicity || null,
       };
       await prisma.patient.upsert({
@@ -587,6 +592,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             contactEmail: report.submitter.contactEmail ?? "",
             contactPhone: report.submitter.contactPhone ?? "",
             relationship: report.submitter.relationship ?? "",
+            relationshipOther: report.submitter.relationshipOther ?? "",
             mailingStreet: report.submitter.mailingStreet ?? "",
             mailingCity: report.submitter.mailingCity ?? "",
             mailingState: report.submitter.mailingState ?? "",
@@ -612,6 +618,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             recentIllnesses: report.patient.recentIllnesses ?? "",
             chronicConditions: report.patient.chronicConditions ?? "",
             patientRace: report.patient.race ? JSON.parse(report.patient.race) : [],
+            patientRaceOther: report.patient.raceOther ?? "",
             patientEthnicity: report.patient.ethnicity ?? "",
           }
         : null;
@@ -629,6 +636,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             bodySite: report.vaccine.bodySite ?? "",
             administeringFacility: report.vaccine.administeringFacility ?? "",
             facilityType: report.vaccine.facilityType ?? "",
+            facilityTypeOther: report.vaccine.facilityTypeOther ?? "",
             otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
             otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
             additionalVaccines: (report.vaccine.additionalVaccines ?? []).map((row: any) => ({
@@ -672,6 +680,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
       return report.errorDetail
         ? {
             errorType: report.errorDetail.errorType ?? "",
+            errorTypeOther: report.errorDetail.errorTypeOther ?? "",
             errorDescription: report.errorDetail.errorDescription ?? "",
             errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "",
             correctiveActionTaken: report.errorDetail.correctiveActionTaken ?? "",

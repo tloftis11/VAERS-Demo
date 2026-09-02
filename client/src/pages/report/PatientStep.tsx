@@ -7,7 +7,7 @@ import {
   ETHNICITY_OPTIONS,
 } from "../../../../shared/src/schemas";
 import { useState } from "react";
-import { ageInYears, todayIsoDate } from "../../../../shared/src/liveChecks";
+import { ageInYears, todayIsoDate, PREGNANCY_MIN_PLAUSIBLE_AGE } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -34,13 +34,6 @@ interface PatientStepProps {
  * report from being filed. */
 const SELF_REPORT_MIN_PLAUSIBLE_AGE = 10;
 
-/** A biologically-implausible age for pregnancy (e.g. an infant) skips the
- * question outright rather than just marking it optional — asking it at
- * all reads as a mistake, not a real question. Deliberately conservative
- * (well below the youngest plausible age) so this only ever fires for
- * clear-cut cases, never a real early-adolescent report. */
-const PREGNANCY_MIN_PLAUSIBLE_AGE = 9;
-
 const EMPTY: PatientData = {
   patientFirstName: "",
   patientLastName: "",
@@ -57,6 +50,7 @@ const EMPTY: PatientData = {
   recentIllnesses: "",
   chronicConditions: "",
   patientRace: [],
+  patientRaceOther: "",
   patientEthnicity: "",
 };
 
@@ -166,6 +160,7 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
       kind: "checkboxGroup",
       options: RACE_OPTIONS,
     },
+    { id: "patientRaceOther", label: "Please describe the patient's race", required: false, kind: "text" },
     {
       id: "patientEthnicity",
       label: "Patient's ethnicity (optional)",
@@ -238,6 +233,7 @@ export function PatientStep({
   const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter((f) => {
     if (f.id === "pregnant") return !pregnancySkipReason;
     if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
+    if (f.id === "patientRaceOther") return (values.patientRace as string[]).includes("other");
     return true;
   });
 
@@ -255,6 +251,7 @@ export function PatientStep({
       if (value !== "" && Number.isFinite(n) && n < PREGNANCY_MIN_PLAUSIBLE_AGE) setValue("pregnant", "");
     }
     if (id === "pregnant" && value !== "yes") setValue("pregnancyDetails", "");
+    if (id === "patientRace" && !(value as string[]).includes("other")) setValue("patientRaceOther", "");
   }
 
   function handleDobPartialToggle(checked: boolean) {
