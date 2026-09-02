@@ -29,7 +29,7 @@
 import { z } from "zod";
 import type { StepId, SubmitterType } from "./branchingRules";
 import { ageInYears, PREGNANCY_MIN_PLAUSIBLE_AGE } from "./liveChecks";
-import { optionalPhone, usZipSchema } from "./contactValidation";
+import { optionalPhone, usZipSchema, optionalEmail, isValidPostalCodeForState } from "./contactValidation";
 
 const requiredString = (msg = "This field is required") => z.string().trim().min(1, msg);
 const optionalString = () =>
@@ -109,6 +109,13 @@ export const STATE_OPTIONS = Object.keys(STATE_NAMES).map((code) => ({
   value: code,
   label: STATE_NAMES[code],
 }));
+
+/** For an address field that needs to represent "outside the United
+ * States" — the patient's and facility's own address/state (unlike the
+ * reporter's optional mailing-address block, which is US-only by design).
+ * Selecting "foreign" is what tells postal-code validation to stop
+ * expecting a 5-digit US ZIP (see isValidPostalCodeForState). */
+export const STATE_OR_FOREIGN_OPTIONS = [...STATE_OPTIONS, { value: "foreign", label: "Outside the United States" }];
 
 export const YES_NO_UNKNOWN_OPTIONS = [
   { value: "yes", label: "Yes" },
@@ -581,7 +588,19 @@ const patientBase = z.object({
     .union([z.literal(""), z.coerce.number().int().min(0).max(11)])
     .optional()
     .transform((v) => v ?? ""),
-  patientState: optionalString(),
+  // PWS item 6's address block — kept separate from the reporter's own
+  // contact/mailing address (aboutYouSchema): VAERS staff follow up with
+  // the *reporter*, not the patient directly, so none of this is required —
+  // it's here only because the real form asks for it and a caregiver/HCP
+  // reporter may have it on hand.
+  patientStreet: optionalString(),
+  patientCity: optionalString(),
+  patientState: optionalEnum(STATE_OR_FOREIGN_OPTIONS.map((o) => o.value)),
+  patientCounty: optionalString(),
+  patientZip: optionalString(),
+  patientPhone: optionalPhone(),
+  patientEmail: optionalEmail(),
+  patientEmailConfirm: optionalString(),
   pregnant: optionalEnum(["yes", "no", "unknown"]),
   pregnancyDetails: optionalString(),
   medicationsAtVaccination: optionalString(),
@@ -640,6 +659,23 @@ export function patientSchema(_submitterType: SubmitterType) {
           message: "Please describe the patient's race",
         });
       }
+      if (!isValidPostalCodeForState(data.patientZip, data.patientState)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["patientZip"],
+          message: "Enter a valid 5-digit ZIP code (or ZIP+4, e.g. 20201-0001)",
+        });
+      }
+      if (
+        data.patientEmail &&
+        data.patientEmail.trim().toLowerCase() !== data.patientEmailConfirm.trim().toLowerCase()
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["patientEmailConfirm"],
+          message: "This doesn't match the email address above",
+        });
+      }
     })
     .transform((data) => {
       // A hidden field (pregnancy no longer applicable because sex or age
@@ -653,6 +689,7 @@ export function patientSchema(_submitterType: SubmitterType) {
         pregnant: pregnancyApplicable ? data.pregnant : "",
         pregnancyDetails: pregnancyApplicable && data.pregnant === "yes" ? data.pregnancyDetails : "",
         patientRaceOther: data.patientRace.includes("other") ? data.patientRaceOther : "",
+        patientEmailConfirm: data.patientEmail ? data.patientEmailConfirm : "",
       };
     });
 }
@@ -731,6 +768,12 @@ export function vaccineSchema(_submitterType: SubmitterType) {
       route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
       bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
       administeringFacility: optionalString(),
+      facilityStreet: optionalString(),
+      facilityCity: optionalString(),
+      facilityState: optionalEnum(STATE_OR_FOREIGN_OPTIONS.map((o) => o.value)),
+      facilityZip: optionalString(),
+      facilityPhone: optionalPhone(),
+      facilityFax: optionalPhone("Enter a valid fax number, e.g. (404) 555-1212"),
       facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
       facilityTypeOther: optionalString(),
       // Public path only: kept low-burden as one free-text question each,
@@ -759,6 +802,13 @@ export function vaccineSchema(_submitterType: SubmitterType) {
           code: z.ZodIssueCode.custom,
           path: ["facilityTypeOther"],
           message: "Please describe the facility type",
+        });
+      }
+      if (!isValidPostalCodeForState(data.facilityZip, data.facilityState)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["facilityZip"],
+          message: "Enter a valid 5-digit ZIP code (or ZIP+4, e.g. 20201-0001)",
         });
       }
       data.additionalVaccines.forEach((row, i) => {

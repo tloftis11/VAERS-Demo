@@ -6,6 +6,7 @@ import {
   ROUTE_OPTIONS,
   BODY_SITE_OPTIONS,
   FACILITY_TYPE_OPTIONS,
+  STATE_OR_FOREIGN_OPTIONS,
   getManufacturerOptions,
   getManufacturerOptionsForHcpVaccine,
 } from "../../../../shared/src/schemas";
@@ -40,6 +41,12 @@ const EMPTY: VaccineData = {
   route: "",
   bodySite: "",
   administeringFacility: "",
+  facilityStreet: "",
+  facilityCity: "",
+  facilityState: "",
+  facilityZip: "",
+  facilityPhone: "",
+  facilityFax: "",
   facilityType: "",
   facilityTypeOther: "",
   otherVaccinesRecent: "",
@@ -148,6 +155,25 @@ export function vaccineFieldSpecs(
   ];
   fields.push(
     { id: "administeringFacility", label: "Facility or clinic name (optional)", required: false, kind: "text" },
+    { id: "facilityStreet", label: "Facility street address (optional)", required: false, kind: "text" },
+    { id: "facilityCity", label: "Facility city (optional)", required: false, kind: "text" },
+    {
+      id: "facilityState",
+      label: "Facility state (optional)",
+      required: false,
+      kind: "choice",
+      options: STATE_OR_FOREIGN_OPTIONS,
+    },
+    { id: "facilityZip", label: "Facility ZIP code (optional)", required: false, kind: "text" },
+    {
+      id: "facilityPhone",
+      label: "Facility phone (optional)",
+      required: false,
+      kind: "tel",
+      autoComplete: "tel",
+      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+    },
+    { id: "facilityFax", label: "Facility fax (optional)", required: false, kind: "tel" },
     {
       id: "facilityType",
       label: "Type of facility (optional)",

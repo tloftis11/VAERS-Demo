@@ -25,7 +25,14 @@ export interface PatientData {
   patientSex: string;
   ageYears: number | string;
   ageMonths: number | string;
+  patientStreet: string;
+  patientCity: string;
   patientState: string;
+  patientCounty: string;
+  patientZip: string;
+  patientPhone: string;
+  patientEmail: string;
+  patientEmailConfirm: string;
   pregnant: string;
   pregnancyDetails: string;
   medicationsAtVaccination: string;
@@ -63,6 +70,12 @@ export interface VaccineData {
   route: string;
   bodySite: string;
   administeringFacility: string;
+  facilityStreet: string;
+  facilityCity: string;
+  facilityState: string;
+  facilityZip: string;
+  facilityPhone: string;
+  facilityFax: string;
   facilityType: string;
   facilityTypeOther: string;
   otherVaccinesRecent: string;

@@ -1,7 +1,7 @@
 import {
   patientSchema,
   SEX_OPTIONS,
-  STATE_OPTIONS,
+  STATE_OR_FOREIGN_OPTIONS,
   YES_NO_UNKNOWN_OPTIONS,
   RACE_OPTIONS,
   ETHNICITY_OPTIONS,
@@ -42,7 +42,14 @@ const EMPTY: PatientData = {
   patientSex: "",
   ageYears: "",
   ageMonths: "",
+  patientStreet: "",
+  patientCity: "",
   patientState: "",
+  patientCounty: "",
+  patientZip: "",
+  patientPhone: "",
+  patientEmail: "",
+  patientEmailConfirm: "",
   pregnant: "",
   pregnancyDetails: "",
   medicationsAtVaccination: "",
@@ -101,12 +108,32 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
     );
   }
   fields.push(
+    { id: "patientStreet", label: "Patient's street address (optional)", required: false, kind: "text" },
+    { id: "patientCity", label: "Patient's city (optional)", required: false, kind: "text" },
     {
       id: "patientState",
       label: "Patient's state (optional)",
       required: false,
       kind: "choice",
-      options: STATE_OPTIONS,
+      options: STATE_OR_FOREIGN_OPTIONS,
+    },
+    { id: "patientCounty", label: "Patient's county (optional)", required: false, kind: "text" },
+    { id: "patientZip", label: "Patient's ZIP code (optional)", required: false, kind: "text" },
+    {
+      id: "patientPhone",
+      label: "Patient's phone (optional)",
+      required: false,
+      kind: "tel",
+      autoComplete: "tel",
+      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+    },
+    { id: "patientEmail", label: "Patient's email (optional)", required: false, kind: "email", autoComplete: "email" },
+    {
+      id: "patientEmailConfirm",
+      label: "Confirm patient's email",
+      required: false,
+      kind: "email",
+      autoComplete: "email",
     },
     {
       id: "pregnant",
@@ -234,6 +261,7 @@ export function PatientStep({
     if (f.id === "pregnant") return !pregnancySkipReason;
     if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
     if (f.id === "patientRaceOther") return (values.patientRace as string[]).includes("other");
+    if (f.id === "patientEmailConfirm") return !!(values.patientEmail as string).trim();
     return true;
   });
 
@@ -252,6 +280,7 @@ export function PatientStep({
     }
     if (id === "pregnant" && value !== "yes") setValue("pregnancyDetails", "");
     if (id === "patientRace" && !(value as string[]).includes("other")) setValue("patientRaceOther", "");
+    if (id === "patientEmail" && !String(value).trim()) setValue("patientEmailConfirm", "");
   }
 
   function handleDobPartialToggle(checked: boolean) {

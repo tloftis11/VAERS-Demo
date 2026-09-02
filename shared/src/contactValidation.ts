@@ -63,3 +63,21 @@ export function usZipSchema(message = "Enter a valid 5-digit ZIP code (or ZIP+4,
     .transform((v) => v ?? "")
     .refine(isValidUsZip, message);
 }
+
+/** A free-text address field (patient/facility ZIP) validated against the
+ * US pattern only when the associated state field is an actual US state —
+ * "Foreign"/blank leaves it as an unconstrained optional string, since a
+ * foreign postal code has no single standard format to check against. */
+export function isValidPostalCodeForState(zip: string, state: string): boolean {
+  if (!state || state === "foreign") return true;
+  return isValidUsZip(zip);
+}
+
+export function optionalEmail(message = "Enter a valid email address") {
+  return z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => v ?? "")
+    .refine((v) => !v || z.string().email().safeParse(v).success, message);
+}

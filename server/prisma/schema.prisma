@@ -64,7 +64,16 @@ model Patient {
   sex                      String?
   ageYears                 Int?
   ageMonths                Int?
-  state                    String? // public-path only (PUB-002): patient's state of residence
+  // PWS item 6's address/contact block — separate from the reporter's own
+  // contact/mailing address (Submitter model); staff follow up with the
+  // reporter, not the patient directly, so none of this is required.
+  street                   String?
+  city                     String?
+  state                    String? // "foreign" is a valid value here, not just a US code — see STATE_OR_FOREIGN_OPTIONS
+  county                   String?
+  zip                      String?
+  phone                    String?
+  email                    String?
   pregnant                 String?
   pregnancyDetails         String?
   medicationsAtVaccination String?
@@ -90,6 +99,12 @@ model VaccineAdministration {
   route                 String?
   bodySite              String?
   administeringFacility String?
+  facilityStreet        String?
+  facilityCity          String?
+  facilityState         String? // "foreign" is a valid value here — see STATE_OR_FOREIGN_OPTIONS
+  facilityZip           String?
+  facilityPhone         String?
+  facilityFax           String?
   facilityType          String?
   facilityTypeOther     String? // free-text detail when facilityType is "other"
   // Public path only (see vaccineSchema in shared/src/schemas.ts) — a

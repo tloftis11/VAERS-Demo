@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { vaccineSchema, aboutYouSchema, patientSchema, adverseEventSchema, errorDetailSchema } from "./schemas";
-import { isValidPhone, isValidUsZip } from "./contactValidation";
+import { isValidPhone, isValidUsZip, isValidPostalCodeForState } from "./contactValidation";
 
 /** Minimal valid HCP vaccine-step payload — every test below starts from
  * this and only varies additionalVaccines/manufacturer/lotNumber, so a
@@ -582,6 +582,153 @@ describe("aboutYouSchema — email confirmation, phone, mailing ZIP", () => {
   it("accepts a ZIP+4 mailing code", () => {
     const schema = aboutYouSchema("public");
     const result = schema.safeParse(baseAboutYouData({ mailingZip: "20201-0001" }));
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("contactValidation — postal code gated on state", () => {
+  it("requires the US ZIP pattern for a real US state", () => {
+    expect(isValidPostalCodeForState("2020", "MD")).toBe(false);
+    expect(isValidPostalCodeForState("20201", "MD")).toBe(true);
+  });
+
+  it("permits any postal code (or none) for 'foreign'", () => {
+    expect(isValidPostalCodeForState("SW1A 1AA", "foreign")).toBe(true);
+    expect(isValidPostalCodeForState("", "foreign")).toBe(true);
+  });
+
+  it("doesn't impose US validation when no state is given", () => {
+    expect(isValidPostalCodeForState("not a real zip", "")).toBe(true);
+  });
+});
+
+describe("patientSchema — address/contact block (section 6)", () => {
+  function basePatientAddressData(overrides: Record<string, unknown> = {}) {
+    return {
+      patientFirstName: "Test",
+      patientLastName: "Patient",
+      patientDateOfBirth: "1990-01-01",
+      dateOfBirthUnknown: false,
+      patientSex: "female",
+      ageYears: "",
+      ageMonths: "",
+      patientStreet: "",
+      patientCity: "",
+      patientState: "",
+      patientCounty: "",
+      patientZip: "",
+      patientPhone: "",
+      patientEmail: "",
+      patientEmailConfirm: "",
+      pregnant: "",
+      pregnancyDetails: "",
+      medicationsAtVaccination: "",
+      allergies: "",
+      recentIllnesses: "",
+      chronicConditions: "",
+      patientRace: [],
+      patientRaceOther: "",
+      patientEthnicity: "",
+      ...overrides,
+    };
+  }
+
+  it("rejects a malformed ZIP for a real US state", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(basePatientAddressData({ patientState: "MD", patientZip: "2020" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("patientZip");
+    }
+  });
+
+  it("permits a non-US postal code when state is 'foreign'", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientAddressData({ patientState: "foreign", patientZip: "SW1A 1AA" })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an impossible patient phone number", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(basePatientAddressData({ patientPhone: "555-1212" }));
+    expect(result.success).toBe(false);
+  });
+
+  it("REGRESSION: rejects a mismatched patient email confirmation", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientAddressData({ patientEmail: "patient@example.com", patientEmailConfirm: "typo@example.com" })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("patientEmailConfirm");
+    }
+  });
+
+  it("doesn't require email confirmation when patient email is blank", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(basePatientAddressData({ patientEmail: "", patientEmailConfirm: "" }));
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a fully-completed US address", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientAddressData({
+        patientStreet: "123 Main St",
+        patientCity: "Bethesda",
+        patientState: "MD",
+        patientCounty: "Montgomery",
+        patientZip: "20814",
+        patientPhone: "(301) 555-1212",
+        patientEmail: "patient@example.com",
+        patientEmailConfirm: "patient@example.com",
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("vaccineSchema — facility address/contact block (section 6)", () => {
+  it("rejects a malformed facility ZIP for a real US state", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ facilityState: "MD", facilityZip: "2020" })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("facilityZip");
+    }
+  });
+
+  it("permits a non-US postal code when facility state is 'foreign'", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ facilityState: "foreign", facilityZip: "SW1A 1AA" })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an impossible facility phone/fax number", () => {
+    const schema = vaccineSchema("hcp");
+    expect(schema.safeParse(baseHcpVaccineData({ facilityPhone: "555-1212" })).success).toBe(false);
+    expect(schema.safeParse(baseHcpVaccineData({ facilityFax: "555-1212" })).success).toBe(false);
+  });
+
+  it("accepts a fully-completed facility address", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        facilityStreet: "456 Clinic Way",
+        facilityCity: "Bethesda",
+        facilityState: "MD",
+        facilityZip: "20814-1234",
+        facilityPhone: "(301) 555-1212",
+        facilityFax: "(301) 555-1213",
+      })
+    );
     expect(result.success).toBe(true);
   });
 });

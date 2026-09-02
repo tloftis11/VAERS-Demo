@@ -62,7 +62,13 @@ model Patient {
   sex                      String?
   ageYears                 Int?
   ageMonths                Int?
-  state                    String? // public-path only (PUB-002): patient's state of residence
+  street                   String?
+  city                     String?
+  state                    String? // "foreign" is a valid value here, not just a US code — see STATE_OR_FOREIGN_OPTIONS
+  county                   String?
+  zip                      String?
+  phone                    String?
+  email                    String?
   pregnant                 String?
   pregnancyDetails         String?
   medicationsAtVaccination String?
@@ -88,6 +94,12 @@ model VaccineAdministration {
   route                 String?
   bodySite              String?
   administeringFacility String?
+  facilityStreet        String?
+  facilityCity          String?
+  facilityState         String? // "foreign" is a valid value here — see STATE_OR_FOREIGN_OPTIONS
+  facilityZip           String?
+  facilityPhone         String?
+  facilityFax           String?
   facilityType          String?
   facilityTypeOther     String? // free-text detail when facilityType is "other"
   otherVaccinesRecent   String?
