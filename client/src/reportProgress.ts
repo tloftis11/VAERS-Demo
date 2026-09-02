@@ -62,6 +62,59 @@ export function firstIncompleteStep(report: ClientReport): StepId {
   return "review";
 }
 
+/**
+ * How far the reporter has actually gotten, for deciding which steps are
+ * safe to jump straight to (forward or back) instead of clicking through
+ * one at a time — every step before the one this returns has real saved
+ * data, regardless of which step is currently on screen.
+ *
+ * Deliberately not `firstIncompleteStep`: that one always treats
+ * "documents" as the next stop once reached, since it has no required
+ * field to signal completion and resuming a draft should keep offering it.
+ * That's the wrong behavior here — a reporter who already passed
+ * "documents" on the way to Review must still be able to jump forward to
+ * it (and back again) freely, so this only stops at steps with *required*
+ * data actually missing.
+ */
+export function furthestCompletedStep(report: ClientReport): StepId {
+  const state = branchingStateFromReport(report);
+  const steps = getApplicableSteps(state);
+
+  for (const step of steps) {
+    switch (step) {
+      case "submitter-type":
+        if (!report.submitterType) return step;
+        break;
+      case "administration-error":
+        if (report.administrationError === null) return step;
+        break;
+      case "adverse-event-occurred":
+        if (report.adverseEventOccurred === null) return step;
+        break;
+      case "about-you":
+        if (!report.aboutYou) return step;
+        break;
+      case "patient":
+        if (!report.patient) return step;
+        break;
+      case "vaccine":
+        if (!report.vaccine) return step;
+        break;
+      case "adverse-event":
+        if (!report.adverseEvent) return step;
+        break;
+      case "error-detail":
+        if (!report.errorDetail) return step;
+        break;
+      // before-you-start/documents/review have no required data of their
+      // own — never block a forward jump on any of them.
+      default:
+        break;
+    }
+  }
+  return "review";
+}
+
 /** All applicable steps still missing required data — for the Review page's proactive checklist (VAL-002). */
 export function missingRequiredSteps(report: ClientReport): StepId[] {
   const state = branchingStateFromReport(report);

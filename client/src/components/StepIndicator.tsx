@@ -3,24 +3,29 @@ import { STEP_LABELS, type StepId } from "../../../shared/src/branchingRules";
 interface StepIndicatorProps {
   steps: StepId[];
   currentStep: StepId;
-  /** Jump directly to an already-completed step instead of clicking "← Back"
-   * through every step in between — only offered for steps before the
-   * current one, since there's nothing to jump to for the current/upcoming
-   * ones. */
+  /** The furthest step with real saved data (see reportProgress.ts) — every
+   * step before this one is "complete" and jumpable, whether it sits before
+   * *or after* the step currently on screen. Defaults to currentStep (only
+   * the current step counts as reached) when omitted, matching the old
+   * behavior of never offering a forward jump. */
+  furthestCompletedStep?: StepId;
+  /** Jump directly to an already-completed step (forward or back) instead
+   * of clicking "← Back"/"Next" through every step in between. */
   onStepClick?: (step: StepId) => void;
 }
 
 /** Persistent breadcrumb-style step indicator (design doc §4.2): gives users a clear sense of location and remaining effort. */
-export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicatorProps) {
+export function StepIndicator({ steps, currentStep, furthestCompletedStep, onStepClick }: StepIndicatorProps) {
   const currentIndex = steps.indexOf(currentStep);
-  const completedSteps = steps.slice(0, currentIndex);
+  const completedIndex = steps.indexOf(furthestCompletedStep ?? currentStep);
+  const completedSteps = steps.filter((step, index) => index < completedIndex && step !== currentStep);
 
   return (
     <nav aria-label="Report progress" className="step-indicator">
       <ol>
         {steps.map((step, index) => {
           const status =
-            index < currentIndex ? "complete" : index === currentIndex ? "current" : "upcoming";
+            step === currentStep ? "current" : index < completedIndex ? "complete" : "upcoming";
           const label = STEP_LABELS[step];
           return (
             <li key={step} className={`step-indicator__item step-indicator__item--${status}`}>

@@ -20,6 +20,7 @@ import {
   applyOptimisticUpdate,
   branchingStateFromReport,
   firstIncompleteStep,
+  furthestCompletedStep,
   mergeServerUpdate,
 } from "../../reportProgress";
 import { getDraftToken } from "../../draftAuth";
@@ -186,12 +187,19 @@ export function ReportWizard() {
   }
 
   // Jump straight to an already-completed step (from the step indicator)
-  // instead of clicking "← Back" through every step in between — the next
-  // successful save from there returns to the step being left now.
+  // instead of clicking "← Back"/"Next" through every step in between.
+  // Direction changes what happens after: jumping *back* to review/fix an
+  // earlier answer is a detour — the next successful save from there
+  // returns here. Jumping *forward* to a step already completed (e.g.
+  // after going back a few steps and now wanting to skip ahead again)
+  // isn't a detour at all — it's resuming the normal forward flow, so
+  // continuing from there should keep going forward as usual, not snap
+  // back to the step being left now.
   function handleStepClick(target: StepId) {
     if (target === currentStep) return;
     setSkipNotice(null);
-    setReturnToStep(currentStep);
+    const isBackward = steps.indexOf(target) < steps.indexOf(currentStep);
+    setReturnToStep(isBackward ? currentStep : null);
     goTo(target);
   }
 
@@ -347,7 +355,12 @@ export function ReportWizard() {
     // (including old validation errors) into the new one.
     <div className="page page--wizard" key={reportId}>
       <div className="wizard-header">
-        <StepIndicator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
+        <StepIndicator
+          steps={steps}
+          currentStep={currentStep}
+          furthestCompletedStep={furthestCompletedStep(report)}
+          onStepClick={handleStepClick}
+        />
         {saveStatus !== "idle" && (
           <span className={`autosave-indicator${saveStatus === "saved" ? " autosave-indicator--saved" : ""}`} role="status">
             {saveStatus === "saving" ? "Saving…" : "✓ Saved"}
