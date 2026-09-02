@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface SubmitterTypeStepProps {
   value: "public" | "hcp" | null;
   onSelect: (value: "public" | "hcp", card: "patient" | "caregiver" | "hcp") => Promise<void>;
@@ -13,12 +15,37 @@ interface SubmitterTypeStepProps {
  * of asking it from scratch — it's never persisted server-side.
  */
 export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // This step has no review screen of its own to retry from (unlike a
+  // ConversationalStep-driven step) — draft saving is still authoritative
+  // here: disable the cards while a selection is being saved, and surface a
+  // retryable error instead of silently going nowhere if it fails.
+  async function handleSelect(value: "public" | "hcp", card: "patient" | "caregiver" | "hcp") {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSelect(value, card);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="choice-step">
       <h1>Who is filling out this form?</h1>
       <p>Choose the option that best matches your situation.</p>
       <div className="choice-cards">
-        <button type="button" className="choice-card" onClick={() => onSelect("public", "patient")}>
+        <button
+          type="button"
+          className="choice-card"
+          onClick={() => handleSelect("public", "patient")}
+          disabled={submitting}
+        >
           <span className="choice-card__icon">
             <PersonIcon />
           </span>
@@ -27,7 +54,12 @@ export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
             <p>Reporting for yourself</p>
           </span>
         </button>
-        <button type="button" className="choice-card" onClick={() => onSelect("public", "caregiver")}>
+        <button
+          type="button"
+          className="choice-card"
+          onClick={() => handleSelect("public", "caregiver")}
+          disabled={submitting}
+        >
           <span className="choice-card__icon">
             <PeopleIcon />
           </span>
@@ -36,7 +68,12 @@ export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
             <p>Reporting for a child, family, etc.</p>
           </span>
         </button>
-        <button type="button" className="choice-card" onClick={() => onSelect("hcp", "hcp")}>
+        <button
+          type="button"
+          className="choice-card"
+          onClick={() => handleSelect("hcp", "hcp")}
+          disabled={submitting}
+        >
           <span className="choice-card__icon">
             <ClinicalIcon />
           </span>
@@ -46,6 +83,11 @@ export function SubmitterTypeStep({ onSelect }: SubmitterTypeStepProps) {
           </span>
         </button>
       </div>
+      {error && (
+        <p role="alert" className="field__error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

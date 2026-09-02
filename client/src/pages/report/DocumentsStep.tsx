@@ -48,6 +48,7 @@ export function DocumentsStep({
   const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiDocumentSuggestion[]>([]);
   const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
@@ -84,8 +85,17 @@ export function DocumentsStep({
   }
 
   async function handleDelete(id: string) {
-    await deleteAttachment(id);
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    if (deletingId) return;
+    setUploadError(null);
+    setDeletingId(id);
+    try {
+      await deleteAttachment(id);
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Couldn't remove this file — please try again.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function handleReplaceClick(id: string) {
@@ -212,12 +222,17 @@ export function DocumentsStep({
                   type="button"
                   className="button button--text"
                   onClick={() => handleReplaceClick(a.id)}
-                  disabled={uploadProgress !== null}
+                  disabled={uploadProgress !== null || deletingId !== null}
                 >
                   Replace
                 </button>
-                <button type="button" className="button button--text" onClick={() => handleDelete(a.id)}>
-                  Remove
+                <button
+                  type="button"
+                  className="button button--text"
+                  onClick={() => handleDelete(a.id)}
+                  disabled={deletingId !== null}
+                >
+                  {deletingId === a.id ? "Removing…" : "Remove"}
                 </button>
               </span>
             </li>
