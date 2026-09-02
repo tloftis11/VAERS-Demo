@@ -16,6 +16,7 @@ import {
   createFollowUpAccessToken,
   verifyFollowUpAccessToken,
 } from "../services/followUpAccess.js";
+import { generateDraftToken, hashDraftToken, requireDraftToken } from "../services/draftTokens.js";
 
 export const reportsRouter = Router();
 
@@ -220,7 +221,8 @@ async function serializeReport(reportId: string) {
 }
 
 reportsRouter.post("/", async (_req, res) => {
-  const report = await prisma.report.create({ data: {} });
+  const draftToken = generateDraftToken();
+  const report = await prisma.report.create({ data: { draftTokenHash: hashDraftToken(draftToken) } });
   // A brand-new report has no sub-records yet, so its serialized shape is
   // entirely knowable without a query — skip serializeReport()'s heavy
   // multi-relation re-fetch (submitter/patient/vaccine+rows/adverseEvent/
@@ -229,6 +231,10 @@ reportsRouter.post("/", async (_req, res) => {
   res.status(201).json({
     id: report.id,
     status: report.status,
+    // Returned exactly once, here — never again by any other route (GET
+    // re-fetches never include it, matching the "only a hash server-side"
+    // rule). The client is responsible for holding onto it from this point on.
+    draftToken,
     submitterType: null,
     administrationError: null,
     adverseEventOccurred: null,
@@ -246,6 +252,9 @@ reportsRouter.post("/", async (_req, res) => {
 });
 
 reportsRouter.get("/:id", async (req, res) => {
+  const existing = await prisma.report.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ error: "Report not found" });
+  if (!requireDraftToken(req, res, existing)) return;
   const serialized = await serializeReport(req.params.id);
   if (!serialized) return res.status(404).json({ error: "Report not found" });
   res.json(serialized);
@@ -269,6 +278,7 @@ reportsRouter.patch("/:id", async (req, res) => {
   if (existing.status === "submitted") {
     return res.status(409).json({ error: "Report has already been submitted" });
   }
+  if (!requireDraftToken(req, res, existing)) return;
 
   const submitterTypeForValidation: SubmitterType =
     step === "submitter-type"
@@ -483,6 +493,7 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   if (report.status === "submitted") {
     return res.status(409).json({ error: "Report has already been submitted" });
   }
+  if (!requireDraftToken(req, res, report)) return;
   if (!report.submitterType) {
     return res.status(400).json({ error: "Submitter type is required before submitting" });
   }

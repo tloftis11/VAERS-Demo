@@ -15,6 +15,7 @@ import { useStepForm } from "../../hooks/useStepForm";
 import { TextAreaField } from "../../components/Field";
 import { FieldIcon } from "../../components/illustrations";
 import { Dropzone } from "../../components/Dropzone";
+import { getDraftToken } from "../../draftAuth";
 
 interface DocumentsStepProps {
   reportId: string;
@@ -73,7 +74,7 @@ export function DocumentsStep({
     for (const file of accepted) {
       setUploadProgress(0);
       try {
-        const meta = await uploadAttachment(reportId, file, setUploadProgress);
+        const meta = await uploadAttachment(reportId, file, getDraftToken(reportId), setUploadProgress);
         setAttachments((prev) => [...prev, meta]);
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Upload failed");
@@ -89,7 +90,7 @@ export function DocumentsStep({
     setUploadError(null);
     setDeletingId(id);
     try {
-      await deleteAttachment(id);
+      await deleteAttachment(id, getDraftToken(reportId));
       setAttachments((prev) => prev.filter((a) => a.id !== id));
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Couldn't remove this file — please try again.");
@@ -113,8 +114,8 @@ export function DocumentsStep({
     setUploadProgress(0);
     setUploadError(null);
     try {
-      const meta = await uploadAttachment(reportId, file, setUploadProgress);
-      await deleteAttachment(targetId);
+      const meta = await uploadAttachment(reportId, file, getDraftToken(reportId), setUploadProgress);
+      await deleteAttachment(targetId, getDraftToken(reportId));
       setAttachments((prev) => prev.map((a) => (a.id === targetId ? meta : a)));
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Replace failed");

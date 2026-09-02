@@ -20,6 +20,9 @@ model Report {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   submittedAt          DateTime?
+  // SHA-256 hex digest of the draft capability token minted at creation —
+  // never the raw token itself. See services/draftTokens.ts.
+  draftTokenHash       String?
 
   submitter       Submitter?
   patient         Patient?

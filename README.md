@@ -70,11 +70,26 @@ client/src/components/         StepIndicator, FaqWidget, SurveyForm, Field primi
   first — do that upgrade if you want it resolved.
 - **FAQ widget can overlap page content** on very short pages (e.g. the
   branching-choice steps) since it's a fixed-position panel. Cosmetic only.
-- **No automated test suite.** Everything above was verified by hand (API
-  smoke tests via curl, both submitter paths driven end-to-end in a real
-  browser via Playwright). If you extend this, consider adding tests around
-  the shared branching/validation logic first — it's the piece the design
-  doc calls out as needing zero-defect correctness (PRS#1).
+- **Draft access control is a prototype-grade opaque token, not real
+  identity.** A report's draft is protected by a random capability token
+  (`X-Draft-Token` header) issued once at creation and stored, hashed, on
+  the report row — never a signed/self-verifying token, so it can't expire
+  or be checked without a database lookup, and it can't be recovered if the
+  browser's `localStorage` is cleared (there's deliberately no "email me a
+  new one" recovery path for an in-progress draft — a real deployment would
+  need one). It's enough to stop a stranger from reading or editing a
+  draft merely by guessing/knowing its id, which is what the real risk here
+  is; it is not equivalent to authenticating the *reporter's identity*, and
+  a submitted report deliberately drops this check entirely (see
+  `services/draftTokens.ts`) since the confirmation page and follow-up flow
+  (a real two-step email+code identity check) both need it to survive a
+  browser refresh with no token in hand.
+- **Automated tests exist across all three packages** (Vitest for
+  `shared`/`server`/`client`, Supertest for the API, React Testing Library
+  for components) — this bullet used to say there were none; that's no
+  longer true. There's still no Playwright end-to-end suite covering full
+  submitter journeys through the browser, which is the next gap worth
+  closing if you extend this.
 
 ## Deploying to Render
 

@@ -12,8 +12,13 @@ describe("app smoke test", () => {
   it("can create and fetch a report against the isolated test database", async () => {
     const created = await request(app).post("/api/reports").expect(201);
     const id = created.body.id;
+    const token = created.body.draftToken;
     expect(id).toBeTruthy();
-    const fetched = await request(app).get(`/api/reports/${id}`).expect(200);
+    expect(token).toBeTruthy();
+    const fetched = await request(app)
+      .get(`/api/reports/${id}`)
+      .set("X-Draft-Token", token)
+      .expect(200);
     expect(fetched.body.id).toBe(id);
     expect(fetched.body.status).toBe("draft");
   });
