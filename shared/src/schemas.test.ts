@@ -384,6 +384,53 @@ describe("vaccineSchema — priorVaccines date chronology ('the month before')",
     expect(result.success).toBe(true);
   });
 
+  describe("calendar-month cutoff clamps to the last valid day of the preceding month", () => {
+    function acceptsCutoff(primary: string, expectedCutoff: string) {
+      const schema = vaccineSchema("hcp");
+      const result = schema.safeParse(
+        baseHcpVaccineData({
+          administrationDate: primary,
+          priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: expectedCutoff }],
+        })
+      );
+      expect(result.success).toBe(true);
+    }
+
+    function rejectsOneDayBeforeCutoff(primary: string, oneDayBeforeCutoff: string) {
+      const schema = vaccineSchema("hcp");
+      const result = schema.safeParse(
+        baseHcpVaccineData({
+          administrationDate: primary,
+          priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: oneDayBeforeCutoff }],
+        })
+      );
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.administrationDate");
+      }
+    }
+
+    it("REGRESSION: May 31 -> April 30 (naive rollover would produce May 1 instead)", () => {
+      acceptsCutoff("2026-05-31", "2026-04-30");
+      rejectsOneDayBeforeCutoff("2026-05-31", "2026-04-29");
+    });
+
+    it("March 31 -> February 28 (non-leap year)", () => {
+      acceptsCutoff("2026-03-31", "2026-02-28");
+      rejectsOneDayBeforeCutoff("2026-03-31", "2026-02-27");
+    });
+
+    it("leap-year March 31 -> February 29", () => {
+      acceptsCutoff("2024-03-31", "2024-02-29");
+      rejectsOneDayBeforeCutoff("2024-03-31", "2024-02-28");
+    });
+
+    it("January 31 -> December 31 (of the preceding year)", () => {
+      acceptsCutoff("2026-01-31", "2025-12-31");
+      rejectsOneDayBeforeCutoff("2026-01-31", "2025-12-30");
+    });
+  });
+
   it("REGRESSION: rejects a partial/incomplete prior-vaccine date", () => {
     const schema = vaccineSchema("hcp");
     const result = schema.safeParse(

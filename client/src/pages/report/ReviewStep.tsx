@@ -141,16 +141,28 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
         fields={vaccineFieldSpecs(isHcp, undefined, report.vaccine?.vaccineType)}
         values={report.vaccine}
       />
-      <ReportSummarySection
-        title="What happened"
-        fields={adverseEventFieldSpecs(isHcp, isSelfReport, report.adverseEvent?.symptomsOther)}
-        values={report.adverseEvent}
-      />
-      <ReportSummarySection
-        title="Administration error details"
-        fields={ERROR_DETAIL_FIELD_SPECS}
-        values={report.errorDetail}
-      />
+      {/* Mirrors getApplicableSteps' own gating exactly (branchingRules.ts):
+          a public report is always adverse-event-shaped; an HCP report
+          only shows each section while its controlling question is
+          answered accordingly. `values` being non-null is *not* enough on
+          its own to gate this — the server clears each record the moment
+          its answer flips to "No", but this is a second, independent guard
+          against a stale record (e.g. from before that fix existed)
+          surfacing under a branch that's no longer selected. */}
+      {(!isHcp || report.adverseEventOccurred !== false) && (
+        <ReportSummarySection
+          title="What happened"
+          fields={adverseEventFieldSpecs(isHcp, isSelfReport, report.adverseEvent?.symptomsOther)}
+          values={report.adverseEvent}
+        />
+      )}
+      {isHcp && report.administrationError === true && (
+        <ReportSummarySection
+          title="Administration error details"
+          fields={ERROR_DETAIL_FIELD_SPECS}
+          values={report.errorDetail}
+        />
+      )}
 
       <div className="review-section">
         <h2>Supporting documents</h2>
