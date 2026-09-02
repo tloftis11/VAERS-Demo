@@ -42,4 +42,46 @@ describe("StepIndicator — jump-to-completed-step controls", () => {
     render(<StepIndicator steps={STEPS} currentStep="submitter-type" onStepClick={vi.fn()} />);
     expect(screen.queryByRole("combobox", { name: "Jump to a completed step" })).not.toBeInTheDocument();
   });
+
+  it("a step *after* the current one is also clickable when furthestCompletedStep says it has data (going back, then forward again)", async () => {
+    const onStepClick = vi.fn();
+    const user = userEvent.setup();
+    // Reporter went back to "about-you" after having already completed
+    // through "vaccine" — those later steps must still be reachable.
+    render(
+      <StepIndicator
+        steps={STEPS}
+        currentStep="about-you"
+        furthestCompletedStep="vaccine"
+        onStepClick={onStepClick}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "About the patient" }));
+    expect(onStepClick).toHaveBeenCalledWith("patient");
+
+    // "vaccine" itself is the furthest-completed marker (first NOT-yet-done
+    // step), so it isn't included — only what's strictly before it.
+    expect(screen.queryByRole("button", { name: "Vaccine information" })).not.toBeInTheDocument();
+  });
+
+  it("the mobile jump select includes steps both before and after the current one when they're already completed", async () => {
+    const onStepClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StepIndicator
+        steps={STEPS}
+        currentStep="about-you"
+        furthestCompletedStep="vaccine"
+        onStepClick={onStepClick}
+      />
+    );
+
+    const select = screen.getByRole("combobox", { name: "Jump to a completed step" });
+    expect(screen.getByRole("option", { name: "Who is reporting?" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "About the patient" })).toBeInTheDocument();
+
+    await user.selectOptions(select, "patient");
+    expect(onStepClick).toHaveBeenCalledWith("patient");
+  });
 });
