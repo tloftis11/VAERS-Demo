@@ -36,12 +36,17 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
   const proactiveFindings = useMemo(
     () =>
       checkCrossFieldRules({
+        submitterType: report.submitterType,
+        administrationError: report.administrationError,
+        adverseEventOccurred: report.adverseEventOccurred,
         vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate } : null,
+        patient: report.patient ? { dateOfBirth: report.patient.patientDateOfBirth } : null,
         adverseEvent: report.adverseEvent
           ? {
               onsetDate: report.adverseEvent.onsetDate,
               dateOfDeath: report.adverseEvent.dateOfDeath,
               outcomes: report.adverseEvent.outcomes,
+              hospitalizationDays: report.adverseEvent.hospitalizationDays,
             }
           : null,
         errorDetail: report.errorDetail

@@ -41,8 +41,18 @@ export function Combobox({
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = `${id}-listbox`;
+  // Set right before we call onSelect("") ourselves (typing away from the
+  // stored selection, below) — the resulting `selectedLabel` change would
+  // otherwise run straight into the sync effect just below and stomp
+  // whatever the user is mid-typing back to "". Consumed (reset to false)
+  // the next time that effect runs, so it only ever skips that one sync.
+  const skipNextSyncRef = useRef(false);
 
   useEffect(() => {
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false;
+      return;
+    }
     setQuery(selectedLabel);
   }, [selectedLabel]);
 
@@ -130,9 +140,21 @@ export function Combobox({
         placeholder={placeholder ?? "Type to search…"}
         autoComplete="off"
         onChange={(e) => {
-          setQuery(e.target.value);
+          const next = e.target.value;
+          setQuery(next);
           setOpen(true);
-          setActiveIndex(0);
+          // -1, not 0: matches onFocus below and the WAI-ARIA convention
+          // documented on the initial state — nothing should be
+          // pre-highlighted just because the list was filtered, or the
+          // first ArrowDown press skips straight past the first result.
+          setActiveIndex(-1);
+          // The stored selection and the displayed text have diverged —
+          // typing a replacement without picking a new option must not
+          // leave the old value silently committed underneath it.
+          if (value && next !== selectedLabel) {
+            skipNextSyncRef.current = true;
+            onSelect("");
+          }
         }}
         onFocus={() => {
           setOpen(true);

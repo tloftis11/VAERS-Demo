@@ -38,6 +38,14 @@ import { ErrorDetailStep } from "./ErrorDetailStep";
 import { DocumentsStep } from "./DocumentsStep";
 import { ReviewStep } from "./ReviewStep";
 
+/** A report needs at least one of these two things to be true — an HCP
+ * reporter answering "No" to both would otherwise submit a report with
+ * neither an administration error nor an adverse event to actually report,
+ * which both questions' own applicable-steps branching quietly allows by
+ * skipping the sections that would normally ask for either one's details. */
+const HCP_BOTH_NO_MESSAGE =
+  "A report needs at least one of these to be true — you already answered \"No\" to the other question. Go back and change that answer first if this one should really be \"No\" too.";
+
 /** Only administration-error and adverse-event-occurred (both HCP-only)
  * ever cause the wizard to jump past a whole section, and both only take
  * effect right after "vaccine" (see getApplicableSteps) — so that's the one
@@ -249,6 +257,9 @@ export function ReportWizard() {
           value={report.administrationError}
           onSelect={(v) => handleSelectAndAdvance({ administrationError: v })}
           onBack={handleBack}
+          blockAnswer={(v) =>
+            v === false && report.adverseEventOccurred === false ? HCP_BOTH_NO_MESSAGE : null
+          }
         />
       );
       break;
@@ -260,6 +271,9 @@ export function ReportWizard() {
           value={report.adverseEventOccurred}
           onSelect={(v) => handleSelectAndAdvance({ adverseEventOccurred: v })}
           onBack={handleBack}
+          blockAnswer={(v) =>
+            v === false && report.administrationError === false ? HCP_BOTH_NO_MESSAGE : null
+          }
         />
       );
       break;

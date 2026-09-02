@@ -6,6 +6,7 @@
  * only ever see one step's fields at a time.
  */
 import type { StepId } from "./branchingRules";
+import { hospitalizationExceedsElapsed } from "./liveChecks";
 
 export type Severity = "ERROR" | "WARNING" | "INFO";
 
@@ -25,8 +26,17 @@ export interface ValidationFinding {
 }
 
 export interface CrossFieldCheckInput {
+  submitterType?: "public" | "hcp" | null;
+  administrationError?: boolean | null;
+  adverseEventOccurred?: boolean | null;
   vaccine: { administrationDate: string } | null;
-  adverseEvent: { onsetDate: string; dateOfDeath?: string; outcomes?: string[] } | null;
+  patient: { dateOfBirth?: string } | null;
+  adverseEvent: {
+    onsetDate: string;
+    dateOfDeath?: string;
+    outcomes?: string[];
+    hospitalizationDays?: number | string;
+  } | null;
   errorDetail: { errorDiscoveredDate: string } | null;
   aboutYou: { relationship?: string } | null;
 }
@@ -105,6 +115,53 @@ export function checkCrossFieldRules(report: CrossFieldCheckInput): ValidationFi
       field: "outcomes",
       message: "A report submitted by the patient themselves can't also report that the patient died.",
       actionLabel: "Change who's filling out this report",
+    });
+  }
+
+  // The live UI (VaccineStep.tsx) already blocks this on the administration
+  // date question itself — this is the same check enforced independently
+  // server-side, since that live check is trivially bypassed by anything
+  // that doesn't go through the browser UI (a direct API call, a stale
+  // client build, etc.).
+  const dateOfBirth = report.patient?.dateOfBirth;
+  if (administrationDate && dateOfBirth && isBefore(administrationDate, dateOfBirth)) {
+    findings.push({
+      severity: "ERROR",
+      step: "vaccine",
+      field: "administrationDate",
+      message: "Vaccination date is before the patient's date of birth.",
+    });
+  }
+
+  // Same defense-in-depth rationale as above — the live UI (AdverseEventStep.tsx)
+  // already blocks this on the hospitalization-days question via the same
+  // hospitalizationExceedsElapsed helper.
+  const hospitalizationDays = report.adverseEvent?.hospitalizationDays;
+  const onsetDate = report.adverseEvent?.onsetDate;
+  if (onsetDate && hospitalizationDays !== undefined && hospitalizationDays !== "") {
+    const message = hospitalizationExceedsElapsed(onsetDate, Number(hospitalizationDays));
+    if (message) {
+      findings.push({ severity: "ERROR", step: "adverse-event", field: "hospitalizationDays", message });
+    }
+  }
+
+  // An HCP report needs at least one of these to be true — otherwise
+  // there's neither an administration error nor an adverse event to
+  // actually report. The live UI (YesNoQuestionStep, wired in
+  // ReportWizard.tsx) already blocks answering the second question "No"
+  // once the other is already "No"; this is the same rule enforced
+  // independently server-side.
+  if (
+    report.submitterType === "hcp" &&
+    report.administrationError === false &&
+    report.adverseEventOccurred === false
+  ) {
+    findings.push({
+      severity: "ERROR",
+      step: "adverse-event-occurred",
+      field: "adverseEventOccurred",
+      message: "A report needs at least an administration error or an adverse event to submit — both are answered \"No\" here.",
+      actionLabel: "Change one of these answers",
     });
   }
 

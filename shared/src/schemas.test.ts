@@ -11,7 +11,11 @@ import { isValidPhone, isValidUsZip, isValidPostalCodeForState } from "./contact
 
 /** Minimal valid HCP vaccine-step payload — every test below starts from
  * this and only varies additionalVaccines/manufacturer/lotNumber, so a
- * failure always points at the field under test, not an unrelated one. */
+ * failure always points at the field under test, not an unrelated one.
+ * manufacturer is "unknown" (not a specific brand) since "covid19" here is
+ * a plain-language code, not one of the HCP path's full-name vaccineType
+ * values — "unknown" is the one manufacturer value valid for every vaccine
+ * regardless of that mismatch. */
 function baseHcpVaccineData(overrides: Record<string, unknown> = {}) {
   return {
     vaccineType: "covid19",
@@ -19,7 +23,7 @@ function baseHcpVaccineData(overrides: Record<string, unknown> = {}) {
     doseNumber: "",
     administrationDate: "2026-01-01",
     administrationTime: "",
-    manufacturer: "pfizer",
+    manufacturer: "unknown",
     lotNumber: "ABC123",
     route: "",
     bodySite: "",
@@ -267,6 +271,139 @@ describe("vaccineSchema (HCP) — manufacturer/lot number", () => {
   it("REGRESSION: lot number must not be required merely because a vaccine was selected", () => {
     const schema = vaccineSchema("hcp");
     const result = schema.safeParse(baseHcpVaccineData({ lotNumber: "" }));
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("vaccineSchema — manufacturer must match the selected vaccine", () => {
+  const PFIZER_COVID = "COVID19 (Pfizer-BioNTech Comirnaty)";
+
+  it("REGRESSION: rejects a manufacturer that doesn't make the selected HCP vaccine", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ vaccineType: PFIZER_COVID, manufacturer: "moderna" })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("manufacturer");
+    }
+  });
+
+  it("accepts the manufacturer that actually matches the selected HCP vaccine", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ vaccineType: PFIZER_COVID, manufacturer: "pfizer_biontech" })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("'Unknown' is always accepted regardless of the selected vaccine", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ vaccineType: PFIZER_COVID, manufacturer: "unknown" })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("REGRESSION: switching to a mismatched manufacturer on an additionalVaccines row is rejected the same way", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        additionalVaccines: [{ ...EMPTY_ADDITIONAL_ROW, vaccineType: PFIZER_COVID, manufacturer: "moderna" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("additionalVaccines.0.manufacturer");
+    }
+  });
+
+  it("REGRESSION: a mismatched manufacturer on a priorVaccines row is rejected the same way", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: PFIZER_COVID, manufacturer: "moderna" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.manufacturer");
+    }
+  });
+});
+
+describe("vaccineSchema — priorVaccines date chronology ('the month before')", () => {
+  it("REGRESSION: rejects a prior-vaccine date after the primary vaccination date", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        administrationDate: "2026-06-10",
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: "2026-06-11" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.administrationDate");
+    }
+  });
+
+  it("accepts a prior-vaccine date on the same day as the primary vaccination", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        administrationDate: "2026-06-10",
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: "2026-06-10" }],
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("REGRESSION: rejects a prior-vaccine date more than a calendar month before the primary vaccination date", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        administrationDate: "2026-06-15",
+        // One day earlier than the "2026-05-15" calendar-month cutoff.
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: "2026-05-14" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.administrationDate");
+    }
+  });
+
+  it("accepts a prior-vaccine date exactly at the calendar-month cutoff", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        administrationDate: "2026-06-15",
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: "2026-05-15" }],
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("REGRESSION: rejects a partial/incomplete prior-vaccine date", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: "2026-05" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.administrationDate");
+    }
+  });
+
+  it("a row with no date at all is unaffected by the chronology check", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", administrationDate: "" }],
+      })
+    );
     expect(result.success).toBe(true);
   });
 });

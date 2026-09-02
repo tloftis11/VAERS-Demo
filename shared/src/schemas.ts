@@ -58,6 +58,25 @@ const isValidDate = (v: string) => {
 };
 const notInFuture = (v: string) => new Date(v).getTime() <= Date.now();
 
+/** True only for a complete "YYYY-MM-DD" date — unlike isValidDate above,
+ * this rejects a partial "YYYY-MM" value (accepted elsewhere, like the
+ * patient DOB's month/year mode, but not meaningful for a chronology
+ * comparison against another full date). */
+const isCompleteIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && isValidDate(v);
+
+/** The same calendar day one month earlier — e.g. "2026-06-15" -> "2026-05-15".
+ * Deliberately calendar-based, not a fixed 30/31-day offset, so it lines up
+ * with how a reporter naturally reads "the month before" a given date. When
+ * the earlier month is too short to have that day (e.g. no "May 31"), JS's
+ * own date-rollover behavior is used as-is (rolls into the following
+ * month) rather than clamped — an acceptable edge case for a lookback
+ * window, not a hard compliance boundary. */
+function oneMonthBefore(isoDate: string): string {
+  const d = new Date(isoDate);
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 const dateSchema = (msg = "Enter a valid date") => z.string().refine(isValidDate, msg);
 const optionalDate = (msg = "Enter a valid date") =>
   z
@@ -819,7 +838,13 @@ function isBlankPriorVaccineRow(row: {
  * though harmless to validate for public too) even though it doesn't
  * currently branch the rules here.
  */
-export function vaccineSchema(_submitterType: SubmitterType) {
+export function vaccineSchema(submitterType: SubmitterType) {
+  const isHcp = submitterType === "hcp";
+  // Same picklist the UI itself builds each option list from (see
+  // VaccineStep.tsx) — "Unknown" is always included for every vaccineType,
+  // so this can never make an already-honest "Unknown" answer invalid.
+  const manufacturerOptionsFor = (vaccineType: string) =>
+    isHcp ? getManufacturerOptionsForHcpVaccine(vaccineType) : getManufacturerOptions(vaccineType);
   return z
     .object({
       vaccineType: requiredString("Select the vaccine given"),
@@ -864,6 +889,13 @@ export function vaccineSchema(_submitterType: SubmitterType) {
           message: "Enter the vaccine name",
         });
       }
+      if (data.manufacturer && !manufacturerOptionsFor(data.vaccineType).some((o) => o.value === data.manufacturer)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["manufacturer"],
+          message: "Select a manufacturer that matches the selected vaccine",
+        });
+      }
       if (data.facilityType === "other" && !data.facilityTypeOther) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -889,11 +921,20 @@ export function vaccineSchema(_submitterType: SubmitterType) {
             path: ["additionalVaccines", i, "vaccineType"],
             message: "Select the vaccine for this row, or remove it",
           });
-        } else if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
+          return;
+        }
+        if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["additionalVaccines", i, "vaccineTypeOther"],
             message: "Enter the vaccine name for this row",
+          });
+        }
+        if (row.manufacturer && !manufacturerOptionsFor(row.vaccineType).some((o) => o.value === row.manufacturer)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["additionalVaccines", i, "manufacturer"],
+            message: "Select a manufacturer that matches this row's vaccine",
           });
         }
       });
@@ -907,12 +948,50 @@ export function vaccineSchema(_submitterType: SubmitterType) {
             path: ["priorVaccines", i, "vaccineType"],
             message: "Select the vaccine for this row, or remove it",
           });
-        } else if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["priorVaccines", i, "vaccineTypeOther"],
-            message: "Enter the vaccine name for this row",
-          });
+        } else {
+          if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["priorVaccines", i, "vaccineTypeOther"],
+              message: "Enter the vaccine name for this row",
+            });
+          }
+          if (
+            row.manufacturer &&
+            !manufacturerOptionsFor(row.vaccineType).some((o) => o.value === row.manufacturer)
+          ) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["priorVaccines", i, "manufacturer"],
+              message: "Select a manufacturer that matches this row's vaccine",
+            });
+          }
+        }
+        // "Vaccines received in the month before" (item 22): the date is
+        // meaningless without the primary vaccination date to measure
+        // against, and a malformed/partial date can't be compared at all.
+        if (row.administrationDate) {
+          if (!isCompleteIsoDate(row.administrationDate)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["priorVaccines", i, "administrationDate"],
+              message: "Enter a complete date",
+            });
+          } else if (isCompleteIsoDate(data.administrationDate)) {
+            if (row.administrationDate > data.administrationDate) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["priorVaccines", i, "administrationDate"],
+                message: "Can't be after the vaccination date",
+              });
+            } else if (row.administrationDate < oneMonthBefore(data.administrationDate)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["priorVaccines", i, "administrationDate"],
+                message: "Must fall within the month before the vaccination date",
+              });
+            }
+          }
         }
       });
     })

@@ -570,12 +570,17 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   // can't express (they only ever see one step's fields at a time). ERROR
   // severity blocks submission, same as a missing required field would.
   const crossFieldFindings: ValidationFinding[] = checkCrossFieldRules({
+    submitterType: report.submitterType as "public" | "hcp" | null,
+    administrationError: report.administrationError,
+    adverseEventOccurred: report.adverseEventOccurred,
     vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate ?? "" } : null,
+    patient: report.patient ? { dateOfBirth: report.patient.dateOfBirth ?? "" } : null,
     adverseEvent: report.adverseEvent
       ? {
           onsetDate: report.adverseEvent.onsetDate ?? "",
           dateOfDeath: report.adverseEvent.dateOfDeath ?? "",
           outcomes: report.adverseEvent.outcomes ? (JSON.parse(report.adverseEvent.outcomes) as string[]) : [],
+          hospitalizationDays: report.adverseEvent.hospitalizationDays ?? "",
         }
       : null,
     errorDetail: report.errorDetail
