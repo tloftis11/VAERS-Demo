@@ -51,9 +51,11 @@ model Submitter {
   mailingState    String?
   mailingZip      String?
   // Item 14 on the real form: name/phone of the best doctor or healthcare
-  // professional to contact about the adverse event — kept to one free-text
-  // field rather than separate name/phone/ext questions to keep the burden low.
-  bestContactInfo String?
+  // professional to contact about the adverse event — split into two
+  // fields (not one free-text blob) so a name can't be entered with no way
+  // to reach them, or vice versa.
+  bestContactName  String?
+  bestContactPhone String?
 }
 
 model Patient {

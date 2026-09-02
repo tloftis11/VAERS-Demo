@@ -16,7 +16,8 @@ test("draft resumes correctly after a full page reload, once a step has actually
   await fillAndAdvance(page, "Your email", "reload.tester@example.com");
   await fillAndAdvance(page, "Confirm your email", "reload.tester@example.com");
   await skipQuestion(page); // phone
-  await skipQuestion(page); // best contact info
+  await skipQuestion(page); // best contact name
+  await skipQuestion(page); // best contact phone
   await page.getByRole("button", { name: "Continue", exact: true }).click(); // saves "about-you", advances to "patient"
 
   await expect(page.getByLabel("Patient's first name", { exact: true })).toBeVisible();
@@ -38,7 +39,8 @@ test("a failed step save shows a retryable error and keeps entered data, without
   await fillAndAdvance(page, "Your email", "retry.tester@example.com");
   await fillAndAdvance(page, "Confirm your email", "retry.tester@example.com");
   await skipQuestion(page); // phone
-  await skipQuestion(page); // best contact info
+  await skipQuestion(page); // best contact name
+  await skipQuestion(page); // best contact phone
   await expect(page.getByRole("heading", { name: "Review: About you" })).toBeVisible();
 
   // Fail the step-save PATCH once, then let it through on retry.

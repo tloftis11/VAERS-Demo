@@ -5,7 +5,21 @@ import { Combobox } from "./Combobox";
 import { MultiSelect } from "./MultiSelect";
 import { TimeInput12 } from "./TimeInput12";
 import { MonthYearInput } from "./MonthYearInput";
-import { errorsForField, firstErrorForField, relativeErrorsForField } from "../utils/fieldErrors";
+import { errorsForField, relativeErrorsForField } from "../utils/fieldErrors";
+
+/** Errors for a field plus any it claims via `alsoValidates` (see that
+ * field's doc comment) — same shape as errorsForField, just unioned across
+ * every id this question is responsible for. */
+function errorsForFieldAndAliases(
+  errors: Record<string, string>,
+  field: ConversationalFieldSpec
+): Array<{ path: string; message: string }> {
+  return [field.id, ...(field.alsoValidates ?? [])].flatMap((id) => errorsForField(errors, id));
+}
+
+function firstErrorForFieldAndAliases(errors: Record<string, string>, field: ConversationalFieldSpec): string | undefined {
+  return errorsForFieldAndAliases(errors, field)[0]?.message;
+}
 
 export type ConversationalFieldKind =
   | "text"
@@ -62,6 +76,18 @@ export interface ConversationalFieldSpec {
    * screen, since formatValue's options-lookup doesn't apply to arbitrary
    * custom data shapes (e.g. an array of rows). */
   formatSummary?: (value: unknown) => string;
+  /**
+   * Other top-level schema field ids whose errors this question is also
+   * responsible for surfacing — for a field rendered inline via `extras`
+   * (e.g. a conditional "Other, please specify" input shown under a
+   * checkboxGroup question, not asked as its own sequential question) so
+   * its validation error isn't orphaned: invisible in the review-screen
+   * summary, not blocking the live per-question Next click, and not shown
+   * when navigating back to the question that owns it. The aliased field
+   * must NOT also appear in `fields` — it exists only in the schema/errors,
+   * never as its own question.
+   */
+  alsoValidates?: string[];
 }
 
 interface ConversationalStepProps {
@@ -168,7 +194,7 @@ export function ConversationalStep({
       return;
     }
     const prevField = fields[index - 1];
-    setActiveError(firstErrorForField(errors, prevField.id) ?? null);
+    setActiveError(firstErrorForFieldAndAliases(errors, prevField) ?? null);
     setIndex(index - 1);
   }
 
@@ -179,7 +205,7 @@ export function ConversationalStep({
 
   function jumpTo(targetIndex: number) {
     const targetField = fields[targetIndex];
-    setActiveError((targetField && firstErrorForField(errors, targetField.id)) ?? null);
+    setActiveError((targetField && firstErrorForFieldAndAliases(errors, targetField)) ?? null);
     setIndex(targetIndex);
   }
 
@@ -204,9 +230,10 @@ export function ConversationalStep({
     // needs its own identifiable, clickable line rather than being
     // collapsed into one generic "additionalVaccines: <first message>".
     const errorRows = fields.flatMap((field, fieldIdx) =>
-      errorsForField(errors, field.id).map(({ path, message }) => {
-        const relativePath =
-          path === field.id
+      errorsForFieldAndAliases(errors, field).map(({ path, message }) => {
+        const relativePath = field.alsoValidates?.includes(path)
+          ? path
+          : path === field.id
             ? ""
             : path.startsWith(`${field.id}[`)
               ? path.slice(field.id.length)
@@ -299,7 +326,7 @@ export function ConversationalStep({
       // "additionalVaccines.0.vaccineType" entirely — Continue stayed
       // blocked (validate() still failed) but nothing ever told the user
       // why, since no top-level key matched.
-      const message = firstErrorForField(result.errors, field.id);
+      const message = firstErrorForFieldAndAliases(result.errors, field);
       if (message) {
         setActiveError(message);
         return;

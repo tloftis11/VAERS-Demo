@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { vaccineSchema, aboutYouSchema, patientSchema, adverseEventSchema, errorDetailSchema } from "./schemas";
+import {
+  vaccineSchema,
+  aboutYouSchema,
+  patientSchema,
+  adverseEventSchema,
+  errorDetailSchema,
+  getBodySiteOptionsForRoute,
+} from "./schemas";
 import { isValidPhone, isValidUsZip, isValidPostalCodeForState } from "./contactValidation";
 
 /** Minimal valid HCP vaccine-step payload — every test below starts from
@@ -224,7 +231,8 @@ describe("aboutYouSchema — relationship 'Other' detail (public/caregiver only)
       mailingCity: "",
       mailingState: "",
       mailingZip: "",
-      bestContactInfo: "",
+      bestContactName: "",
+      bestContactPhone: "",
       ...overrides,
     };
   }
@@ -487,10 +495,17 @@ describe("contactValidation — phone", () => {
     expect(isValidPhone("+44 20 7946 0958")).toBe(true);
   });
 
+  it("REGRESSION: accepts a real-looking number even when its area code/exchange isn't in libphonenumber's assigned-range data", () => {
+    // e.g. any "555" area code — extremely common in real-world examples/
+    // testing and, before this fix, rejected as "impossible" even though
+    // it's a perfectly plausible 10-digit US number.
+    expect(isValidPhone("(555) 123-4567")).toBe(true);
+  });
+
   it("rejects an impossible number", () => {
-    expect(isValidPhone("555-1212")).toBe(false);
-    expect(isValidPhone("123-456-7890")).toBe(false);
+    expect(isValidPhone("555-1212")).toBe(false); // too short — no area code
     expect(isValidPhone("not a phone number")).toBe(false);
+    expect(isValidPhone("123")).toBe(false);
   });
 
   it("treats blank as valid (optional field)", () => {
@@ -529,7 +544,8 @@ describe("aboutYouSchema — email confirmation, phone, mailing ZIP", () => {
       mailingCity: "",
       mailingState: "",
       mailingZip: "",
-      bestContactInfo: "",
+      bestContactName: "",
+      bestContactPhone: "",
       ...overrides,
     };
   }
@@ -730,5 +746,99 @@ describe("vaccineSchema — facility address/contact block (section 6)", () => {
       })
     );
     expect(result.success).toBe(true);
+  });
+});
+
+describe("getBodySiteOptionsForRoute", () => {
+  it("narrows to arm/thigh/other/unknown for an injection", () => {
+    const values = getBodySiteOptionsForRoute("injection").map((o) => o.value);
+    expect(values).toEqual([
+      "right_arm",
+      "left_arm",
+      "arm_unknown_side",
+      "right_thigh",
+      "left_thigh",
+      "thigh_unknown_side",
+      "other",
+      "unknown",
+    ]);
+  });
+
+  it("narrows to mouth/other/unknown for oral", () => {
+    expect(getBodySiteOptionsForRoute("oral").map((o) => o.value)).toEqual(["mouth", "other", "unknown"]);
+  });
+
+  it("narrows to nose/other/unknown for intranasal", () => {
+    expect(getBodySiteOptionsForRoute("intranasal").map((o) => o.value)).toEqual(["nose", "other", "unknown"]);
+  });
+
+  it("REGRESSION: an unset/'other'/'unknown' route can't rule anything out, so it gets the full list", () => {
+    const all = getBodySiteOptionsForRoute("").map((o) => o.value);
+    expect(all).toContain("mouth");
+    expect(all).toContain("nose");
+    expect(all).toContain("right_arm");
+    expect(getBodySiteOptionsForRoute("other").length).toBe(all.length);
+    expect(getBodySiteOptionsForRoute("unknown").length).toBe(all.length);
+  });
+});
+
+describe("patientSchema — ageMonths only applies to a plausible infant", () => {
+  function basePatientData(overrides: Record<string, unknown> = {}) {
+    return {
+      patientFirstName: "Test",
+      patientLastName: "Patient",
+      patientDateOfBirth: "",
+      dateOfBirthUnknown: true,
+      patientSex: "female",
+      ageYears: "1",
+      ageMonths: "6",
+      patientState: "",
+      pregnant: "",
+      pregnancyDetails: "",
+      medicationsAtVaccination: "",
+      allergies: "",
+      recentIllnesses: "",
+      chronicConditions: "",
+      patientRace: [],
+      patientRaceOther: "",
+      patientEthnicity: "",
+      ...overrides,
+    };
+  }
+
+  it("keeps ageMonths when age (years) is 2 or under", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(basePatientData({ ageYears: "2", ageMonths: "6" }));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as { ageMonths: string | number }).ageMonths).toBe(6);
+    }
+  });
+
+  it("REGRESSION: strips a stale ageMonths server-side once age (years) is over 2", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientData({ ageYears: "3", ageMonths: "6" /* stale leftover from before the user corrected years */ })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as { ageMonths: string | number }).ageMonths).toBe("");
+    }
+  });
+
+  it("does not apply the age>2 skip when date of birth is known (age is derived, not typed)", () => {
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientData({
+        dateOfBirthUnknown: false,
+        patientDateOfBirth: "1990-01-01",
+        ageYears: "",
+        ageMonths: "6",
+      })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as { ageMonths: string | number }).ageMonths).toBe(6);
+    }
   });
 });

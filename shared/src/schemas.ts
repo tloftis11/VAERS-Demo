@@ -435,6 +435,32 @@ export const BODY_SITE_OPTIONS = [
   { value: "unknown", label: "Unknown" },
 ] as const;
 
+const INJECTION_BODY_SITES = new Set([
+  "right_arm",
+  "left_arm",
+  "arm_unknown_side",
+  "right_thigh",
+  "left_thigh",
+  "thigh_unknown_side",
+  "other",
+  "unknown",
+]);
+const ORAL_BODY_SITES = new Set(["mouth", "other", "unknown"]);
+const INTRANASAL_BODY_SITES = new Set(["nose", "other", "unknown"]);
+
+/** Narrows the "where was it given?" options to whatever's actually
+ * possible for the selected route — an injection can't land in the mouth,
+ * an oral dose can't land in the left arm. A blank/"other"/"unknown" route
+ * can't rule anything out, so it gets the full list. Used for both the
+ * primary vaccine and every additional-vaccine row (same fields, same
+ * relationship between them either way). */
+export function getBodySiteOptionsForRoute(route: string): readonly (typeof BODY_SITE_OPTIONS)[number][] {
+  if (route === "injection") return BODY_SITE_OPTIONS.filter((o) => INJECTION_BODY_SITES.has(o.value));
+  if (route === "oral") return BODY_SITE_OPTIONS.filter((o) => ORAL_BODY_SITES.has(o.value));
+  if (route === "intranasal") return BODY_SITE_OPTIONS.filter((o) => INTRANASAL_BODY_SITES.has(o.value));
+  return BODY_SITE_OPTIONS;
+}
+
 export const FACILITY_TYPE_OPTIONS = [
   { value: "doctors_office_urgent_care_hospital", label: "Doctor's office, urgent care, or hospital" },
   { value: "pharmacy_or_store", label: "Pharmacy or store" },
@@ -518,7 +544,7 @@ function requireMatchingEmailConfirmation<T extends { contactEmail: string; cont
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["contactEmailConfirm"],
-      message: "This doesn't match the email address above",
+      message: "This doesn't match the email you entered previously",
     });
   }
 }
@@ -536,7 +562,12 @@ export function aboutYouSchema(submitterType: SubmitterType) {
     mailingCity: optionalString(),
     mailingState: optionalEnum(STATE_OPTIONS.map((o) => o.value)),
     mailingZip: usZipSchema(),
-    bestContactInfo: optionalString(),
+    // Split into name + phone (rather than one free-text field) so a
+    // reporter can't hand over a name with no way to reach them, or a
+    // number with no idea whose it is — better data quality for the same
+    // amount of typing.
+    bestContactName: optionalString(),
+    bestContactPhone: optionalPhone(),
   });
   if (submitterType === "hcp") return base.superRefine(requireMatchingEmailConfirmation);
   return base
@@ -673,7 +704,7 @@ export function patientSchema(_submitterType: SubmitterType) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["patientEmailConfirm"],
-          message: "This doesn't match the email address above",
+          message: "This doesn't match the email you entered previously",
         });
       }
     })
@@ -684,10 +715,12 @@ export function patientSchema(_submitterType: SubmitterType) {
       // client bug or a stale pre-fix draft can't leak it through.
       const age = bestAgeEstimate(data);
       const pregnancyApplicable = data.patientSex !== "male" && !(age !== null && age < PREGNANCY_MIN_PLAUSIBLE_AGE);
+      const ageMonthsApplicable = !(data.dateOfBirthUnknown && age !== null && age > 2);
       return {
         ...data,
         pregnant: pregnancyApplicable ? data.pregnant : "",
         pregnancyDetails: pregnancyApplicable && data.pregnant === "yes" ? data.pregnancyDetails : "",
+        ageMonths: ageMonthsApplicable ? data.ageMonths : "",
         patientRaceOther: data.patientRace.includes("other") ? data.patientRaceOther : "",
         patientEmailConfirm: data.patientEmail ? data.patientEmailConfirm : "",
       };

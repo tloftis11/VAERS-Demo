@@ -292,7 +292,11 @@ export function FollowUp() {
           />
           <ReportSummarySection
             title="What happened"
-            fields={adverseEventFieldSpecs(report.submitterType === "hcp", report.aboutYou?.relationship === "self")}
+            fields={adverseEventFieldSpecs(
+              report.submitterType === "hcp",
+              report.aboutYou?.relationship === "self",
+              report.adverseEvent?.symptomsOther
+            )}
             values={report.adverseEvent}
           />
           <ReportSummarySection

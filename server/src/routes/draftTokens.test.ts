@@ -154,7 +154,8 @@ describe("draft capability token — protects draft read/write and attachment op
           mailingCity: "",
           mailingState: "",
           mailingZip: "",
-          bestContactInfo: "",
+          bestContactName: "",
+          bestContactPhone: "",
         },
       })
       .expect(200);

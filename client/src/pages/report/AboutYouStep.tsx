@@ -27,7 +27,8 @@ const EMPTY: AboutYouData = {
   mailingCity: "",
   mailingState: "",
   mailingZip: "",
-  bestContactInfo: "",
+  bestContactName: "",
+  bestContactPhone: "",
 };
 
 /**
@@ -94,16 +95,32 @@ export function aboutYouFieldSpecs(
       { id: "relationshipOther", label: "Please describe your relationship to the patient", required: false, kind: "text" }
     );
   }
-  fields.push({
-    id: "bestContactInfo",
-    label: "Best doctor or healthcare professional to contact about this adverse event (optional)",
-    required: false,
-    kind: "text",
-    hint: "Name and phone number, if there's someone better placed than you to discuss the clinical details.",
-  });
+  fields.push(
+    {
+      id: "bestContactName",
+      label: "Best doctor or healthcare professional to contact about this adverse event (optional)",
+      required: false,
+      kind: "text",
+      hint: "If there's someone better placed than you to discuss the clinical details.",
+    },
+    {
+      id: "bestContactPhone",
+      label: "Their phone number (optional)",
+      required: false,
+      kind: "tel",
+      autoComplete: "tel",
+      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+    }
+  );
   if (includeMailingAddress) {
     fields.push(
-      { id: "mailingStreet", label: "Mailing street address", required: false, kind: "text" },
+      {
+        id: "mailingStreet",
+        label: "Mailing street address",
+        required: false,
+        kind: "text",
+        hint: "Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B.",
+      },
       { id: "mailingCity", label: "Mailing city", required: false, kind: "text" },
       { id: "mailingState", label: "Mailing state", required: false, kind: "choice", options: STATE_OPTIONS },
       { id: "mailingZip", label: "Mailing ZIP code", required: false, kind: "text" }
@@ -166,7 +183,7 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
       onBack={onBack}
       initialIndex={schema.safeParse(seededInitial).success ? fields.length : 0}
       extras={{
-        bestContactInfo: () => (
+        bestContactPhone: () => (
           <label className="field__inline-toggle">
             <input
               type="checkbox"
