@@ -290,20 +290,29 @@ export function FollowUp() {
             fields={vaccineFieldSpecs(report.submitterType === "hcp", undefined, report.vaccine?.vaccineType)}
             values={report.vaccine}
           />
-          <ReportSummarySection
-            title="What happened"
-            fields={adverseEventFieldSpecs(
-              report.submitterType === "hcp",
-              report.aboutYou?.relationship === "self",
-              report.adverseEvent?.symptomsOther
-            )}
-            values={report.adverseEvent}
-          />
-          <ReportSummarySection
-            title="Administration error details"
-            fields={ERROR_DETAIL_FIELD_SPECS}
-            values={report.errorDetail}
-          />
+          {/* Mirrors getApplicableSteps' own gating (branchingRules.ts) and
+              ReviewStep.tsx's matching guard — a second, independent check
+              against a stale adverseEvent/errorDetail record (e.g. from
+              before the server started clearing them on a "No" answer)
+              surfacing under a branch that's no longer selected. */}
+          {(report.submitterType !== "hcp" || report.adverseEventOccurred !== false) && (
+            <ReportSummarySection
+              title="What happened"
+              fields={adverseEventFieldSpecs(
+                report.submitterType === "hcp",
+                report.aboutYou?.relationship === "self",
+                report.adverseEvent?.symptomsOther
+              )}
+              values={report.adverseEvent}
+            />
+          )}
+          {report.submitterType === "hcp" && report.administrationError === true && (
+            <ReportSummarySection
+              title="Administration error details"
+              fields={ERROR_DETAIL_FIELD_SPECS}
+              values={report.errorDetail}
+            />
+          )}
           {report.documents.supplementalNotes && (
             <div className="review-section">
               <h2>Additional context</h2>

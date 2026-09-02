@@ -67,14 +67,22 @@ const isCompleteIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && isVali
 /** The same calendar day one month earlier — e.g. "2026-06-15" -> "2026-05-15".
  * Deliberately calendar-based, not a fixed 30/31-day offset, so it lines up
  * with how a reporter naturally reads "the month before" a given date. When
- * the earlier month is too short to have that day (e.g. no "May 31"), JS's
- * own date-rollover behavior is used as-is (rolls into the following
- * month) rather than clamped — an acceptable edge case for a lookback
- * window, not a hard compliance boundary. */
+ * the earlier month is too short to have that day, clamps to its last valid
+ * day instead of letting `Date.setUTCMonth` roll over into the following
+ * month — e.g. May 31 -> April 30 (not May 1, which is what naive rollover
+ * would produce and would incorrectly reject April 30 as outside the
+ * window). Computed via `Date.UTC(year, month, 0)`, which is exactly
+ * "the day before day 1 of `month`" — i.e. the last day of the *previous*
+ * month — so it's correct across every month length, including leap years.
+ */
 function oneMonthBefore(isoDate: string): string {
   const d = new Date(isoDate);
-  d.setUTCMonth(d.getUTCMonth() - 1);
-  return d.toISOString().slice(0, 10);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const day = d.getUTCDate();
+  const lastDayOfPrecedingMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const clampedDay = Math.min(day, lastDayOfPrecedingMonth);
+  return new Date(Date.UTC(year, month - 1, clampedDay)).toISOString().slice(0, 10);
 }
 
 const dateSchema = (msg = "Enter a valid date") => z.string().refine(isValidDate, msg);

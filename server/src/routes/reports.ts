@@ -310,12 +310,25 @@ reportsRouter.patch("/:id", async (req, res) => {
         where: { id },
         data: { administrationError: validated.administrationError },
       });
+      // Answering "No" here means the error-detail section no longer
+      // applies — clear it any time this is saved as false (not just on a
+      // true→false change) so a stale record from an earlier "Yes" can
+      // never linger and show up on Review under a branch that's no
+      // longer selected. A no-op if nothing was ever saved there.
+      if (validated.administrationError === false) {
+        await prisma.errorDetail.deleteMany({ where: { reportId: id } });
+      }
       break;
     case "adverse-event-occurred":
       await prisma.report.update({
         where: { id },
         data: { adverseEventOccurred: validated.adverseEventOccurred },
       });
+      // Same rationale as administration-error above — a stale adverseEvent
+      // record from an earlier "Yes" must not survive a later "No".
+      if (validated.adverseEventOccurred === false) {
+        await prisma.adverseEvent.deleteMany({ where: { reportId: id } });
+      }
       break;
     case "about-you": {
       // Read before the upsert below overwrites it — this is the
