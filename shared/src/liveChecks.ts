@@ -45,6 +45,11 @@ export function ageInYears(dobIso: string, atIso: string = todayIsoDate()): numb
   return years < 0 ? null : years;
 }
 
+/** Below this age, pregnancy is biologically implausible — shared by the
+ * live UI (skip the question) and the schema (strip any stale answer left
+ * over from before the patient's age/sex made it inapplicable). */
+export const PREGNANCY_MIN_PLAUSIBLE_AGE = 9;
+
 /**
  * A hospitalization can't have lasted longer than the time that has actually
  * elapsed since the symptoms it followed began. Returns an error message if

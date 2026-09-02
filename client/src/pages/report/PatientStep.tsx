@@ -1,13 +1,13 @@
 import {
   patientSchema,
   SEX_OPTIONS,
-  STATE_OPTIONS,
+  STATE_OR_FOREIGN_OPTIONS,
   YES_NO_UNKNOWN_OPTIONS,
   RACE_OPTIONS,
   ETHNICITY_OPTIONS,
 } from "../../../../shared/src/schemas";
 import { useState } from "react";
-import { ageInYears, todayIsoDate } from "../../../../shared/src/liveChecks";
+import { ageInYears, todayIsoDate, PREGNANCY_MIN_PLAUSIBLE_AGE } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
@@ -34,13 +34,6 @@ interface PatientStepProps {
  * report from being filed. */
 const SELF_REPORT_MIN_PLAUSIBLE_AGE = 10;
 
-/** A biologically-implausible age for pregnancy (e.g. an infant) skips the
- * question outright rather than just marking it optional — asking it at
- * all reads as a mistake, not a real question. Deliberately conservative
- * (well below the youngest plausible age) so this only ever fires for
- * clear-cut cases, never a real early-adolescent report. */
-const PREGNANCY_MIN_PLAUSIBLE_AGE = 9;
-
 const EMPTY: PatientData = {
   patientFirstName: "",
   patientLastName: "",
@@ -49,7 +42,14 @@ const EMPTY: PatientData = {
   patientSex: "",
   ageYears: "",
   ageMonths: "",
+  patientStreet: "",
+  patientCity: "",
   patientState: "",
+  patientCounty: "",
+  patientZip: "",
+  patientPhone: "",
+  patientEmail: "",
+  patientEmailConfirm: "",
   pregnant: "",
   pregnancyDetails: "",
   medicationsAtVaccination: "",
@@ -57,6 +57,7 @@ const EMPTY: PatientData = {
   recentIllnesses: "",
   chronicConditions: "",
   patientRace: [],
+  patientRaceOther: "",
   patientEthnicity: "",
 };
 
@@ -107,12 +108,32 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
     );
   }
   fields.push(
+    { id: "patientStreet", label: "Patient's street address (optional)", required: false, kind: "text" },
+    { id: "patientCity", label: "Patient's city (optional)", required: false, kind: "text" },
     {
       id: "patientState",
       label: "Patient's state (optional)",
       required: false,
       kind: "choice",
-      options: STATE_OPTIONS,
+      options: STATE_OR_FOREIGN_OPTIONS,
+    },
+    { id: "patientCounty", label: "Patient's county (optional)", required: false, kind: "text" },
+    { id: "patientZip", label: "Patient's ZIP code (optional)", required: false, kind: "text" },
+    {
+      id: "patientPhone",
+      label: "Patient's phone (optional)",
+      required: false,
+      kind: "tel",
+      autoComplete: "tel",
+      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+    },
+    { id: "patientEmail", label: "Patient's email (optional)", required: false, kind: "email", autoComplete: "email" },
+    {
+      id: "patientEmailConfirm",
+      label: "Confirm patient's email",
+      required: false,
+      kind: "email",
+      autoComplete: "email",
     },
     {
       id: "pregnant",
@@ -166,6 +187,7 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
       kind: "checkboxGroup",
       options: RACE_OPTIONS,
     },
+    { id: "patientRaceOther", label: "Please describe the patient's race", required: false, kind: "text" },
     {
       id: "patientEthnicity",
       label: "Patient's ethnicity (optional)",
@@ -238,6 +260,8 @@ export function PatientStep({
   const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter((f) => {
     if (f.id === "pregnant") return !pregnancySkipReason;
     if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
+    if (f.id === "patientRaceOther") return (values.patientRace as string[]).includes("other");
+    if (f.id === "patientEmailConfirm") return !!(values.patientEmail as string).trim();
     return true;
   });
 
@@ -255,6 +279,8 @@ export function PatientStep({
       if (value !== "" && Number.isFinite(n) && n < PREGNANCY_MIN_PLAUSIBLE_AGE) setValue("pregnant", "");
     }
     if (id === "pregnant" && value !== "yes") setValue("pregnancyDetails", "");
+    if (id === "patientRace" && !(value as string[]).includes("other")) setValue("patientRaceOther", "");
+    if (id === "patientEmail" && !String(value).trim()) setValue("patientEmailConfirm", "");
   }
 
   function handleDobPartialToggle(checked: boolean) {

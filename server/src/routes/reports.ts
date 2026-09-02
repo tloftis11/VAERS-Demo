@@ -16,6 +16,7 @@ import {
   createFollowUpAccessToken,
   verifyFollowUpAccessToken,
 } from "../services/followUpAccess.js";
+import { generateDraftToken, hashDraftToken, requireDraftToken } from "../services/draftTokens.js";
 
 export const reportsRouter = Router();
 
@@ -83,8 +84,15 @@ async function serializeReport(reportId: string) {
       ? {
           contactName: report.submitter.contactName ?? "",
           contactEmail: report.submitter.contactEmail ?? "",
+          // Never persisted (see reports.ts's write path and
+          // aboutYouSchema) — pre-filled from the already-saved, already-
+          // confirmed address so a returning visitor isn't forced to
+          // retype it on every reload; changing contactEmail without
+          // updating this still re-triggers the mismatch check.
+          contactEmailConfirm: report.submitter.contactEmail ?? "",
           contactPhone: report.submitter.contactPhone ?? "",
           relationship: report.submitter.relationship ?? "",
+          relationshipOther: report.submitter.relationshipOther ?? "",
           mailingStreet: report.submitter.mailingStreet ?? "",
           mailingCity: report.submitter.mailingCity ?? "",
           mailingState: report.submitter.mailingState ?? "",
@@ -101,7 +109,16 @@ async function serializeReport(reportId: string) {
           patientSex: report.patient.sex ?? "",
           ageYears: report.patient.ageYears ?? "",
           ageMonths: report.patient.ageMonths ?? "",
+          patientStreet: report.patient.street ?? "",
+          patientCity: report.patient.city ?? "",
           patientState: report.patient.state ?? "",
+          patientCounty: report.patient.county ?? "",
+          patientZip: report.patient.zip ?? "",
+          patientPhone: report.patient.phone ?? "",
+          patientEmail: report.patient.email ?? "",
+          // Never persisted (same pattern as aboutYou.contactEmailConfirm) —
+          // pre-filled from the already-confirmed saved address.
+          patientEmailConfirm: report.patient.email ?? "",
           pregnant: report.patient.pregnant ?? "",
           pregnancyDetails: report.patient.pregnancyDetails ?? "",
           medicationsAtVaccination: report.patient.medicationsAtVaccination ?? "",
@@ -109,6 +126,7 @@ async function serializeReport(reportId: string) {
           recentIllnesses: report.patient.recentIllnesses ?? "",
           chronicConditions: report.patient.chronicConditions ?? "",
           patientRace: report.patient.race ? (JSON.parse(report.patient.race) as string[]) : [],
+          patientRaceOther: report.patient.raceOther ?? "",
           patientEthnicity: report.patient.ethnicity ?? "",
         }
       : null,
@@ -124,11 +142,19 @@ async function serializeReport(reportId: string) {
           route: report.vaccine.route ?? "",
           bodySite: report.vaccine.bodySite ?? "",
           administeringFacility: report.vaccine.administeringFacility ?? "",
+          facilityStreet: report.vaccine.facilityStreet ?? "",
+          facilityCity: report.vaccine.facilityCity ?? "",
+          facilityState: report.vaccine.facilityState ?? "",
+          facilityZip: report.vaccine.facilityZip ?? "",
+          facilityPhone: report.vaccine.facilityPhone ?? "",
+          facilityFax: report.vaccine.facilityFax ?? "",
           facilityType: report.vaccine.facilityType ?? "",
+          facilityTypeOther: report.vaccine.facilityTypeOther ?? "",
           otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
           otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
           additionalVaccines: report.vaccine.additionalVaccines.map((row) => ({
             vaccineType: row.vaccineType ?? "",
+            vaccineTypeOther: row.vaccineTypeOther ?? "",
             manufacturer: row.manufacturer ?? "",
             lotNumber: row.lotNumber ?? "",
             route: row.route ?? "",
@@ -169,6 +195,7 @@ async function serializeReport(reportId: string) {
     errorDetail: report.errorDetail
       ? {
           errorType: report.errorDetail.errorType ?? "",
+          errorTypeOther: report.errorDetail.errorTypeOther ?? "",
           errorDescription: report.errorDetail.errorDescription ?? "",
           errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "",
           correctiveActionTaken: report.errorDetail.correctiveActionTaken ?? "",
@@ -194,11 +221,40 @@ async function serializeReport(reportId: string) {
 }
 
 reportsRouter.post("/", async (_req, res) => {
-  const report = await prisma.report.create({ data: {} });
-  res.status(201).json(await serializeReport(report.id));
+  const draftToken = generateDraftToken();
+  const report = await prisma.report.create({ data: { draftTokenHash: hashDraftToken(draftToken) } });
+  // A brand-new report has no sub-records yet, so its serialized shape is
+  // entirely knowable without a query — skip serializeReport()'s heavy
+  // multi-relation re-fetch (submitter/patient/vaccine+rows/adverseEvent/
+  // errorDetail/attachments/followUpNotes) for what's otherwise a second
+  // round trip to confirm everything is null/empty.
+  res.status(201).json({
+    id: report.id,
+    status: report.status,
+    // Returned exactly once, here — never again by any other route (GET
+    // re-fetches never include it, matching the "only a hash server-side"
+    // rule). The client is responsible for holding onto it from this point on.
+    draftToken,
+    submitterType: null,
+    administrationError: null,
+    adverseEventOccurred: null,
+    duplicateFlag: report.duplicateFlag,
+    submittedAt: null,
+    aboutYou: null,
+    patient: null,
+    vaccine: null,
+    adverseEvent: null,
+    errorDetail: null,
+    documents: { supplementalNotes: "" },
+    attachments: [],
+    followUpNotes: [],
+  });
 });
 
 reportsRouter.get("/:id", async (req, res) => {
+  const existing = await prisma.report.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ error: "Report not found" });
+  if (!requireDraftToken(req, res, existing)) return;
   const serialized = await serializeReport(req.params.id);
   if (!serialized) return res.status(404).json({ error: "Report not found" });
   res.json(serialized);
@@ -222,6 +278,7 @@ reportsRouter.patch("/:id", async (req, res) => {
   if (existing.status === "submitted") {
     return res.status(409).json({ error: "Report has already been submitted" });
   }
+  if (!requireDraftToken(req, res, existing)) return;
 
   const submitterTypeForValidation: SubmitterType =
     step === "submitter-type"
@@ -254,10 +311,14 @@ reportsRouter.patch("/:id", async (req, res) => {
       });
       break;
     case "about-you": {
+      // contactEmailConfirm only exists to catch a mistyped address at
+      // submit time (see shared/src/schemas.ts) — it's never a real
+      // Submitter column, so it must never reach the Prisma write.
+      const { contactEmailConfirm: _contactEmailConfirm, ...submitterData } = validated;
       await prisma.submitter.upsert({
         where: { reportId: id },
-        create: { reportId: id, ...validated },
-        update: { ...validated },
+        create: { reportId: id, ...submitterData },
+        update: { ...submitterData },
       });
       // Reporting for "myself" means the contact IS the patient — carry the
       // name over so it isn't re-typed a step later. Only fills a blank
@@ -295,7 +356,15 @@ reportsRouter.patch("/:id", async (req, res) => {
         // takes a directly-entered age.
         ageYears: dobUnknown ? (validated.ageYears === "" ? null : validated.ageYears) : null,
         ageMonths: dobUnknown ? (validated.ageMonths === "" ? null : validated.ageMonths) : null,
+        street: validated.patientStreet || null,
+        city: validated.patientCity || null,
         state: validated.patientState || null,
+        county: validated.patientCounty || null,
+        zip: validated.patientZip || null,
+        phone: validated.patientPhone || null,
+        // patientEmailConfirm only exists to catch a mistyped address at
+        // submit time (see shared/src/schemas.ts) — never a real column.
+        email: validated.patientEmail || null,
         pregnant: validated.pregnant || null,
         pregnancyDetails: validated.pregnancyDetails || null,
         medicationsAtVaccination: validated.medicationsAtVaccination || null,
@@ -303,6 +372,7 @@ reportsRouter.patch("/:id", async (req, res) => {
         recentIllnesses: validated.recentIllnesses || null,
         chronicConditions: validated.chronicConditions || null,
         race: JSON.stringify(validated.patientRace ?? []),
+        raceOther: validated.patientRaceOther || null,
         ethnicity: validated.patientEthnicity || null,
       };
       await prisma.patient.upsert({
@@ -423,6 +493,7 @@ reportsRouter.post("/:id/submit", async (req, res) => {
   if (report.status === "submitted") {
     return res.status(409).json({ error: "Report has already been submitted" });
   }
+  if (!requireDraftToken(req, res, report)) return;
   if (!report.submitterType) {
     return res.status(400).json({ error: "Submitter type is required before submitting" });
   }
@@ -563,8 +634,10 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
         ? {
             contactName: report.submitter.contactName ?? "",
             contactEmail: report.submitter.contactEmail ?? "",
+            contactEmailConfirm: report.submitter.contactEmail ?? "",
             contactPhone: report.submitter.contactPhone ?? "",
             relationship: report.submitter.relationship ?? "",
+            relationshipOther: report.submitter.relationshipOther ?? "",
             mailingStreet: report.submitter.mailingStreet ?? "",
             mailingCity: report.submitter.mailingCity ?? "",
             mailingState: report.submitter.mailingState ?? "",
@@ -582,7 +655,14 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             patientSex: report.patient.sex ?? "",
             ageYears: report.patient.ageYears ?? "",
             ageMonths: report.patient.ageMonths ?? "",
+            patientStreet: report.patient.street ?? "",
+            patientCity: report.patient.city ?? "",
             patientState: report.patient.state ?? "",
+            patientCounty: report.patient.county ?? "",
+            patientZip: report.patient.zip ?? "",
+            patientPhone: report.patient.phone ?? "",
+            patientEmail: report.patient.email ?? "",
+            patientEmailConfirm: report.patient.email ?? "",
             pregnant: report.patient.pregnant ?? "",
             pregnancyDetails: report.patient.pregnancyDetails ?? "",
             medicationsAtVaccination: report.patient.medicationsAtVaccination ?? "",
@@ -590,6 +670,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             recentIllnesses: report.patient.recentIllnesses ?? "",
             chronicConditions: report.patient.chronicConditions ?? "",
             patientRace: report.patient.race ? JSON.parse(report.patient.race) : [],
+            patientRaceOther: report.patient.raceOther ?? "",
             patientEthnicity: report.patient.ethnicity ?? "",
           }
         : null;
@@ -606,11 +687,19 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
             route: report.vaccine.route ?? "",
             bodySite: report.vaccine.bodySite ?? "",
             administeringFacility: report.vaccine.administeringFacility ?? "",
+            facilityStreet: report.vaccine.facilityStreet ?? "",
+            facilityCity: report.vaccine.facilityCity ?? "",
+            facilityState: report.vaccine.facilityState ?? "",
+            facilityZip: report.vaccine.facilityZip ?? "",
+            facilityPhone: report.vaccine.facilityPhone ?? "",
+            facilityFax: report.vaccine.facilityFax ?? "",
             facilityType: report.vaccine.facilityType ?? "",
+            facilityTypeOther: report.vaccine.facilityTypeOther ?? "",
             otherVaccinesRecent: report.vaccine.otherVaccinesRecent ?? "",
             otherVaccinesSameVisit: report.vaccine.otherVaccinesSameVisit ?? "",
             additionalVaccines: (report.vaccine.additionalVaccines ?? []).map((row: any) => ({
               vaccineType: row.vaccineType ?? "",
+              vaccineTypeOther: row.vaccineTypeOther ?? "",
               manufacturer: row.manufacturer ?? "",
               lotNumber: row.lotNumber ?? "",
               route: row.route ?? "",
@@ -649,6 +738,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
       return report.errorDetail
         ? {
             errorType: report.errorDetail.errorType ?? "",
+            errorTypeOther: report.errorDetail.errorTypeOther ?? "",
             errorDescription: report.errorDetail.errorDescription ?? "",
             errorDiscoveredDate: report.errorDetail.errorDiscoveredDate ?? "",
             correctiveActionTaken: report.errorDetail.correctiveActionTaken ?? "",

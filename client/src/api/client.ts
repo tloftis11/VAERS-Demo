@@ -6,8 +6,10 @@ const API_ROOT = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}
 export interface AboutYouData {
   contactName: string;
   contactEmail: string;
+  contactEmailConfirm: string;
   contactPhone: string;
   relationship: string;
+  relationshipOther: string;
   mailingStreet: string;
   mailingCity: string;
   mailingState: string;
@@ -23,7 +25,14 @@ export interface PatientData {
   patientSex: string;
   ageYears: number | string;
   ageMonths: number | string;
+  patientStreet: string;
+  patientCity: string;
   patientState: string;
+  patientCounty: string;
+  patientZip: string;
+  patientPhone: string;
+  patientEmail: string;
+  patientEmailConfirm: string;
   pregnant: string;
   pregnancyDetails: string;
   medicationsAtVaccination: string;
@@ -31,11 +40,13 @@ export interface PatientData {
   recentIllnesses: string;
   chronicConditions: string;
   patientRace: string[];
+  patientRaceOther: string;
   patientEthnicity: string;
 }
 
 export interface AdditionalVaccineRow {
   vaccineType: string;
+  vaccineTypeOther: string;
   manufacturer: string;
   lotNumber: string;
   route: string;
@@ -59,7 +70,14 @@ export interface VaccineData {
   route: string;
   bodySite: string;
   administeringFacility: string;
+  facilityStreet: string;
+  facilityCity: string;
+  facilityState: string;
+  facilityZip: string;
+  facilityPhone: string;
+  facilityFax: string;
   facilityType: string;
+  facilityTypeOther: string;
   otherVaccinesRecent: string;
   otherVaccinesSameVisit: string;
   additionalVaccines: AdditionalVaccineRow[];
@@ -88,6 +106,7 @@ export interface AdverseEventData {
 
 export interface ErrorDetailData {
   errorType: string;
+  errorTypeOther: string;
   errorDescription: string;
   errorDiscoveredDate: string;
   correctiveActionTaken: string;
@@ -111,6 +130,10 @@ export interface FollowUpNote {
 export interface ClientReport {
   id: string;
   status: "draft" | "submitted";
+  /** Present ONLY in the response to createReport() — never sent again by
+   * any other route (the server stores only its hash). Callers must save
+   * it (see draftAuth.ts) at that point or lose access to the draft. */
+  draftToken?: string;
   submitterType: "public" | "hcp" | null;
   administrationError: boolean | null;
   adverseEventOccurred: boolean | null;
@@ -153,8 +176,8 @@ export function createReport(): Promise<ClientReport> {
   return fetch(`${API_ROOT}/reports`, { method: "POST" }).then((r) => asJson(r));
 }
 
-export function getReport(id: string): Promise<ClientReport> {
-  return fetch(`${API_ROOT}/reports/${id}`).then((r) => asJson(r));
+export function getReport(id: string, draftToken: string): Promise<ClientReport> {
+  return fetch(`${API_ROOT}/reports/${id}`, { headers: { "X-Draft-Token": draftToken } }).then((r) => asJson(r));
 }
 
 /** PHI-free existence/status check — safe to call before identity is verified. */
@@ -165,24 +188,30 @@ export function getReportStatus(id: string): Promise<{ id: string; status: "draf
 export function patchReport(
   id: string,
   step: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  draftToken: string
 ): Promise<ClientReport> {
   return fetch(`${API_ROOT}/reports/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Draft-Token": draftToken },
     body: JSON.stringify({ step, data }),
   }).then((r) => asJson(r));
 }
 
 export function submitReport(
-  id: string
+  id: string,
+  draftToken: string
 ): Promise<{ id: string; status: string; duplicateFlag: boolean }> {
-  return fetch(`${API_ROOT}/reports/${id}/submit`, { method: "POST" }).then((r) => asJson(r));
+  return fetch(`${API_ROOT}/reports/${id}/submit`, {
+    method: "POST",
+    headers: { "X-Draft-Token": draftToken },
+  }).then((r) => asJson(r));
 }
 
 export function uploadAttachment(
   reportId: string,
   file: File,
+  draftToken: string,
   onProgress?: (percent: number) => void
 ): Promise<AttachmentMeta> {
   const formData = new FormData();
@@ -191,6 +220,7 @@ export function uploadAttachment(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_ROOT}/reports/${reportId}/attachments`);
+    xhr.setRequestHeader("X-Draft-Token", draftToken);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     };
@@ -213,8 +243,10 @@ export function uploadAttachment(
   });
 }
 
-export function listAttachments(reportId: string): Promise<AttachmentMeta[]> {
-  return fetch(`${API_ROOT}/reports/${reportId}/attachments`).then((r) => asJson(r));
+export function listAttachments(reportId: string, draftToken: string): Promise<AttachmentMeta[]> {
+  return fetch(`${API_ROOT}/reports/${reportId}/attachments`, {
+    headers: { "X-Draft-Token": draftToken },
+  }).then((r) => asJson(r));
 }
 
 export function uploadFollowUpAttachment(
@@ -272,8 +304,11 @@ export function getFollowUpReport(reportId: string, followUpToken: string): Prom
   }).then((r) => asJson(r));
 }
 
-export function deleteAttachment(attachmentId: string): Promise<void> {
-  return fetch(`${API_ROOT}/attachments/${attachmentId}`, { method: "DELETE" }).then((r) => {
+export function deleteAttachment(attachmentId: string, draftToken: string): Promise<void> {
+  return fetch(`${API_ROOT}/attachments/${attachmentId}`, {
+    method: "DELETE",
+    headers: { "X-Draft-Token": draftToken },
+  }).then((r) => {
     if (!r.ok) throw new Error("Failed to delete attachment");
   });
 }

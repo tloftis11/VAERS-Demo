@@ -12,6 +12,8 @@ interface ComboboxProps {
   onSelect: (value: string) => void;
   labelledBy: string;
   placeholder?: string;
+  invalid?: boolean;
+  describedBy?: string;
 }
 
 /**
@@ -20,11 +22,23 @@ interface ComboboxProps {
  * as a wall of tappable chips; typing to narrow the list is the standard
  * desktop-and-mobile-friendly pattern for this.
  */
-export function Combobox({ id, options, value, onSelect, labelledBy, placeholder }: ComboboxProps) {
+export function Combobox({
+  id,
+  options,
+  value,
+  onSelect,
+  labelledBy,
+  placeholder,
+  invalid,
+  describedBy,
+}: ComboboxProps) {
   const selectedLabel = options.find((o) => o.value === value)?.label ?? "";
   const [query, setQuery] = useState(selectedLabel);
   const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  // -1 means "nothing highlighted yet" — the WAI-ARIA combobox pattern
+  // doesn't pre-highlight an option on open; the first ArrowDown press
+  // should land on the first option, not skip past it to the second.
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = `${id}-listbox`;
 
@@ -36,7 +50,8 @@ export function Combobox({ id, options, value, onSelect, labelledBy, placeholder
     query.trim() === ""
       ? options
       : options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()));
-  const safeActiveIndex = Math.min(activeIndex, Math.max(filtered.length - 1, 0));
+  const safeActiveIndex =
+    activeIndex < 0 ? -1 : Math.min(activeIndex, Math.max(filtered.length - 1, 0));
 
   useEffect(() => {
     function handlePointerDown(e: MouseEvent) {
@@ -55,16 +70,37 @@ export function Combobox({ id, options, value, onSelect, labelledBy, placeholder
     setOpen(false);
   }
 
+  // Typing something that no longer matches the stored selection, then
+  // leaving the field without picking a new option (e.g. Tab, not just a
+  // click elsewhere), must not leave the displayed text and the stored
+  // value permanently disagreeing — revert the display back to the last
+  // real selection. Options themselves select via onMouseDown+preventDefault
+  // (below), so a real selection never reaches this handler.
+  function handleBlur() {
+    setOpen(false);
+    setQuery(selectedLabel);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setOpen(true);
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+      setActiveIndex((i) => (i < 0 ? 0 : Math.min(i + 1, filtered.length - 1)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Home") {
+      if (open) {
+        e.preventDefault();
+        setActiveIndex(0);
+      }
+    } else if (e.key === "End") {
+      if (open) {
+        e.preventDefault();
+        setActiveIndex(filtered.length - 1);
+      }
     } else if (e.key === "Enter") {
-      if (open && filtered[safeActiveIndex]) {
+      if (open && safeActiveIndex >= 0 && filtered[safeActiveIndex]) {
         e.preventDefault();
         selectOption(filtered[safeActiveIndex]);
       }
@@ -85,7 +121,11 @@ export function Combobox({ id, options, value, onSelect, labelledBy, placeholder
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-labelledby={labelledBy}
-        aria-activedescendant={open && filtered.length > 0 ? `${id}-opt-${safeActiveIndex}` : undefined}
+        aria-activedescendant={
+          open && safeActiveIndex >= 0 && filtered.length > 0 ? `${id}-opt-${safeActiveIndex}` : undefined
+        }
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         value={query}
         placeholder={placeholder ?? "Type to search…"}
         autoComplete="off"
@@ -94,12 +134,20 @@ export function Combobox({ id, options, value, onSelect, labelledBy, placeholder
           setOpen(true);
           setActiveIndex(0);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          setActiveIndex(-1);
+        }}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
       />
       {open && (
         <ul className="combobox__listbox" role="listbox" id={listboxId}>
-          {filtered.length === 0 && <li className="combobox__empty">No matches</li>}
+          {filtered.length === 0 && (
+            <li className="combobox__empty" role="option" aria-disabled="true">
+              No matches
+            </li>
+          )}
           {filtered.map((opt, i) => (
             <li
               key={opt.value}

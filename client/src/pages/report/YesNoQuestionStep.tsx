@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface YesNoQuestionStepProps {
   title: string;
   description: string;
@@ -27,6 +29,25 @@ export function YesNoQuestionStep({
   noLabel = "No",
   noHint,
 }: YesNoQuestionStepProps) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // No review screen of its own to retry from — draft saving is still
+  // authoritative: disable both cards while the answer is being saved, and
+  // surface a retryable error rather than silently doing nothing if it fails.
+  async function handleSelect(v: boolean) {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onSelect(v);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="choice-step">
       <h1>{title}</h1>
@@ -35,7 +56,8 @@ export function YesNoQuestionStep({
         <button
           type="button"
           className={`choice-card${value === true ? " choice-card--selected" : ""}`}
-          onClick={() => onSelect(true)}
+          onClick={() => handleSelect(true)}
+          disabled={submitting}
         >
           <span>
             <h2>{yesLabel}</h2>
@@ -45,7 +67,8 @@ export function YesNoQuestionStep({
         <button
           type="button"
           className={`choice-card${value === false ? " choice-card--selected" : ""}`}
-          onClick={() => onSelect(false)}
+          onClick={() => handleSelect(false)}
+          disabled={submitting}
         >
           <span>
             <h2>{noLabel}</h2>
@@ -53,6 +76,11 @@ export function YesNoQuestionStep({
           </span>
         </button>
       </div>
+      {error && (
+        <p role="alert" className="field__error">
+          {error}
+        </p>
+      )}
       <button type="button" className="button button--text" onClick={onBack}>
         ← Back
       </button>

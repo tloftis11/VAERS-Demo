@@ -15,6 +15,7 @@ import { useStepForm } from "../../hooks/useStepForm";
 import { TextAreaField } from "../../components/Field";
 import { FieldIcon } from "../../components/illustrations";
 import { Dropzone } from "../../components/Dropzone";
+import { getDraftToken } from "../../draftAuth";
 
 interface DocumentsStepProps {
   reportId: string;
@@ -48,6 +49,7 @@ export function DocumentsStep({
   const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiDocumentSuggestion[]>([]);
   const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
@@ -72,7 +74,7 @@ export function DocumentsStep({
     for (const file of accepted) {
       setUploadProgress(0);
       try {
-        const meta = await uploadAttachment(reportId, file, setUploadProgress);
+        const meta = await uploadAttachment(reportId, file, getDraftToken(reportId), setUploadProgress);
         setAttachments((prev) => [...prev, meta]);
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Upload failed");
@@ -84,8 +86,17 @@ export function DocumentsStep({
   }
 
   async function handleDelete(id: string) {
-    await deleteAttachment(id);
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    if (deletingId) return;
+    setUploadError(null);
+    setDeletingId(id);
+    try {
+      await deleteAttachment(id, getDraftToken(reportId));
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Couldn't remove this file — please try again.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function handleReplaceClick(id: string) {
@@ -103,8 +114,8 @@ export function DocumentsStep({
     setUploadProgress(0);
     setUploadError(null);
     try {
-      const meta = await uploadAttachment(reportId, file, setUploadProgress);
-      await deleteAttachment(targetId);
+      const meta = await uploadAttachment(reportId, file, getDraftToken(reportId), setUploadProgress);
+      await deleteAttachment(targetId, getDraftToken(reportId));
       setAttachments((prev) => prev.map((a) => (a.id === targetId ? meta : a)));
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Replace failed");
@@ -212,12 +223,17 @@ export function DocumentsStep({
                   type="button"
                   className="button button--text"
                   onClick={() => handleReplaceClick(a.id)}
-                  disabled={uploadProgress !== null}
+                  disabled={uploadProgress !== null || deletingId !== null}
                 >
                   Replace
                 </button>
-                <button type="button" className="button button--text" onClick={() => handleDelete(a.id)}>
-                  Remove
+                <button
+                  type="button"
+                  className="button button--text"
+                  onClick={() => handleDelete(a.id)}
+                  disabled={deletingId !== null}
+                >
+                  {deletingId === a.id ? "Removing…" : "Remove"}
                 </button>
               </span>
             </li>

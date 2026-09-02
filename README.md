@@ -41,6 +41,23 @@ npm run dev                          # API on :4000, client on :5173
 Open http://localhost:5173. The Vite dev server proxies `/api` to the
 Express server, so no extra configuration is needed.
 
+### Running the tests
+
+```bash
+npm run test --workspace=shared      # zod schema + validation-util unit tests
+npm run test --workspace=client      # component tests (Vitest + RTL)
+npm run test --workspace=server      # API tests (Vitest + Supertest, isolated SQLite test.db)
+npm run e2e                          # Playwright, full browser + real API + isolated DB
+```
+
+`npm run e2e` starts its own server+client pair on ports 4100/5175 against a
+throwaway `server/e2e-test.db` (see `playwright.config.ts`) — it's safe to
+run alongside a `npm run dev` session on the normal 4000/5173 ports, and
+never touches `dev.db`. It covers a representative subset of the reporting
+flow (the HCP additional-vaccine bug fix, contact validation, draft
+resume/retry, the draft token, a mobile-viewport check) — not an exhaustive
+walk of every branch/submitter path.
+
 ## Project structure
 
 ```
@@ -70,11 +87,29 @@ client/src/components/         StepIndicator, FaqWidget, SurveyForm, Field primi
   first — do that upgrade if you want it resolved.
 - **FAQ widget can overlap page content** on very short pages (e.g. the
   branching-choice steps) since it's a fixed-position panel. Cosmetic only.
-- **No automated test suite.** Everything above was verified by hand (API
-  smoke tests via curl, both submitter paths driven end-to-end in a real
-  browser via Playwright). If you extend this, consider adding tests around
-  the shared branching/validation logic first — it's the piece the design
-  doc calls out as needing zero-defect correctness (PRS#1).
+- **Draft access control is a prototype-grade opaque token, not real
+  identity.** A report's draft is protected by a random capability token
+  (`X-Draft-Token` header) issued once at creation and stored, hashed, on
+  the report row — never a signed/self-verifying token, so it can't expire
+  or be checked without a database lookup, and it can't be recovered if the
+  browser's `localStorage` is cleared (there's deliberately no "email me a
+  new one" recovery path for an in-progress draft — a real deployment would
+  need one). It's enough to stop a stranger from reading or editing a
+  draft merely by guessing/knowing its id, which is what the real risk here
+  is; it is not equivalent to authenticating the *reporter's identity*, and
+  a submitted report deliberately drops this check entirely (see
+  `services/draftTokens.ts`) since the confirmation page and follow-up flow
+  (a real two-step email+code identity check) both need it to survive a
+  browser refresh with no token in hand.
+- **Automated tests exist across all three packages** (Vitest for
+  `shared`/`server`/`client`, Supertest for the API, React Testing Library
+  for components, Playwright for a handful of full-browser end-to-end
+  scenarios — see "Running the tests" above) — this bullet used to say
+  there were none; that's no longer true. The Playwright suite is a
+  representative subset (the additional-vaccine bug fix, contact
+  validation, draft resume/retry, the draft token, a mobile check), not an
+  exhaustive walk of every submitter path/branch combination — widening it
+  is the next gap worth closing if you extend this.
 
 ## Deploying to Render
 

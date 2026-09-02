@@ -7,5 +7,14 @@ server/uploads/*
 !server/uploads/.gitkeep
 server/prisma/dev.db
 server/prisma/dev.db-journal
+server/test.db
+server/test.db-journal
+server/.test-uploads/
+server/e2e-test.db
+server/e2e-test.db-journal
+server/e2e-uploads/
+/test-results/
+/playwright-report/
+/blob-report/
 *.log
 .DS_Store

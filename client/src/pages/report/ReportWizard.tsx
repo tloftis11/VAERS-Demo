@@ -21,6 +21,7 @@ import {
   firstIncompleteStep,
   mergeServerUpdate,
 } from "../../reportProgress";
+import { getDraftToken } from "../../draftAuth";
 import { StepIndicator } from "../../components/StepIndicator";
 import { FaqWidget } from "../../components/FaqWidget";
 import { MilestoneBanner } from "../../components/MilestoneBanner";
@@ -75,13 +76,24 @@ export function ReportWizard() {
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
+  const [accessDenied, setAccessDenied] = useState(false);
+
   useEffect(() => {
     if (!reportId) return;
     setLoading(true);
-    getReport(reportId).then((r) => {
-      setReport(r);
-      setLoading(false);
-    });
+    getReport(reportId, getDraftToken(reportId))
+      .then((r) => {
+        setReport(r);
+        setLoading(false);
+      })
+      .catch((err) => {
+        // Wrong/missing token for someone else's still-in-progress draft —
+        // this browser never had (or has lost) legitimate access to it.
+        if ((err as { status?: number }).status === 401) {
+          setAccessDenied(true);
+        }
+        setLoading(false);
+      });
   }, [reportId]);
 
   useEffect(() => {
@@ -91,6 +103,16 @@ export function ReportWizard() {
   }, [saveStatus]);
 
   if (!reportId) return <Navigate to="/report" replace />;
+  if (accessDenied) {
+    return (
+      <div className="page">
+        <p>
+          This report can't be accessed from this browser/device. If it's yours, use the link in your
+          confirmation email or the follow-up lookup instead.
+        </p>
+      </div>
+    );
+  }
   if (loading || !report) {
     return (
       <div className="page">
@@ -118,31 +140,32 @@ export function ReportWizard() {
     if (target) navigate(`/report/${reportId}/${target}`);
   }
 
-  // Navigates on the client-validated data immediately instead of waiting on
-  // the PATCH round-trip first — the round-trip still happens, just in the
-  // background, reconciling `report` when it resolves. Every field the
-  // branching/next-step logic reads (submitterType, administrationError,
-  // adverseEventOccurred) is already known here, so there's nothing the
-  // server response could tell us that changes where we navigate to.
+  // Draft saving is authoritative: the PATCH must actually succeed before
+  // the route changes, so a failed save never leaves the reporter thinking
+  // their answer was recorded when it wasn't. `onNext` callers (via
+  // ConversationalStep's handleReviewContinue) already await this and
+  // disable their own "Continue" control while it's pending, show the
+  // thrown error, and leave the entered data in place for a retry — this
+  // just has to actually reject on failure instead of resolving instantly
+  // and navigating on optimistic data regardless of what the server says.
   async function handleNext(data: Record<string, unknown>) {
-    const optimisticReport = applyOptimisticUpdate(report!, currentStep, data);
-    setReport(optimisticReport);
     setSaveError(false);
-    const nextState = branchingStateFromReport(optimisticReport);
-    setSkipNotice(currentStep === "vaccine" ? skipNoticeForVaccineExit(nextState) : null);
-    goTo(nextStep(currentStep, nextState));
-
     setSaveStatus("saving");
-    patchReport(reportId!, currentStep, data)
-      .then((server) => {
-        setReport((prev) => (prev ? mergeServerUpdate(prev, currentStep, server) : server));
-        setSaveStatus("saved");
-      })
-      .catch((err) => {
-        console.error("Failed to save step", currentStep, err);
-        setSaveError(true);
-        setSaveStatus("idle");
-      });
+    try {
+      const server = await patchReport(reportId!, currentStep, data, getDraftToken(reportId!));
+      const optimisticReport = applyOptimisticUpdate(report!, currentStep, data);
+      const merged = mergeServerUpdate(optimisticReport, currentStep, server);
+      setReport(merged);
+      setSaveStatus("saved");
+      const nextState = branchingStateFromReport(merged);
+      setSkipNotice(currentStep === "vaccine" ? skipNoticeForVaccineExit(nextState) : null);
+      goTo(nextStep(currentStep, nextState));
+    } catch (err) {
+      console.error("Failed to save step", currentStep, err);
+      setSaveError(true);
+      setSaveStatus("idle");
+      throw err;
+    }
   }
 
   async function handleSelectAndAdvance(data: Record<string, unknown>) {
@@ -156,7 +179,7 @@ export function ReportWizard() {
 
   async function handleSubmitReport() {
     try {
-      await submitReport(reportId!);
+      await submitReport(reportId!, getDraftToken(reportId!));
       navigate(`/report/${reportId}/confirmation`);
     } catch (err) {
       const e = err as Error & { incompleteSteps?: StepId[]; findings?: ValidationFinding[] };

@@ -14,6 +14,7 @@ interface ErrorDetailStepProps {
 
 const EMPTY: ErrorDetailData = {
   errorType: "",
+  errorTypeOther: "",
   errorDescription: "",
   errorDiscoveredDate: "",
   correctiveActionTaken: "",
@@ -22,6 +23,7 @@ const EMPTY: ErrorDetailData = {
 /** Exported so the final review and the read-only follow-up lookup can show the same labels. */
 export const ERROR_DETAIL_FIELD_SPECS: ConversationalFieldSpec[] = [
   { id: "errorType", label: "Type of error", required: true, kind: "choice", options: ERROR_TYPES },
+  { id: "errorTypeOther", label: "Please describe the error type", required: false, kind: "text" },
   { id: "errorDescription", label: "Describe the error", required: true, kind: "textarea", rows: 4 },
   {
     id: "errorDiscoveredDate",
@@ -48,7 +50,10 @@ export function ErrorDetailStep({
 }: ErrorDetailStepProps) {
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(errorDetailSchema, initial);
-  const fields = ERROR_DETAIL_FIELD_SPECS;
+  const fields = ERROR_DETAIL_FIELD_SPECS.filter((f) => {
+    if (f.id === "errorTypeOther") return values.errorType === "other";
+    return true;
+  });
 
   function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {
     if (fieldId === "errorDiscoveredDate" && vaccineAdministrationDate) {
@@ -60,12 +65,17 @@ export function ErrorDetailStep({
     return null;
   }
 
+  function handleSetValue(id: string, value: unknown) {
+    setValue(id as keyof ErrorDetailData, value as any);
+    if (id === "errorType" && value !== "other") setValue("errorTypeOther", "");
+  }
+
   return (
     <ConversationalStep
       stepTitle="Administration error details"
       fields={fields}
       values={values as unknown as Record<string, unknown>}
-      setValue={(id, value) => setValue(id as keyof ErrorDetailData, value as any)}
+      setValue={handleSetValue}
       errors={errors}
       validate={validate}
       onNext={onNext}

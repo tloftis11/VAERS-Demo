@@ -12,6 +12,7 @@ import {
   type ClientReport,
 } from "../api/client";
 import { firstIncompleteStep } from "../reportProgress";
+import { getDraftToken } from "../draftAuth";
 import { TextField, TextAreaField } from "../components/Field";
 import { Dropzone } from "../components/Dropzone";
 import { FieldIcon } from "../components/illustrations";
@@ -37,7 +38,7 @@ function formatDate(iso: string): string {
   });
 }
 
-type LookupState = "idle" | "loading" | "not-found" | "error";
+type LookupState = "idle" | "loading" | "not-found" | "error" | "draft-not-accessible";
 /** "email" / "code": the identity gate for a submitted report, before any
  * of its PHI reaches the browser. "verified": gate passed, full report loaded. */
 type GatePhase = "email" | "code" | "verified";
@@ -76,15 +77,21 @@ export function FollowUp() {
     try {
       const status = await getReportStatus(id);
       setReportId(status.id);
-      setLookupState("idle");
       if (status.status === "draft") {
-        setDraftReport(await getReport(id));
+        // Only succeeds if this is the same browser/device the draft was
+        // started on (it's the only place the token is ever stored) —
+        // otherwise this correctly 401s, same as anyone else guessing or
+        // being told the reference number of someone else's in-progress
+        // report, since a draft has no other identity check yet.
+        setDraftReport(await getReport(id, getDraftToken(id)));
+        setLookupState("idle");
       } else {
+        setLookupState("idle");
         setGatePhase("email");
       }
     } catch (err) {
       const status = (err as { status?: number }).status;
-      setLookupState(status === 404 ? "not-found" : "error");
+      setLookupState(status === 404 ? "not-found" : status === 401 ? "draft-not-accessible" : "error");
     }
   }
 
@@ -192,6 +199,12 @@ export function FollowUp() {
       {lookupState === "error" && (
         <p role="alert" className="field__error">
           Something went wrong looking up that report. Please try again in a moment.
+        </p>
+      )}
+      {lookupState === "draft-not-accessible" && (
+        <p role="alert" className="field__error">
+          That report is still in progress and hasn't been submitted yet — it can only be continued from
+          the device and browser it was started on.
         </p>
       )}
 

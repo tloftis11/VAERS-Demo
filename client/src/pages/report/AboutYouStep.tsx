@@ -19,8 +19,10 @@ interface AboutYouStepProps {
 const EMPTY: AboutYouData = {
   contactName: "",
   contactEmail: "",
+  contactEmailConfirm: "",
   contactPhone: "",
   relationship: "",
+  relationshipOther: "",
   mailingStreet: "",
   mailingCity: "",
   mailingState: "",
@@ -52,8 +54,24 @@ export function aboutYouFieldSpecs(
       kind: "email",
       hint: "Used only if we need to follow up about this report.",
       icon: "mail",
+      autoComplete: "email",
     },
-    { id: "contactPhone", label: "Your phone (optional)", required: false, kind: "text", icon: "phone" },
+    {
+      id: "contactEmailConfirm",
+      label: "Confirm your email",
+      required: true,
+      kind: "email",
+      autoComplete: "email",
+    },
+    {
+      id: "contactPhone",
+      label: "Your phone (optional)",
+      required: false,
+      kind: "tel",
+      icon: "phone",
+      autoComplete: "tel",
+      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+    },
   ];
   // The real VAERS form has no healthcare-provider sub-role breakdown — HCPs
   // skip this question entirely (submitterType already captured that).
@@ -62,16 +80,19 @@ export function aboutYouFieldSpecs(
   // the question (parent vs. other relative isn't implied), just without
   // the now-irrelevant "Myself" option.
   if (!isHcp && relationshipHint !== "patient") {
-    fields.push({
-      id: "relationship",
-      label: "Your relationship to the patient",
-      required: true,
-      kind: "choice",
-      options:
-        relationshipHint === "caregiver"
-          ? RELATIONSHIP_OPTIONS_PUBLIC.filter((o) => o.value !== "self")
-          : RELATIONSHIP_OPTIONS_PUBLIC,
-    });
+    fields.push(
+      {
+        id: "relationship",
+        label: "Your relationship to the patient",
+        required: true,
+        kind: "choice",
+        options:
+          relationshipHint === "caregiver"
+            ? RELATIONSHIP_OPTIONS_PUBLIC.filter((o) => o.value !== "self")
+            : RELATIONSHIP_OPTIONS_PUBLIC,
+      },
+      { id: "relationshipOther", label: "Please describe your relationship to the patient", required: false, kind: "text" }
+    );
   }
   fields.push({
     id: "bestContactInfo",
@@ -113,10 +134,14 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
   const [wantsMailedResponse, setWantsMailedResponse] = useState(
     () => !!(initial.mailingStreet || initial.mailingCity || initial.mailingState || initial.mailingZip)
   );
-  const fields = aboutYouFieldSpecs(submitterType, relationshipHint, wantsMailedResponse);
+  const fields = aboutYouFieldSpecs(submitterType, relationshipHint, wantsMailedResponse).filter((f) => {
+    if (f.id === "relationshipOther") return values.relationship === "other";
+    return true;
+  });
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof AboutYouData, value as any);
+    if (id === "relationship" && value !== "other") setValue("relationshipOther", "");
   }
 
   function handleMailToggle(checked: boolean) {

@@ -20,6 +20,9 @@ model Report {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   submittedAt          DateTime?
+  // SHA-256 hex digest of the draft capability token minted at creation —
+  // never the raw token itself. See services/draftTokens.ts.
+  draftTokenHash       String?
 
   submitter       Submitter?
   patient         Patient?
@@ -39,6 +42,7 @@ model Submitter {
   contactEmail    String?
   contactPhone    String?
   relationship    String?
+  relationshipOther String? // free-text detail when relationship is "other"
   // Structured mailing-address block, only populated when the reporter opts
   // into a mailed response instead of email (see AboutYouStep.tsx) — most
   // reporters leave these blank, since email is the default.
@@ -63,7 +67,16 @@ model Patient {
   sex                      String?
   ageYears                 Int?
   ageMonths                Int?
-  state                    String? // public-path only (PUB-002): patient's state of residence
+  // PWS item 6's address/contact block — separate from the reporter's own
+  // contact/mailing address (Submitter model); staff follow up with the
+  // reporter, not the patient directly, so none of this is required.
+  street                   String?
+  city                     String?
+  state                    String? // "foreign" is a valid value here, not just a US code — see STATE_OR_FOREIGN_OPTIONS
+  county                   String?
+  zip                      String?
+  phone                    String?
+  email                    String?
   pregnant                 String?
   pregnancyDetails         String?
   medicationsAtVaccination String?
@@ -71,6 +84,7 @@ model Patient {
   recentIllnesses          String?
   chronicConditions        String?
   race                     String? // JSON-encoded string array (SQLite has no native array type)
+  raceOther                String? // free-text detail when "other" is among the selected races
   ethnicity                String?
 }
 
@@ -88,7 +102,14 @@ model VaccineAdministration {
   route                 String?
   bodySite              String?
   administeringFacility String?
+  facilityStreet        String?
+  facilityCity          String?
+  facilityState         String? // "foreign" is a valid value here — see STATE_OR_FOREIGN_OPTIONS
+  facilityZip           String?
+  facilityPhone         String?
+  facilityFax           String?
   facilityType          String?
+  facilityTypeOther     String? // free-text detail when facilityType is "other"
   // Public path only (see vaccineSchema in shared/src/schemas.ts) — a
   // single free-text question, kept low-burden for a public reporter.
   otherVaccinesRecent   String?
@@ -110,6 +131,9 @@ model AdditionalVaccine {
   vaccine      VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
   sortOrder    Int                   @default(0)
   vaccineType  String?
+  // Detail text when vaccineType is "other"/"foreign" — mirrors
+  // VaccineAdministration.vaccineTypeOther for the primary vaccine.
+  vaccineTypeOther String?
   manufacturer String?
   lotNumber    String?
   route        String?
@@ -157,6 +181,7 @@ model ErrorDetail {
   reportId              String  @unique
   report                Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   errorType             String?
+  errorTypeOther        String? // free-text detail when errorType is "other"
   errorDescription      String?
   errorDiscoveredDate   String?
   correctiveActionTaken String?

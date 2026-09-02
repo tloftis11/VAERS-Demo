@@ -28,6 +28,8 @@
  */
 import { z } from "zod";
 import type { StepId, SubmitterType } from "./branchingRules";
+import { ageInYears, PREGNANCY_MIN_PLAUSIBLE_AGE } from "./liveChecks";
+import { optionalPhone, usZipSchema, optionalEmail, isValidPostalCodeForState } from "./contactValidation";
 
 const requiredString = (msg = "This field is required") => z.string().trim().min(1, msg);
 const optionalString = () =>
@@ -107,6 +109,13 @@ export const STATE_OPTIONS = Object.keys(STATE_NAMES).map((code) => ({
   value: code,
   label: STATE_NAMES[code],
 }));
+
+/** For an address field that needs to represent "outside the United
+ * States" — the patient's and facility's own address/state (unlike the
+ * reporter's optional mailing-address block, which is US-only by design).
+ * Selecting "foreign" is what tells postal-code validation to stop
+ * expecting a 5-digit US ZIP (see isValidPostalCodeForState). */
+export const STATE_OR_FOREIGN_OPTIONS = [...STATE_OPTIONS, { value: "foreign", label: "Outside the United States" }];
 
 export const YES_NO_UNKNOWN_OPTIONS = [
   { value: "yes", label: "Yes" },
@@ -495,26 +504,58 @@ export const adverseEventOccurredSchema = z.object({
   adverseEventOccurred: z.boolean(),
 });
 
+/** Confirms an email was typed correctly, the same way any account-signup
+ * form does — trimmed and case-insensitive, since email addresses aren't
+ * case-sensitive in practice and a mismatched *case* isn't a real typo.
+ * Deliberately never persisted (see reports.ts's "about-you" write path,
+ * which destructures this out before it ever reaches the database) — its
+ * only job is to catch a mistyped address before it's saved. */
+function requireMatchingEmailConfirmation<T extends { contactEmail: string; contactEmailConfirm: string }>(
+  data: T,
+  ctx: z.RefinementCtx
+) {
+  if (data.contactEmail.trim().toLowerCase() !== data.contactEmailConfirm.trim().toLowerCase()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["contactEmailConfirm"],
+      message: "This doesn't match the email address above",
+    });
+  }
+}
+
 /** Item 13 — the real form has no healthcare-provider sub-role breakdown, so HCPs skip this question entirely. */
 export function aboutYouSchema(submitterType: SubmitterType) {
   const base = z.object({
     contactName: requiredString("Please enter your name"),
     contactEmail: z.string().trim().email("Enter a valid email address"),
-    contactPhone: optionalString(),
+    contactEmailConfirm: z.string().trim().email("Enter a valid email address"),
+    contactPhone: optionalPhone(),
     relationship: optionalString(),
+    relationshipOther: optionalString(),
     mailingStreet: optionalString(),
     mailingCity: optionalString(),
     mailingState: optionalEnum(STATE_OPTIONS.map((o) => o.value)),
-    mailingZip: optionalString(),
+    mailingZip: usZipSchema(),
     bestContactInfo: optionalString(),
   });
-  if (submitterType === "hcp") return base;
-  return base.extend({
-    relationship: selectEnum(
-      ["self", "parent_guardian_caregiver", "other"],
-      "Select your relationship to the patient"
-    ),
-  });
+  if (submitterType === "hcp") return base.superRefine(requireMatchingEmailConfirmation);
+  return base
+    .extend({
+      relationship: selectEnum(
+        ["self", "parent_guardian_caregiver", "other"],
+        "Select your relationship to the patient"
+      ),
+    })
+    .superRefine((data, ctx) => {
+      requireMatchingEmailConfirmation(data, ctx);
+      if (data.relationship === "other" && !data.relationshipOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["relationshipOther"],
+          message: "Please describe your relationship to the patient",
+        });
+      }
+    });
 }
 
 /**
@@ -547,7 +588,19 @@ const patientBase = z.object({
     .union([z.literal(""), z.coerce.number().int().min(0).max(11)])
     .optional()
     .transform((v) => v ?? ""),
-  patientState: optionalString(),
+  // PWS item 6's address block — kept separate from the reporter's own
+  // contact/mailing address (aboutYouSchema): VAERS staff follow up with
+  // the *reporter*, not the patient directly, so none of this is required —
+  // it's here only because the real form asks for it and a caregiver/HCP
+  // reporter may have it on hand.
+  patientStreet: optionalString(),
+  patientCity: optionalString(),
+  patientState: optionalEnum(STATE_OR_FOREIGN_OPTIONS.map((o) => o.value)),
+  patientCounty: optionalString(),
+  patientZip: optionalString(),
+  patientPhone: optionalPhone(),
+  patientEmail: optionalEmail(),
+  patientEmailConfirm: optionalString(),
   pregnant: optionalEnum(["yes", "no", "unknown"]),
   pregnancyDetails: optionalString(),
   medicationsAtVaccination: optionalString(),
@@ -555,38 +608,99 @@ const patientBase = z.object({
   recentIllnesses: optionalString(),
   chronicConditions: optionalString(),
   patientRace: z.array(z.string()).optional().default([]),
+  patientRaceOther: optionalString(),
   patientEthnicity: optionalEnum(ETHNICITY_OPTIONS.map((o) => o.value)),
 });
 
+/** Same "best estimate available at this point in the flow" logic the live
+ * UI uses (PatientStep.tsx) to decide whether the pregnancy question
+ * applies — duplicated here (not imported) only because it operates on the
+ * already-parsed schema shape rather than raw form values. */
+function bestAgeEstimate(data: {
+  dateOfBirthUnknown: boolean;
+  ageYears: number | "";
+  patientDateOfBirth: string;
+}): number | null {
+  if (data.dateOfBirthUnknown) {
+    const n = Number(data.ageYears);
+    return data.ageYears !== "" && Number.isFinite(n) ? n : null;
+  }
+  return data.patientDateOfBirth ? ageInYears(data.patientDateOfBirth) : null;
+}
+
 export function patientSchema(_submitterType: SubmitterType) {
-  return patientBase.superRefine((data, ctx) => {
-    if (!data.dateOfBirthUnknown) {
-      if (!data.patientDateOfBirth) {
+  return patientBase
+    .superRefine((data, ctx) => {
+      if (!data.dateOfBirthUnknown) {
+        if (!data.patientDateOfBirth) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["patientDateOfBirth"],
+            message: "Enter the patient's date of birth, or mark it as unknown",
+          });
+        } else if (!isValidDate(data.patientDateOfBirth)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["patientDateOfBirth"], message: "Enter a valid date" });
+        } else if (!notInFuture(data.patientDateOfBirth)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["patientDateOfBirth"],
+            message: "Date of birth cannot be in the future",
+          });
+        }
+        // ageYears/ageMonths are computed server-side once the vaccination
+        // date is known (see reports.ts) — nothing to validate here.
+      } else if (data.ageYears === "" || data.ageYears === undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ageYears"], message: "Enter age in years" });
+      }
+      if (data.patientRace.includes("other") && !data.patientRaceOther) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["patientDateOfBirth"],
-          message: "Enter the patient's date of birth, or mark it as unknown",
-        });
-      } else if (!isValidDate(data.patientDateOfBirth)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["patientDateOfBirth"], message: "Enter a valid date" });
-      } else if (!notInFuture(data.patientDateOfBirth)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["patientDateOfBirth"],
-          message: "Date of birth cannot be in the future",
+          path: ["patientRaceOther"],
+          message: "Please describe the patient's race",
         });
       }
-      // ageYears/ageMonths are computed server-side once the vaccination
-      // date is known (see reports.ts) — nothing to validate here.
-    } else if (data.ageYears === "" || data.ageYears === undefined) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ageYears"], message: "Enter age in years" });
-    }
-  });
+      if (!isValidPostalCodeForState(data.patientZip, data.patientState)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["patientZip"],
+          message: "Enter a valid 5-digit ZIP code (or ZIP+4, e.g. 20201-0001)",
+        });
+      }
+      if (
+        data.patientEmail &&
+        data.patientEmail.trim().toLowerCase() !== data.patientEmailConfirm.trim().toLowerCase()
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["patientEmailConfirm"],
+          message: "This doesn't match the email address above",
+        });
+      }
+    })
+    .transform((data) => {
+      // A hidden field (pregnancy no longer applicable because sex or age
+      // changed) must never be silently submitted — strip it here as a
+      // server-side guarantee, not just a client-side UI nicety, so a
+      // client bug or a stale pre-fix draft can't leak it through.
+      const age = bestAgeEstimate(data);
+      const pregnancyApplicable = data.patientSex !== "male" && !(age !== null && age < PREGNANCY_MIN_PLAUSIBLE_AGE);
+      return {
+        ...data,
+        pregnant: pregnancyApplicable ? data.pregnant : "",
+        pregnancyDetails: pregnancyApplicable && data.pregnant === "yes" ? data.pregnancyDetails : "",
+        patientRaceOther: data.patientRace.includes("other") ? data.patientRaceOther : "",
+        patientEmailConfirm: data.patientEmail ? data.patientEmailConfirm : "",
+      };
+    });
 }
 
 /** One bundled row (all fields together, not a separate question each) — HCP path's "additional vaccines given at this same visit". */
 const additionalVaccineRowSchema = z.object({
   vaccineType: optionalString(),
+  // Mirrors the primary vaccineTypeOther field — required only when
+  // vaccineType is "other"/"foreign" (superRefine below), same as the
+  // primary vaccine.
+  vaccineTypeOther: optionalString(),
   manufacturer: optionalString(),
   lotNumber: optionalString(),
   route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
@@ -594,63 +708,139 @@ const additionalVaccineRowSchema = z.object({
   doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
 });
 
+/** A row the reporter added (e.g. via "+ Add another vaccine") and then
+ * never touched — every field still at its default empty value. This must
+ * never block submission or be persisted; only a row with *something*
+ * entered is held to "you must at least pick a vaccine". */
+function isBlankAdditionalVaccineRow(row: {
+  vaccineType: string;
+  vaccineTypeOther: string;
+  manufacturer: string;
+  lotNumber: string;
+  route: string;
+  bodySite: string;
+  doseNumber: string;
+}): boolean {
+  return (
+    !row.vaccineType &&
+    !row.vaccineTypeOther &&
+    !row.manufacturer &&
+    !row.lotNumber &&
+    !row.route &&
+    !row.bodySite &&
+    !row.doseNumber
+  );
+}
+
+const OTHER_OR_FOREIGN_VACCINE_VALUES = new Set(["other", "foreign"]);
+
 /** One bundled row — HCP path's "other vaccines received in the month before this one" (real form item 22, a repeatable table). */
 const priorVaccineRowSchema = z.object({
   vaccineName: optionalString(),
   administrationDate: optionalDate(),
 });
 
-/** Items 4 (vaccination date/time), 15-16 (facility), 17 (vaccine given), 22 (other recent vaccines). */
-export function vaccineSchema(submitterType: SubmitterType) {
-  const base = z.object({
-    vaccineType: requiredString("Select the vaccine given"),
-    vaccineTypeOther: optionalString(),
-    doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
-    administrationDate: dateSchema("Enter the vaccination date").refine(
-      notInFuture,
-      "Vaccination date cannot be in the future"
-    ),
-    administrationTime: optionalString(),
-    manufacturer: optionalString(),
-    lotNumber: optionalString(),
-    route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
-    bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
-    administeringFacility: optionalString(),
-    facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
-    // Public path only: kept low-burden as one free-text question each,
-    // rather than the repeatable bundled rows the HCP path gets below —
-    // most public reporters won't have a second vaccine's manufacturer/lot
-    // on hand for every dose.
-    otherVaccinesRecent: optionalString(),
-    otherVaccinesSameVisit: optionalString(),
-    // HCP path only: any number of additional vaccines given at the same
-    // visit, and any number of other vaccines in the month before — each a
-    // full bundled row a reporter fills in and adds, not gated behind a
-    // yes/no plus a single fixed extra slot.
-    additionalVaccines: z.array(additionalVaccineRowSchema).optional().default([]),
-    priorVaccines: z.array(priorVaccineRowSchema).optional().default([]),
-  });
-  if (submitterType === "hcp") {
-    // Not on the real form as a hard requirement, but a reasonable expectation
-    // when the clinic itself is filing — kept as our own addition, not essential.
-    return base
-      .extend({
-        manufacturer: requiredString("Manufacturer is required"),
-        lotNumber: requiredString("Lot number is required"),
-      })
-      .superRefine((data, ctx) => {
-        data.additionalVaccines.forEach((row, i) => {
-          if (!row.vaccineType) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["additionalVaccines", i, "vaccineType"],
-              message: "Select the vaccine for this row, or remove it",
-            });
-          }
+/**
+ * Items 4 (vaccination date/time), 15-16 (facility), 17 (vaccine given), 22
+ * (other recent vaccines).
+ *
+ * Manufacturer and lot number are deliberately optional for both submitter
+ * types — a reporter (including a clinic) genuinely may not know either,
+ * and a vaccine selection alone doesn't imply that information is on hand.
+ * `submitterType` stays part of the signature (every other per-step schema
+ * takes it, and additionalVaccines/priorVaccines are HCP-UI-only even
+ * though harmless to validate for public too) even though it doesn't
+ * currently branch the rules here.
+ */
+export function vaccineSchema(_submitterType: SubmitterType) {
+  return z
+    .object({
+      vaccineType: requiredString("Select the vaccine given"),
+      vaccineTypeOther: optionalString(),
+      doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
+      administrationDate: dateSchema("Enter the vaccination date").refine(
+        notInFuture,
+        "Vaccination date cannot be in the future"
+      ),
+      administrationTime: optionalString(),
+      manufacturer: optionalString(),
+      lotNumber: optionalString(),
+      route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
+      bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
+      administeringFacility: optionalString(),
+      facilityStreet: optionalString(),
+      facilityCity: optionalString(),
+      facilityState: optionalEnum(STATE_OR_FOREIGN_OPTIONS.map((o) => o.value)),
+      facilityZip: optionalString(),
+      facilityPhone: optionalPhone(),
+      facilityFax: optionalPhone("Enter a valid fax number, e.g. (404) 555-1212"),
+      facilityType: optionalEnum(FACILITY_TYPE_OPTIONS.map((o) => o.value)),
+      facilityTypeOther: optionalString(),
+      // Public path only: kept low-burden as one free-text question each,
+      // rather than the repeatable bundled rows the HCP path gets below —
+      // most public reporters won't have a second vaccine's manufacturer/lot
+      // on hand for every dose.
+      otherVaccinesRecent: optionalString(),
+      otherVaccinesSameVisit: optionalString(),
+      // HCP path only: any number of additional vaccines given at the same
+      // visit, and any number of other vaccines in the month before — each a
+      // full bundled row a reporter fills in and adds, not gated behind a
+      // yes/no plus a single fixed extra slot.
+      additionalVaccines: z.array(additionalVaccineRowSchema).optional().default([]),
+      priorVaccines: z.array(priorVaccineRowSchema).optional().default([]),
+    })
+    .superRefine((data, ctx) => {
+      if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(data.vaccineType) && !data.vaccineTypeOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["vaccineTypeOther"],
+          message: "Enter the vaccine name",
         });
+      }
+      if (data.facilityType === "other" && !data.facilityTypeOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["facilityTypeOther"],
+          message: "Please describe the facility type",
+        });
+      }
+      if (!isValidPostalCodeForState(data.facilityZip, data.facilityState)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["facilityZip"],
+          message: "Enter a valid 5-digit ZIP code (or ZIP+4, e.g. 20201-0001)",
+        });
+      }
+      data.additionalVaccines.forEach((row, i) => {
+        // A row nobody has touched yet must never block submission (and is
+        // stripped entirely during normalization — see reports.ts) — only a
+        // row with *something* entered is held to "you must pick a vaccine".
+        if (isBlankAdditionalVaccineRow(row)) return;
+        if (!row.vaccineType) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["additionalVaccines", i, "vaccineType"],
+            message: "Select the vaccine for this row, or remove it",
+          });
+        } else if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["additionalVaccines", i, "vaccineTypeOther"],
+            message: "Enter the vaccine name for this row",
+          });
+        }
       });
-  }
-  return base;
+    })
+    // Runs only once superRefine has already passed (a partially-filled row
+    // failed validation above and never reaches here) — so this only ever
+    // strips rows that were blank from the start. One shared transform means
+    // the client (useStepForm.validate()) and server (validateStep) always
+    // agree on what "normalized" means, since both call this exact function.
+    .transform((data) => ({
+      ...data,
+      facilityTypeOther: data.facilityType === "other" ? data.facilityTypeOther : "",
+      additionalVaccines: data.additionalVaccines.filter((row) => !isBlankAdditionalVaccineRow(row)),
+    }));
 }
 
 /** Items 5 (onset), 18 (essential description), 19 (labs), 20 (recovery), 21 (essential outcomes), 23 (prior AE history). */
@@ -704,21 +894,67 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
         message: "Date of death cannot be in the future",
       });
     }
-  });
+    if (data.symptoms.includes("other") && !data.symptomsOther) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["symptomsOther"],
+        message: "Please describe the other symptom",
+      });
+    }
+    // "None of the above" only makes sense alone — selecting it alongside a
+    // real outcome (or a real outcome alongside it) is a contradiction, not
+    // just a redundant answer. The UI clears the opposite side immediately
+    // on selection (see AdverseEventStep.tsx); this is the server-side
+    // guarantee that a stale/bypassed client can't submit both anyway.
+    if (data.outcomes.includes("none") && data.outcomes.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outcomes"],
+        message: "\"None of the above\" can't be selected along with another outcome",
+      });
+    }
+    if (data.previousAdverseEvent === "yes" && !data.previousAdverseEventDetails) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["previousAdverseEventDetails"],
+        message: "Please describe the previous adverse event",
+      });
+    }
+  })
+    .transform((data) => ({
+      ...data,
+      symptomsOther: data.symptoms.includes("other") ? data.symptomsOther : "",
+      previousAdverseEventDetails: data.previousAdverseEvent === "yes" ? data.previousAdverseEventDetails : "",
+    }));
 }
 
-export const errorDetailSchema = z.object({
-  errorType: selectEnum(ERROR_TYPES.map((o) => o.value), "Select the type of error"),
-  errorDescription: requiredString("Please describe the error").min(
-    10,
-    "Please provide a bit more detail (at least 10 characters)"
-  ),
-  errorDiscoveredDate: dateSchema("Enter when the error was discovered").refine(
-    notInFuture,
-    "Date cannot be in the future"
-  ),
-  correctiveActionTaken: optionalString(),
-});
+export const errorDetailSchema = z
+  .object({
+    errorType: selectEnum(ERROR_TYPES.map((o) => o.value), "Select the type of error"),
+    errorTypeOther: optionalString(),
+    errorDescription: requiredString("Please describe the error").min(
+      10,
+      "Please provide a bit more detail (at least 10 characters)"
+    ),
+    errorDiscoveredDate: dateSchema("Enter when the error was discovered").refine(
+      notInFuture,
+      "Date cannot be in the future"
+    ),
+    correctiveActionTaken: optionalString(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.errorType === "other" && !data.errorTypeOther) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["errorTypeOther"],
+        message: "Please describe the error",
+      });
+    }
+  })
+  .transform((data) => ({
+    ...data,
+    errorTypeOther: data.errorType === "other" ? data.errorTypeOther : "",
+  }));
 
 export const documentsSchema = z.object({
   supplementalNotes: optionalString(),
