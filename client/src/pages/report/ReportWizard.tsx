@@ -6,6 +6,7 @@ import {
   nextStep,
   prevStep,
   STEP_IDS,
+  STEP_LABELS,
   type StepId,
 } from "../../../../shared/src/branchingRules";
 import {
@@ -74,6 +75,12 @@ export function ReportWizard() {
   // over a whole section, so the jump reads as deliberate rather than a
   // glitch — cleared on any other navigation.
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  // Set when the reporter jumps to an already-completed step via the step
+  // indicator (rather than clicking "← Back" through everything in
+  // between) — the next successful save from there returns here instead of
+  // just advancing one step forward, so editing an earlier answer doesn't
+  // force re-clicking through every step back to where they actually were.
+  const [returnToStep, setReturnToStep] = useState<StepId | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   const [accessDenied, setAccessDenied] = useState(false);
@@ -159,7 +166,13 @@ export function ReportWizard() {
       setSaveStatus("saved");
       const nextState = branchingStateFromReport(merged);
       setSkipNotice(currentStep === "vaccine" ? skipNoticeForVaccineExit(nextState) : null);
-      goTo(nextStep(currentStep, nextState));
+      if (returnToStep) {
+        const target = returnToStep;
+        setReturnToStep(null);
+        goTo(target);
+      } else {
+        goTo(nextStep(currentStep, nextState));
+      }
     } catch (err) {
       console.error("Failed to save step", currentStep, err);
       setSaveError(true);
@@ -172,8 +185,22 @@ export function ReportWizard() {
     await handleNext(data);
   }
 
+  // Jump straight to an already-completed step (from the step indicator)
+  // instead of clicking "← Back" through every step in between — the next
+  // successful save from there returns to the step being left now.
+  function handleStepClick(target: StepId) {
+    if (target === currentStep) return;
+    setSkipNotice(null);
+    setReturnToStep(currentStep);
+    goTo(target);
+  }
+
   function handleBack() {
     setSkipNotice(null);
+    // A plain Back click is normal forward/backward navigation, not a
+    // detour — don't let a stale returnToStep redirect a later save
+    // somewhere the reporter no longer expects.
+    setReturnToStep(null);
     goTo(prevStep(currentStep, state));
   }
 
@@ -303,7 +330,7 @@ export function ReportWizard() {
           report={report}
           onSubmit={handleSubmitReport}
           onBack={handleBack}
-          onGoToStep={(s) => goTo(s)}
+          onGoToStep={handleStepClick}
         />
       );
       break;
@@ -320,7 +347,7 @@ export function ReportWizard() {
     // (including old validation errors) into the new one.
     <div className="page page--wizard" key={reportId}>
       <div className="wizard-header">
-        <StepIndicator steps={steps} currentStep={currentStep} />
+        <StepIndicator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
         {saveStatus !== "idle" && (
           <span className={`autosave-indicator${saveStatus === "saved" ? " autosave-indicator--saved" : ""}`} role="status">
             {saveStatus === "saving" ? "Saving…" : "✓ Saved"}
@@ -337,6 +364,11 @@ export function ReportWizard() {
       {skipNotice && (
         <p role="status" className="notice notice--info">
           {skipNotice}
+        </p>
+      )}
+      {returnToStep && (
+        <p role="status" className="notice notice--info">
+          Editing "{STEP_LABELS[currentStep]}" — you'll return to "{STEP_LABELS[returnToStep]}" once you continue.
         </p>
       )}
       {stepContent}

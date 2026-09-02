@@ -143,15 +143,23 @@ model AdditionalVaccine {
   doseNumber   String?
 }
 
-// HCP-only: one row per other vaccine the patient received in the month
-// before this visit (item 22 on the real paper form is a repeatable table;
-// this mirrors that instead of one free-text field).
+// One row per other vaccine the patient received in the month before this
+// visit (item 22 on the real paper form is a repeatable table; this mirrors
+// that instead of one free-text field). Same vaccine/manufacturer/lot/
+// route/site/dose fields as AdditionalVaccine above, plus its own
+// administrationDate — a prior vaccine didn't happen on this visit's date.
 model PriorVaccine {
-  id                 String                @id @default(cuid())
-  vaccineId          String
-  vaccine            VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
-  sortOrder          Int                   @default(0)
-  vaccineName        String?
+  id               String                @id @default(cuid())
+  vaccineId        String
+  vaccine          VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder        Int                   @default(0)
+  vaccineType      String?
+  vaccineTypeOther String?
+  manufacturer     String?
+  lotNumber        String?
+  route            String?
+  bodySite         String?
+  doseNumber       String?
   administrationDate String?
 }
 
