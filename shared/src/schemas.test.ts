@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { vaccineSchema, aboutYouSchema, patientSchema, adverseEventSchema, errorDetailSchema } from "./schemas";
+import { isValidPhone, isValidUsZip } from "./contactValidation";
 
 /** Minimal valid HCP vaccine-step payload — every test below starts from
  * this and only varies additionalVaccines/manufacturer/lotNumber, so a
@@ -215,6 +216,7 @@ describe("aboutYouSchema — relationship 'Other' detail (public/caregiver only)
     return {
       contactName: "Jane Doe",
       contactEmail: "jane@example.com",
+      contactEmailConfirm: "jane@example.com",
       contactPhone: "",
       relationship: "self",
       relationshipOther: "",
@@ -470,5 +472,116 @@ describe("errorDetailSchema — error type 'Other' detail", () => {
     if (notOther.success) {
       expect((notOther.data as { errorTypeOther: string }).errorTypeOther).toBe("");
     }
+  });
+});
+
+describe("contactValidation — phone", () => {
+  it("accepts common US formats", () => {
+    expect(isValidPhone("(404) 555-1212")).toBe(true);
+    expect(isValidPhone("404-555-1212")).toBe(true);
+    expect(isValidPhone("+1 404 555 1212")).toBe(true);
+    expect(isValidPhone("4045551212")).toBe(true);
+  });
+
+  it("accepts a foreign number given with its own country code", () => {
+    expect(isValidPhone("+44 20 7946 0958")).toBe(true);
+  });
+
+  it("rejects an impossible number", () => {
+    expect(isValidPhone("555-1212")).toBe(false);
+    expect(isValidPhone("123-456-7890")).toBe(false);
+    expect(isValidPhone("not a phone number")).toBe(false);
+  });
+
+  it("treats blank as valid (optional field)", () => {
+    expect(isValidPhone("")).toBe(true);
+    expect(isValidPhone("   ")).toBe(true);
+  });
+});
+
+describe("contactValidation — US ZIP", () => {
+  it("accepts 5-digit and ZIP+4", () => {
+    expect(isValidUsZip("20201")).toBe(true);
+    expect(isValidUsZip("20201-0001")).toBe(true);
+  });
+
+  it("rejects malformed ZIPs", () => {
+    expect(isValidUsZip("2020")).toBe(false);
+    expect(isValidUsZip("202011")).toBe(false);
+    expect(isValidUsZip("ABCDE")).toBe(false);
+  });
+
+  it("treats blank as valid (optional field)", () => {
+    expect(isValidUsZip("")).toBe(true);
+  });
+});
+
+describe("aboutYouSchema — email confirmation, phone, mailing ZIP", () => {
+  function baseAboutYouData(overrides: Record<string, unknown> = {}) {
+    return {
+      contactName: "Jane Doe",
+      contactEmail: "jane@example.com",
+      contactEmailConfirm: "jane@example.com",
+      contactPhone: "",
+      relationship: "self",
+      relationshipOther: "",
+      mailingStreet: "",
+      mailingCity: "",
+      mailingState: "",
+      mailingZip: "",
+      bestContactInfo: "",
+      ...overrides,
+    };
+  }
+
+  it("REGRESSION: rejects a mismatched email confirmation", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ contactEmailConfirm: "typo@example.com" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("contactEmailConfirm");
+    }
+  });
+
+  it("matches case-insensitively after trimming", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(
+      baseAboutYouData({ contactEmail: "Jane@Example.com", contactEmailConfirm: "  jane@example.COM  " })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("also enforces email confirmation for HCP submitters", () => {
+    const schema = aboutYouSchema("hcp");
+    const result = schema.safeParse(baseAboutYouData({ contactEmailConfirm: "typo@example.com" }));
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an invalid phone number with a specific message", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ contactPhone: "555-1212" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find((i) => i.path.join(".") === "contactPhone");
+      expect(issue?.message).toMatch(/valid phone number/i);
+    }
+  });
+
+  it("accepts a foreign phone number given with a country code", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ contactPhone: "+44 20 7946 0958" }));
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a malformed mailing ZIP", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ mailingZip: "2020" }));
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a ZIP+4 mailing code", () => {
+    const schema = aboutYouSchema("public");
+    const result = schema.safeParse(baseAboutYouData({ mailingZip: "20201-0001" }));
+    expect(result.success).toBe(true);
   });
 });

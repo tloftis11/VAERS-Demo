@@ -83,6 +83,12 @@ async function serializeReport(reportId: string) {
       ? {
           contactName: report.submitter.contactName ?? "",
           contactEmail: report.submitter.contactEmail ?? "",
+          // Never persisted (see reports.ts's write path and
+          // aboutYouSchema) — pre-filled from the already-saved, already-
+          // confirmed address so a returning visitor isn't forced to
+          // retype it on every reload; changing contactEmail without
+          // updating this still re-triggers the mismatch check.
+          contactEmailConfirm: report.submitter.contactEmail ?? "",
           contactPhone: report.submitter.contactPhone ?? "",
           relationship: report.submitter.relationship ?? "",
           relationshipOther: report.submitter.relationshipOther ?? "",
@@ -280,10 +286,14 @@ reportsRouter.patch("/:id", async (req, res) => {
       });
       break;
     case "about-you": {
+      // contactEmailConfirm only exists to catch a mistyped address at
+      // submit time (see shared/src/schemas.ts) — it's never a real
+      // Submitter column, so it must never reach the Prisma write.
+      const { contactEmailConfirm: _contactEmailConfirm, ...submitterData } = validated;
       await prisma.submitter.upsert({
         where: { reportId: id },
-        create: { reportId: id, ...validated },
-        update: { ...validated },
+        create: { reportId: id, ...submitterData },
+        update: { ...submitterData },
       });
       // Reporting for "myself" means the contact IS the patient — carry the
       // name over so it isn't re-typed a step later. Only fills a blank
@@ -590,6 +600,7 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
         ? {
             contactName: report.submitter.contactName ?? "",
             contactEmail: report.submitter.contactEmail ?? "",
+            contactEmailConfirm: report.submitter.contactEmail ?? "",
             contactPhone: report.submitter.contactPhone ?? "",
             relationship: report.submitter.relationship ?? "",
             relationshipOther: report.submitter.relationshipOther ?? "",

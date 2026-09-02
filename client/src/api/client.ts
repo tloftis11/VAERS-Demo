@@ -6,6 +6,7 @@ const API_ROOT = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}
 export interface AboutYouData {
   contactName: string;
   contactEmail: string;
+  contactEmailConfirm: string;
   contactPhone: string;
   relationship: string;
   relationshipOther: string;

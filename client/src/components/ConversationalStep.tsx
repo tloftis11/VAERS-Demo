@@ -10,6 +10,7 @@ import { errorsForField, firstErrorForField, relativeErrorsForField } from "../u
 export type ConversationalFieldKind =
   | "text"
   | "email"
+  | "tel"
   | "number"
   | "date"
   | "textarea"
@@ -38,6 +39,10 @@ export interface ConversationalFieldSpec {
   /** For kind "date"/"monthYear" — ISO "YYYY-MM-DD" bounds enforced by the input itself, not just the schema. */
   min?: string;
   max?: string;
+  /** Passed straight through to the rendered `<input autoComplete>` —
+   * e.g. "email"/"tel" so a browser's/password-manager's autofill can
+   * recognize the field for what it is. */
+  autoComplete?: string;
   /** kind "custom" only — the caller owns the entire input UI (e.g. a
    * repeatable bundled-fields editor) instead of a single input control.
    * `errors` is pre-scoped and re-based to this field (see
@@ -439,6 +444,7 @@ export function ConversationalStep({
             aria-describedby={error ? errorId : undefined}
             min={field.kind === "date" ? field.min : undefined}
             max={field.kind === "date" ? field.max : undefined}
+            autoComplete={field.autoComplete}
           />
         );
     }

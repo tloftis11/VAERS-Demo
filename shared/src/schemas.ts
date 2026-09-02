@@ -29,6 +29,7 @@
 import { z } from "zod";
 import type { StepId, SubmitterType } from "./branchingRules";
 import { ageInYears, PREGNANCY_MIN_PLAUSIBLE_AGE } from "./liveChecks";
+import { optionalPhone, usZipSchema } from "./contactValidation";
 
 const requiredString = (msg = "This field is required") => z.string().trim().min(1, msg);
 const optionalString = () =>
@@ -496,21 +497,41 @@ export const adverseEventOccurredSchema = z.object({
   adverseEventOccurred: z.boolean(),
 });
 
+/** Confirms an email was typed correctly, the same way any account-signup
+ * form does — trimmed and case-insensitive, since email addresses aren't
+ * case-sensitive in practice and a mismatched *case* isn't a real typo.
+ * Deliberately never persisted (see reports.ts's "about-you" write path,
+ * which destructures this out before it ever reaches the database) — its
+ * only job is to catch a mistyped address before it's saved. */
+function requireMatchingEmailConfirmation<T extends { contactEmail: string; contactEmailConfirm: string }>(
+  data: T,
+  ctx: z.RefinementCtx
+) {
+  if (data.contactEmail.trim().toLowerCase() !== data.contactEmailConfirm.trim().toLowerCase()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["contactEmailConfirm"],
+      message: "This doesn't match the email address above",
+    });
+  }
+}
+
 /** Item 13 — the real form has no healthcare-provider sub-role breakdown, so HCPs skip this question entirely. */
 export function aboutYouSchema(submitterType: SubmitterType) {
   const base = z.object({
     contactName: requiredString("Please enter your name"),
     contactEmail: z.string().trim().email("Enter a valid email address"),
-    contactPhone: optionalString(),
+    contactEmailConfirm: z.string().trim().email("Enter a valid email address"),
+    contactPhone: optionalPhone(),
     relationship: optionalString(),
     relationshipOther: optionalString(),
     mailingStreet: optionalString(),
     mailingCity: optionalString(),
     mailingState: optionalEnum(STATE_OPTIONS.map((o) => o.value)),
-    mailingZip: optionalString(),
+    mailingZip: usZipSchema(),
     bestContactInfo: optionalString(),
   });
-  if (submitterType === "hcp") return base;
+  if (submitterType === "hcp") return base.superRefine(requireMatchingEmailConfirmation);
   return base
     .extend({
       relationship: selectEnum(
@@ -519,6 +540,7 @@ export function aboutYouSchema(submitterType: SubmitterType) {
       ),
     })
     .superRefine((data, ctx) => {
+      requireMatchingEmailConfirmation(data, ctx);
       if (data.relationship === "other" && !data.relationshipOther) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

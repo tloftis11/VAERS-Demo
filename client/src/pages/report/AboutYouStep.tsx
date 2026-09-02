@@ -19,6 +19,7 @@ interface AboutYouStepProps {
 const EMPTY: AboutYouData = {
   contactName: "",
   contactEmail: "",
+  contactEmailConfirm: "",
   contactPhone: "",
   relationship: "",
   relationshipOther: "",
@@ -53,8 +54,24 @@ export function aboutYouFieldSpecs(
       kind: "email",
       hint: "Used only if we need to follow up about this report.",
       icon: "mail",
+      autoComplete: "email",
     },
-    { id: "contactPhone", label: "Your phone (optional)", required: false, kind: "text", icon: "phone" },
+    {
+      id: "contactEmailConfirm",
+      label: "Confirm your email",
+      required: true,
+      kind: "email",
+      autoComplete: "email",
+    },
+    {
+      id: "contactPhone",
+      label: "Your phone (optional)",
+      required: false,
+      kind: "tel",
+      icon: "phone",
+      autoComplete: "tel",
+      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+    },
   ];
   // The real VAERS form has no healthcare-provider sub-role breakdown — HCPs
   // skip this question entirely (submitterType already captured that).
