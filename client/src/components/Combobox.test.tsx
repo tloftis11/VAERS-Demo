@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -72,6 +73,19 @@ describe("Combobox", () => {
     expect(input).toHaveAttribute("aria-activedescendant", "fruit-opt-0");
   });
 
+  it("REGRESSION: after typing to filter the list, the first ArrowDown still lands on the first result instead of skipping to the second", async () => {
+    const user = userEvent.setup();
+    const { input } = setup();
+    await user.click(input);
+    // "a" matches both "Apple" and "Banana" — two results, so a
+    // skip-the-first bug (landing on index 1 instead of 0) is visible.
+    await user.type(input, "a");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    await user.keyboard("{ArrowDown}");
+    expect(input).toHaveAttribute("aria-activedescendant", "fruit-opt-0");
+    expect(screen.getByRole("option", { name: "Apple" })).toHaveClass("combobox__option--active");
+  });
+
   it("Enter selects the highlighted option", async () => {
     const user = userEvent.setup();
     const { onSelect, input } = setup();
@@ -104,14 +118,46 @@ describe("Combobox", () => {
     expect(input).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("REGRESSION: typing without selecting, then tabbing away, reverts the display so it can't permanently disagree with the stored value", async () => {
+  it("REGRESSION: typing a replacement without selecting an option clears the stale stored value as soon as the text no longer matches it", async () => {
+    // A real, controlled parent (not the disconnected setup() spy above) —
+    // this behavior specifically depends on the stored `value` actually
+    // updating in response to onSelect, same as every real call site.
+    const onSelectSpy = vi.fn();
+    function Wrapper() {
+      const [value, setValue] = useState("a");
+      return (
+        <Combobox
+          id="fruit"
+          options={OPTIONS}
+          value={value}
+          onSelect={(v) => {
+            onSelectSpy(v);
+            setValue(v);
+          }}
+          labelledBy="lbl"
+        />
+      );
+    }
     const user = userEvent.setup();
-    const { onSelect, input } = setup({ value: "a" });
+    render(
+      <>
+        <label id="lbl">Fruit</label>
+        <Wrapper />
+      </>
+    );
+    const input = screen.getByRole("combobox");
     await user.click(input);
     await user.type(input, "something else entirely");
+    // Cleared exactly once — the moment the typed text first diverges from
+    // "Apple" — not once per keystroke afterward (the stored value is
+    // already "" by then, so there's nothing left to clear).
+    expect(onSelectSpy).toHaveBeenCalledTimes(1);
+    expect(onSelectSpy).toHaveBeenCalledWith("");
+    // Blurring without picking a new option reverts the *display* to match
+    // the now-actually-empty stored value — not back to "Apple", which
+    // would misrepresent a selection that no longer exists.
     await user.tab();
-    expect(input).toHaveValue("Apple");
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(input).toHaveValue("");
   });
 
   it("an empty filtered result shows an accessible, non-selectable message", async () => {

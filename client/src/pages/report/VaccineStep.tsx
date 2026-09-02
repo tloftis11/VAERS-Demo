@@ -325,6 +325,19 @@ export function VaccineStep({
       const stillValid = getBodySiteOptionsForRoute(String(value)).some((o) => o.value === values.bodySite);
       if (!stillValid) setValue("bodySite", "");
     }
+    // Same idea for the primary vaccine — changing it can leave a
+    // manufacturer or "please specify" detail behind that no longer makes
+    // sense for the new selection (matches the same clearing already done
+    // per-row in AdditionalVaccinesEditor/PriorVaccinesEditor below).
+    if (id === "vaccineType") {
+      const newVaccineType = String(value);
+      if (!OTHER_OR_FOREIGN.has(newVaccineType)) setValue("vaccineTypeOther", "");
+      const manufacturerOptions = isHcp
+        ? getManufacturerOptionsForHcpVaccine(newVaccineType)
+        : getManufacturerOptions(newVaccineType);
+      const stillValidManufacturer = manufacturerOptions.some((o) => o.value === values.manufacturer);
+      if (!stillValidManufacturer) setValue("manufacturer", "");
+    }
   }
 
   function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {

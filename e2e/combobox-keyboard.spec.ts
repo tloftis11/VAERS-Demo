@@ -7,8 +7,12 @@ test("vaccine Combobox: ArrowDown highlights the first option, keyboard and mous
   await page.goto("/report");
   await page.getByRole("button", { name: "Healthcare Professional" }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await clickChoiceCard(page, "No");
-  await clickChoiceCard(page, "No");
+  await clickChoiceCard(page, "No"); // administration error? no
+  // "No" here too would combine with the answer above into an invalid
+  // report (neither an error nor an adverse event to report) and is
+  // correctly blocked — this test doesn't touch either section either way,
+  // so any valid combination works.
+  await clickChoiceCard(page, "Yes"); // adverse event? yes
   // About you (HCP has no relationship question, only name/email/phone/best-contact)
   await page.getByLabel("Your name", { exact: true }).fill("Keyboard Tester");
   await page.getByRole("button", { name: /^(Next|Skip) →$/ }).click();

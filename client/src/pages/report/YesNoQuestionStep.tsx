@@ -10,6 +10,11 @@ interface YesNoQuestionStepProps {
   yesHint?: string;
   noLabel?: string;
   noHint?: string;
+  /** Runs before an answer is saved — return a message to block that
+   * specific answer (e.g. it would combine with an already-answered
+   * sibling question into an invalid combination) instead of an inline
+   * error, same styling as a failed save. Return null to let it through. */
+  blockAnswer?: (value: boolean) => string | null;
 }
 
 /**
@@ -28,6 +33,7 @@ export function YesNoQuestionStep({
   yesHint,
   noLabel = "No",
   noHint,
+  blockAnswer,
 }: YesNoQuestionStepProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +43,11 @@ export function YesNoQuestionStep({
   // surface a retryable error rather than silently doing nothing if it fails.
   async function handleSelect(v: boolean) {
     if (submitting) return;
+    const blockMessage = blockAnswer?.(v);
+    if (blockMessage) {
+      setError(blockMessage);
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {

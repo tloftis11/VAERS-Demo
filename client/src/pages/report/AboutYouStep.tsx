@@ -190,7 +190,7 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
               checked={wantsMailedResponse}
               onChange={(e) => handleMailToggle(e.target.checked)}
             />
-            I'd like a mailed response instead of email
+            I'd also like a mailed response
           </label>
         ),
       }}

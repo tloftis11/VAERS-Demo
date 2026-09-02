@@ -13,8 +13,11 @@ test("HCP vaccine section is usable on a mobile viewport — no horizontal scrol
   await page.goto("/report");
   await page.getByRole("button", { name: "Healthcare Professional" }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await clickChoiceCard(page, "No");
-  await clickChoiceCard(page, "No");
+  await clickChoiceCard(page, "No"); // administration error? no
+  // "No" here too would combine with the answer above into an invalid
+  // report and is correctly blocked — this test doesn't touch that
+  // section either way, so any valid combination works.
+  await clickChoiceCard(page, "Yes"); // adverse event? yes
 
   await fillAndAdvance(page, "Your name", "Mobile Tester");
   await fillAndAdvance(page, "Your email", "mobile.tester@example.com");
