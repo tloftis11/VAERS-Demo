@@ -56,7 +56,13 @@ export interface AdditionalVaccineRow {
 }
 
 export interface PriorVaccineRow {
-  vaccineName: string;
+  vaccineType: string;
+  vaccineTypeOther: string;
+  manufacturer: string;
+  lotNumber: string;
+  route: string;
+  bodySite: string;
+  doseNumber: string;
   administrationDate: string;
 }
 

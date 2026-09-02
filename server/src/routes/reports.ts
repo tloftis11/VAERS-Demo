@@ -163,7 +163,13 @@ async function serializeReport(reportId: string) {
             doseNumber: row.doseNumber ?? "",
           })),
           priorVaccines: report.vaccine.priorVaccines.map((row) => ({
-            vaccineName: row.vaccineName ?? "",
+            vaccineType: row.vaccineType ?? "",
+            vaccineTypeOther: row.vaccineTypeOther ?? "",
+            manufacturer: row.manufacturer ?? "",
+            lotNumber: row.lotNumber ?? "",
+            route: row.route ?? "",
+            bodySite: row.bodySite ?? "",
+            doseNumber: row.doseNumber ?? "",
             administrationDate: row.administrationDate ?? "",
           })),
         }
@@ -312,6 +318,13 @@ reportsRouter.patch("/:id", async (req, res) => {
       });
       break;
     case "about-you": {
+      // Read before the upsert below overwrites it — this is the
+      // relationship as it stood *before* this save, needed to detect a
+      // self → not-self correction (see below).
+      const previousSubmitter = await prisma.submitter.findUnique({
+        where: { reportId: id },
+        select: { relationship: true },
+      });
       // contactEmailConfirm only exists to catch a mistyped address at
       // submit time (see shared/src/schemas.ts) — it's never a real
       // Submitter column, so it must never reach the Prisma write.
@@ -354,6 +367,19 @@ reportsRouter.patch("/:id", async (req, res) => {
             update: { email: String(validated.contactEmail) },
           });
         }
+      } else if (previousSubmitter?.relationship === "self") {
+        // The reporter just corrected "myself" to someone else (e.g. the
+        // patient-step age-plausibility flag's "change who's filling this
+        // out" redirect) — whatever name/email got carried over above while
+        // we still thought this was a self-report was the *reporter's* own
+        // info, not necessarily the real patient's, and it's never been
+        // through the Patient step's own confirmation for this (different)
+        // patient. Clear it so that step asks fresh instead of silently
+        // keeping the previous person's info attributed to someone else.
+        await prisma.patient.updateMany({
+          where: { reportId: id },
+          data: { firstName: null, lastName: null, email: null },
+        });
       }
       break;
     }
@@ -723,7 +749,13 @@ function sliceForStep(step: StepId, report: any): Record<string, unknown> | null
               doseNumber: row.doseNumber ?? "",
             })),
             priorVaccines: (report.vaccine.priorVaccines ?? []).map((row: any) => ({
-              vaccineName: row.vaccineName ?? "",
+              vaccineType: row.vaccineType ?? "",
+              vaccineTypeOther: row.vaccineTypeOther ?? "",
+              manufacturer: row.manufacturer ?? "",
+              lotNumber: row.lotNumber ?? "",
+              route: row.route ?? "",
+              bodySite: row.bodySite ?? "",
+              doseNumber: row.doseNumber ?? "",
               administrationDate: row.administrationDate ?? "",
             })),
           }

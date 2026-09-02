@@ -120,7 +120,10 @@ a {
 .nav-bar__links {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  /* Wider than a typical flex gap — at --space-2 the plain-text links
+     (FAQ, About VAERS, Accessibility, Provide Follow-up Info) read as one
+     run-together phrase rather than distinct destinations. */
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -432,11 +435,26 @@ a {
   .hero__actions {
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: center;
   }
 
   .hero__actions .button {
     flex: none;
   }
+}
+
+/* A plain text link, not a button — sits beside the primary/secondary hero
+   CTAs but reads as a distant third, lower-emphasis path (see Landing.tsx). */
+.hero__tertiary-action {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hero__tertiary-action:hover {
+  color: var(--color-primary);
 }
 
 .hero__stats {
@@ -794,6 +812,43 @@ a {
   border: 0;
 }
 
+/* A completed step's label is a real jump-back-to-this-section control, not
+   just an accessibility-tree-only caption — but only at desktop widths,
+   where the step indicator has room for it: at narrower widths, up to 8
+   short flex columns don't have room for real label text without wrapping
+   and overlapping the content below, so it stays the same sr-only-but-still-
+   in-the-DOM control as every other step there (still functionally
+   reachable, e.g. by a screen reader, just not a visible tap target). */
+@media (min-width: 1000px) {
+  .step-indicator__label--link {
+    position: static;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    margin: var(--space-1) 0 0;
+    padding: 0;
+    overflow: hidden;
+    clip: auto;
+    display: block;
+    background: none;
+    border: 0;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-primary-dark);
+    text-decoration: underline;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .step-indicator__label--link:hover,
+  .step-indicator__label--link:focus-visible {
+    color: var(--color-primary);
+  }
+}
+
 .step-indicator__progress-text {
   margin: 0;
   font-weight: 700;
@@ -876,6 +931,16 @@ a {
      and pushed the buttons down into a large gap below a short question. */
   .convo-step--question .convo-question-panel {
     grid-area: panel;
+  }
+
+  /* A question with no icon/hint/error is noticeably shorter than one with
+     them (label + single-line input vs. label + hint + input + error), so
+     the Back/Next row visibly jumped up and down between adjacent
+     questions in the same step. A floor here absorbs that jump for the
+     common case without capping genuinely tall questions (checkbox
+     groups, multi-row vaccine editors), which already exceed it. */
+  .convo-step--question .convo-question {
+    min-height: 200px;
   }
 }
 

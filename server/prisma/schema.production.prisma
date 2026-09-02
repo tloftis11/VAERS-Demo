@@ -125,11 +125,17 @@ model AdditionalVaccine {
 }
 
 model PriorVaccine {
-  id                 String                @id @default(cuid())
-  vaccineId          String
-  vaccine            VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
-  sortOrder          Int                   @default(0)
-  vaccineName        String?
+  id               String                @id @default(cuid())
+  vaccineId        String
+  vaccine          VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder        Int                   @default(0)
+  vaccineType      String?
+  vaccineTypeOther String?
+  manufacturer     String?
+  lotNumber        String?
+  route            String?
+  bodySite         String?
+  doseNumber       String?
   administrationDate String?
 }
 

@@ -37,6 +37,7 @@ export const translations = {
   },
   "landing.reportEvent": { en: "Report an Event", es: "Reportar un evento" },
   "landing.learnMore": { en: "Learn More", es: "Más información" },
+  "landing.followUp": { en: "Already reported? Provide follow-up info", es: "¿Ya reportó? Agregar información de seguimiento" },
   "landing.stat.time": { en: "~10 min", es: "~10 min" },
   "landing.stat.timeLabel": { en: "Typical time to complete", es: "Tiempo típico para completar" },
   "landing.stat.mobile": { en: "Mobile-friendly", es: "Compatible con móviles" },

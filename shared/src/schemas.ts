@@ -73,9 +73,25 @@ const optionalBoundedInt = (max: number, msg = `Enter a number from 0 to ${max}`
     .optional()
     .transform((v) => v ?? "");
 
-/** z.enum()'s default message ("Invalid enum value...") leaks the raw value list to end users; this swaps in a plain-language one for select fields. */
+/**
+ * z.enum()'s default message ("Invalid enum value...") leaks the raw value
+ * list to end users, so this swaps in a plain-language one — but the reason
+ * it's built on `z.string().refine()` rather than `z.enum()` is more
+ * important than the message: a `z.enum()` failure (an empty/unanswered
+ * value included) makes zod abort the *entire* parse before any wrapping
+ * `.superRefine()` on the object ever runs, silently discarding whatever
+ * cross-field issues that superRefine would have added. Concretely: a blank
+ * `patientSex` (this exact helper) used to make patientSchema's "date of
+ * birth can't be in the future" check vanish entirely until every other
+ * required field was filled too, since patientSex's own failure aborted the
+ * parse before superRefine got a chance to run. `.refine()` reports the
+ * exact same failure without that side effect — it marks the parse "dirty"
+ * instead of aborting it, so superRefine still runs and still reports every
+ * other issue right alongside this one.
+ */
 function selectEnum<T extends string>(values: readonly T[], message: string) {
-  return z.enum(values as [T, ...T[]], { errorMap: () => ({ message }) });
+  const allowed: readonly string[] = values;
+  return z.string().refine((v): v is T => allowed.includes(v), message);
 }
 
 export const RELATIONSHIP_OPTIONS_PUBLIC = [
@@ -767,11 +783,29 @@ function isBlankAdditionalVaccineRow(row: {
 
 const OTHER_OR_FOREIGN_VACCINE_VALUES = new Set(["other", "foreign"]);
 
-/** One bundled row — HCP path's "other vaccines received in the month before this one" (real form item 22, a repeatable table). */
-const priorVaccineRowSchema = z.object({
-  vaccineName: optionalString(),
+/** One bundled row — HCP path's "other vaccines received in the month
+ * before this one" (real form item 22, a repeatable table). Same
+ * vaccine/manufacturer/lot/route/site/dose detail as additionalVaccines
+ * (item 17) — a prior vaccine deserves exactly the same data quality as a
+ * same-visit one — plus its own administrationDate, since (unlike an
+ * additionalVaccines row) a prior vaccine didn't happen on the primary
+ * vaccine's visit date. */
+const priorVaccineRowSchema = additionalVaccineRowSchema.extend({
   administrationDate: optionalDate(),
 });
+
+function isBlankPriorVaccineRow(row: {
+  vaccineType: string;
+  vaccineTypeOther: string;
+  manufacturer: string;
+  lotNumber: string;
+  route: string;
+  bodySite: string;
+  doseNumber: string;
+  administrationDate: string;
+}): boolean {
+  return isBlankAdditionalVaccineRow(row) && !row.administrationDate;
+}
 
 /**
  * Items 4 (vaccination date/time), 15-16 (facility), 17 (vaccine given), 22
@@ -863,6 +897,24 @@ export function vaccineSchema(_submitterType: SubmitterType) {
           });
         }
       });
+      // Same rules as additionalVaccines above — a prior vaccine deserves
+      // the same "you must pick a vaccine, or remove the row" enforcement.
+      data.priorVaccines.forEach((row, i) => {
+        if (isBlankPriorVaccineRow(row)) return;
+        if (!row.vaccineType) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["priorVaccines", i, "vaccineType"],
+            message: "Select the vaccine for this row, or remove it",
+          });
+        } else if (OTHER_OR_FOREIGN_VACCINE_VALUES.has(row.vaccineType) && !row.vaccineTypeOther) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["priorVaccines", i, "vaccineTypeOther"],
+            message: "Enter the vaccine name for this row",
+          });
+        }
+      });
     })
     // Runs only once superRefine has already passed (a partially-filled row
     // failed validation above and never reaches here) — so this only ever
@@ -873,6 +925,7 @@ export function vaccineSchema(_submitterType: SubmitterType) {
       ...data,
       facilityTypeOther: data.facilityType === "other" ? data.facilityTypeOther : "",
       additionalVaccines: data.additionalVaccines.filter((row) => !isBlankAdditionalVaccineRow(row)),
+      priorVaccines: data.priorVaccines.filter((row) => !isBlankPriorVaccineRow(row)),
     }));
 }
 

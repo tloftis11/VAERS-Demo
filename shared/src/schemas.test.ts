@@ -127,6 +127,84 @@ describe("vaccineSchema (HCP) — blank-row normalization", () => {
   });
 });
 
+const EMPTY_PRIOR_ROW = {
+  vaccineType: "",
+  vaccineTypeOther: "",
+  manufacturer: "",
+  lotNumber: "",
+  route: "",
+  bodySite: "",
+  doseNumber: "",
+  administrationDate: "",
+};
+
+describe("vaccineSchema (HCP) — priorVaccines rows (parity with additionalVaccines)", () => {
+  it("REGRESSION: a completely blank prior-vaccine row must not block validation", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(baseHcpVaccineData({ priorVaccines: [{ ...EMPTY_PRIOR_ROW }] }));
+    expect(result.success).toBe(true);
+  });
+
+  it("a partially-filled prior row (manufacturer set, no vaccine type) fails with a nested path", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ priorVaccines: [{ ...EMPTY_PRIOR_ROW, manufacturer: "moderna" }] })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.vaccineType");
+    }
+  });
+
+  it("a fully-completed prior row (with its own administrationDate) passes", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        priorVaccines: [
+          { ...EMPTY_PRIOR_ROW, vaccineType: "Influenza (Seasonal) (Fluzone)", administrationDate: "2025-12-01" },
+        ],
+      })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("requires vaccineTypeOther when a prior row selects 'other'", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "other", vaccineTypeOther: "" }] })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.vaccineTypeOther");
+    }
+  });
+
+  it("strips a completely blank prior row out of the parsed data entirely", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19" }, { ...EMPTY_PRIOR_ROW }],
+      })
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.priorVaccines).toHaveLength(1);
+      expect((result.data.priorVaccines[0] as { vaccineType: string }).vaccineType).toBe("covid19");
+    }
+  });
+
+  it("a row with only a date (no vaccine picked) is not treated as blank — it still requires a vaccine", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ priorVaccines: [{ ...EMPTY_PRIOR_ROW, administrationDate: "2025-12-01" }] })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.vaccineType");
+    }
+  });
+});
+
 describe("vaccineSchema — Other/Foreign vaccine detail", () => {
   it("requires vaccineTypeOther when the primary vaccine is 'other'", () => {
     const schema = vaccineSchema("hcp");
@@ -839,6 +917,32 @@ describe("patientSchema — ageMonths only applies to a plausible infant", () =>
     expect(result.success).toBe(true);
     if (result.success) {
       expect((result.data as { ageMonths: string | number }).ageMonths).toBe(6);
+    }
+  });
+
+  it("REGRESSION: a future date of birth is rejected even while a later required field (patientSex) is still blank", () => {
+    // This is the exact bug this test guards against: z.enum()'s own
+    // validation failure used to abort zod's parse before the wrapping
+    // superRefine ever ran, silently discarding the "date of birth can't be
+    // in the future" issue whenever patientSex (a later question in the
+    // same step) hadn't been answered yet — meaning the live per-question
+    // Next-click check never caught it, only the final full-step submit did.
+    const schema = patientSchema("public");
+    const result = schema.safeParse(
+      basePatientData({
+        dateOfBirthUnknown: false,
+        patientDateOfBirth: "2099-01-01",
+        patientSex: "", // deliberately still unanswered, as it would be mid-step
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => `${i.path.join(".")}:${i.message}`);
+      expect(messages).toContain("patientDateOfBirth:Date of birth cannot be in the future");
+      // The later field's own "required" issue must still be reported too —
+      // this isn't a case of superRefine replacing the object-level checks,
+      // both must survive together.
+      expect(messages).toContain("patientSex:Select the patient's sex");
     }
   });
 });

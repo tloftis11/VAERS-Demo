@@ -73,7 +73,24 @@ function describeAdditionalVaccineError(relativePath: string, message: string): 
   return `Additional vaccine ${rowNumber}: ${message}`;
 }
 
-const EMPTY_PRIOR_VACCINE: PriorVaccineRow = { vaccineName: "", administrationDate: "" };
+const EMPTY_PRIOR_VACCINE: PriorVaccineRow = {
+  vaccineType: "",
+  vaccineTypeOther: "",
+  manufacturer: "",
+  lotNumber: "",
+  route: "",
+  bodySite: "",
+  doseNumber: "",
+  administrationDate: "",
+};
+
+function describePriorVaccineError(relativePath: string, message: string): string {
+  const [rowIndexStr, field] = relativePath.split(".");
+  const rowNumber = Number(rowIndexStr) + 1;
+  if (field === "vaccineType") return `Prior vaccine ${rowNumber}: select a vaccine.`;
+  if (field === "vaccineTypeOther") return `Prior vaccine ${rowNumber}: enter the vaccine name.`;
+  return `Prior vaccine ${rowNumber}: ${message}`;
+}
 
 /**
  * Field set follows the official VAERS form's "WHICH VACCINES WERE GIVEN"
@@ -227,6 +244,7 @@ export function vaccineFieldSpecs(
         const rows = v as PriorVaccineRow[];
         return rows.length === 0 ? "" : `${rows.length} prior vaccine${rows.length === 1 ? "" : "s"}`;
       },
+      describeError: describePriorVaccineError,
     }
   );
   return fields;
@@ -283,8 +301,13 @@ export function VaccineStep({
       if (f.id === "priorVaccines") {
         return {
           ...f,
-          render: (value: unknown, onChange: (v: unknown) => void) => (
-            <PriorVaccinesEditor value={value} onChange={onChange} />
+          render: (value: unknown, onChange: (v: unknown) => void, rowErrors: Record<string, string>) => (
+            <PriorVaccinesEditor
+              value={value}
+              onChange={onChange}
+              vaccineTypeOptions={vaccineTypeOptions}
+              errors={rowErrors}
+            />
           ),
         };
       }
@@ -555,55 +578,220 @@ export function AdditionalVaccinesEditor({
   );
 }
 
-function PriorVaccinesEditor({ value, onChange }: { value: unknown; onChange: (value: unknown) => void }) {
+/**
+ * Same vaccine/manufacturer/lot/route/site/dose detail as
+ * AdditionalVaccinesEditor above (item 17), plus its own administration
+ * date — a prior vaccine happened at a different, independently-relevant
+ * time rather than sharing the primary vaccine's visit date. Deliberately a
+ * near-duplicate of that editor rather than a shared component: the two
+ * differ only in row id prefix, row label, and the extra date field, and
+ * AdditionalVaccinesEditor already has dedicated component tests pinned to
+ * its exact DOM (ids, row labels) that a shared abstraction risks disturbing
+ * for no real benefit.
+ */
+function PriorVaccinesEditor({
+  value,
+  onChange,
+  vaccineTypeOptions,
+  errors,
+}: {
+  value: unknown;
+  onChange: (value: unknown) => void;
+  vaccineTypeOptions: readonly VaccineOption[];
+  errors: Record<string, string>;
+}) {
   const rows = (value as PriorVaccineRow[] | undefined) ?? [];
+  const hasFocusedRef = useRef(false);
 
   function updateRow(index: number, patch: Partial<PriorVaccineRow>) {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  function selectVaccineType(index: number, newValue: string) {
+    updateRow(index, {
+      vaccineType: newValue,
+      manufacturer: "",
+      ...(OTHER_OR_FOREIGN.has(newValue) ? {} : { vaccineTypeOther: "" }),
+    });
   }
 
   function removeRow(index: number) {
     onChange(rows.filter((_, i) => i !== index));
   }
 
+  useEffect(() => {
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length === 0) {
+      hasFocusedRef.current = false;
+      return;
+    }
+    if (hasFocusedRef.current) return;
+    hasFocusedRef.current = true;
+    const [firstRowIndex, firstField] = errorKeys[0].split(".");
+    const targetId = firstField === "vaccineType" ? `prior-${firstRowIndex}-type` : `prior-${firstRowIndex}-type-other`;
+    document.getElementById(targetId)?.focus();
+  }, [errors]);
+
   return (
     <div className="vaccine-rows">
-      {rows.map((row, i) => (
-        <div className="vaccine-row" key={i}>
-          <div className="vaccine-row__header">
-            <span>Prior vaccine {i + 1}</span>
-            <button type="button" className="button button--text" onClick={() => removeRow(i)}>
-              Remove
-            </button>
-          </div>
-          <div className="vaccine-row__grid vaccine-row__grid--narrow">
-            <div className="field">
-              <label className="field__label" htmlFor={`prior-${i}-name`}>
-                Vaccine
-              </label>
-              <input
-                id={`prior-${i}-name`}
-                className="field__input"
-                value={row.vaccineName}
-                onChange={(e) => updateRow(i, { vaccineName: e.target.value })}
-              />
+      {rows.map((row, i) => {
+        const manufacturerOptions = getManufacturerOptionsForHcpVaccine(row.vaccineType);
+        const typeError = errors[`${i}.vaccineType`];
+        const typeOtherError = errors[`${i}.vaccineTypeOther`];
+        const typeErrorId = `prior-${i}-type-error`;
+        const typeOtherErrorId = `prior-${i}-type-other-error`;
+        return (
+          <div className="vaccine-row" key={i}>
+            <div className="vaccine-row__header">
+              <span>Prior vaccine {i + 1}</span>
+              <button type="button" className="button button--text" onClick={() => removeRow(i)}>
+                Remove
+              </button>
             </div>
-            <div className="field">
-              <label className="field__label" htmlFor={`prior-${i}-date`}>
-                Date administered (optional)
-              </label>
-              <input
-                id={`prior-${i}-date`}
-                type="date"
-                className="field__input"
-                max={todayIsoDate()}
-                value={row.administrationDate}
-                onChange={(e) => updateRow(i, { administrationDate: e.target.value })}
-              />
+            <div className="vaccine-row__grid">
+              <div className="field">
+                <label className="field__label" id={`prior-${i}-type-label`}>
+                  Vaccine
+                </label>
+                <Combobox
+                  id={`prior-${i}-type`}
+                  options={vaccineTypeOptions}
+                  value={row.vaccineType}
+                  labelledBy={`prior-${i}-type-label`}
+                  onSelect={(v) => selectVaccineType(i, v)}
+                  invalid={!!typeError}
+                  describedBy={typeError ? typeErrorId : undefined}
+                />
+                {typeError && (
+                  <p id={typeErrorId} role="alert" className="field__error">
+                    {typeError}
+                  </p>
+                )}
+              </div>
+              {OTHER_OR_FOREIGN.has(row.vaccineType) && (
+                <div className="field">
+                  <label className="field__label" htmlFor={`prior-${i}-type-other`}>
+                    Please specify the vaccine
+                  </label>
+                  <input
+                    id={`prior-${i}-type-other`}
+                    className="field__input"
+                    value={row.vaccineTypeOther}
+                    onChange={(e) => updateRow(i, { vaccineTypeOther: e.target.value })}
+                    aria-invalid={!!typeOtherError}
+                    aria-describedby={typeOtherError ? typeOtherErrorId : undefined}
+                  />
+                  {typeOtherError && (
+                    <p id={typeOtherErrorId} role="alert" className="field__error">
+                      {typeOtherError}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="field">
+                <label className="field__label" htmlFor={`prior-${i}-manufacturer`}>
+                  Manufacturer
+                </label>
+                <select
+                  id={`prior-${i}-manufacturer`}
+                  className="field__select"
+                  value={row.manufacturer}
+                  onChange={(e) => updateRow(i, { manufacturer: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {manufacturerOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`prior-${i}-lot`}>
+                  Lot number
+                </label>
+                <input
+                  id={`prior-${i}-lot`}
+                  className="field__input"
+                  value={row.lotNumber}
+                  onChange={(e) => updateRow(i, { lotNumber: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`prior-${i}-route`}>
+                  How was it given? (optional)
+                </label>
+                <select
+                  id={`prior-${i}-route`}
+                  className="field__select"
+                  value={row.route}
+                  onChange={(e) => {
+                    const newRoute = e.target.value;
+                    const stillValid = getBodySiteOptionsForRoute(newRoute).some((o) => o.value === row.bodySite);
+                    updateRow(i, { route: newRoute, ...(stillValid ? {} : { bodySite: "" }) });
+                  }}
+                >
+                  <option value="">Select…</option>
+                  {ROUTE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`prior-${i}-site`}>
+                  Where was it given? (optional)
+                </label>
+                <select
+                  id={`prior-${i}-site`}
+                  className="field__select"
+                  value={row.bodySite}
+                  onChange={(e) => updateRow(i, { bodySite: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {getBodySiteOptionsForRoute(row.route).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`prior-${i}-dose`}>
+                  Dose number (optional)
+                </label>
+                <select
+                  id={`prior-${i}-dose`}
+                  className="field__select"
+                  value={row.doseNumber}
+                  onChange={(e) => updateRow(i, { doseNumber: e.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {DOSE_NUMBER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor={`prior-${i}-date`}>
+                  Date administered (optional)
+                </label>
+                <input
+                  id={`prior-${i}-date`}
+                  type="date"
+                  className="field__input"
+                  max={todayIsoDate()}
+                  value={row.administrationDate}
+                  onChange={(e) => updateRow(i, { administrationDate: e.target.value })}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         className="button button--secondary"
