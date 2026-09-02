@@ -856,6 +856,33 @@ a {
   font-size: 0.9rem;
 }
 
+.step-indicator__jump {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.step-indicator__jump-select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-primary-dark);
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+/* The desktop label-links (see .step-indicator__label--link above) cover
+   this same "jump to a completed step" need there, with more room to show
+   real label text next to each segment — so this mobile/tablet-only select
+   steps aside once that space is available. */
+@media (min-width: 1000px) {
+  .step-indicator__jump {
+    display: none;
+  }
+}
+
 /* Milestone banner */
 
 .milestone-banner {

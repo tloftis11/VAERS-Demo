@@ -13,6 +13,7 @@ interface StepIndicatorProps {
 /** Persistent breadcrumb-style step indicator (design doc §4.2): gives users a clear sense of location and remaining effort. */
 export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicatorProps) {
   const currentIndex = steps.indexOf(currentStep);
+  const completedSteps = steps.slice(0, currentIndex);
 
   return (
     <nav aria-label="Report progress" className="step-indicator">
@@ -45,6 +46,33 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
       <p className="step-indicator__progress-text">
         Step {currentIndex + 1} of {steps.length}: {STEP_LABELS[currentStep]}
       </p>
+      {/* Mobile counterpart to the desktop step-indicator__label--link jump
+          controls: those rely on real label text next to each segment,
+          which doesn't fit in a narrow flex column without wrapping and
+          overlapping the question below (see global.css) — a single select
+          gets the same "jump to a completed step" capability into the same
+          amount of horizontal space. Hidden at desktop widths, where the
+          per-segment labels already cover this. */}
+      {onStepClick && completedSteps.length > 0 && (
+        <label className="step-indicator__jump">
+          <span className="sr-only">Jump to a completed step</span>
+          <select
+            className="step-indicator__jump-select"
+            value=""
+            onChange={(e) => {
+              const target = e.target.value as StepId;
+              if (target) onStepClick(target);
+            }}
+          >
+            <option value="">Jump to a completed step…</option>
+            {completedSteps.map((step) => (
+              <option key={step} value={step}>
+                {STEP_LABELS[step]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </nav>
   );
 }
