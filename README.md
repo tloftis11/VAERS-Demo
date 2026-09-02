@@ -41,6 +41,23 @@ npm run dev                          # API on :4000, client on :5173
 Open http://localhost:5173. The Vite dev server proxies `/api` to the
 Express server, so no extra configuration is needed.
 
+### Running the tests
+
+```bash
+npm run test --workspace=shared      # zod schema + validation-util unit tests
+npm run test --workspace=client      # component tests (Vitest + RTL)
+npm run test --workspace=server      # API tests (Vitest + Supertest, isolated SQLite test.db)
+npm run e2e                          # Playwright, full browser + real API + isolated DB
+```
+
+`npm run e2e` starts its own server+client pair on ports 4100/5175 against a
+throwaway `server/e2e-test.db` (see `playwright.config.ts`) — it's safe to
+run alongside a `npm run dev` session on the normal 4000/5173 ports, and
+never touches `dev.db`. It covers a representative subset of the reporting
+flow (the HCP additional-vaccine bug fix, contact validation, draft
+resume/retry, the draft token, a mobile-viewport check) — not an exhaustive
+walk of every branch/submitter path.
+
 ## Project structure
 
 ```
@@ -86,10 +103,13 @@ client/src/components/         StepIndicator, FaqWidget, SurveyForm, Field primi
   browser refresh with no token in hand.
 - **Automated tests exist across all three packages** (Vitest for
   `shared`/`server`/`client`, Supertest for the API, React Testing Library
-  for components) — this bullet used to say there were none; that's no
-  longer true. There's still no Playwright end-to-end suite covering full
-  submitter journeys through the browser, which is the next gap worth
-  closing if you extend this.
+  for components, Playwright for a handful of full-browser end-to-end
+  scenarios — see "Running the tests" above) — this bullet used to say
+  there were none; that's no longer true. The Playwright suite is a
+  representative subset (the additional-vaccine bug fix, contact
+  validation, draft resume/retry, the draft token, a mobile check), not an
+  exhaustive walk of every submitter path/branch combination — widening it
+  is the next gap worth closing if you extend this.
 
 ## Deploying to Render
 
