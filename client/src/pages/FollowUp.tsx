@@ -182,6 +182,11 @@ export function FollowUp() {
           hint="Shown on your confirmation page after you submitted the report."
           value={referenceInput}
           onChange={setReferenceInput}
+          // A shared/public browser must never offer to autofill someone
+          // else's report reference here — this is a lookup for another
+          // person's already-submitted data, not a returning-user
+          // convenience.
+          autoComplete="off"
         />
         <div className="step-form__actions">
           <button type="submit" className="button button--primary" disabled={lookupState === "loading"}>
@@ -226,7 +231,13 @@ export function FollowUp() {
             confirm you're the person who filed it. Enter the email address you used when you
             submitted.
           </p>
-          <TextField id="verify-email" label="Email of record" value={emailInput} onChange={setEmailInput} />
+          <TextField
+            id="verify-email"
+            label="Email of record"
+            value={emailInput}
+            onChange={setEmailInput}
+            autoComplete="off"
+          />
           {emailError && (
             <p role="alert" className="field__error">
               {emailError}
@@ -281,13 +292,37 @@ export function FollowUp() {
           <h2>What you submitted</h2>
           <ReportSummarySection
             title="About you"
-            fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
+            fields={aboutYouFieldSpecs(report.submitterType ?? "public", null, true, {
+              city: report.aboutYou?.mailingCity ?? "",
+              state: report.aboutYou?.mailingState ?? "",
+              zip: report.aboutYou?.mailingZip ?? "",
+            })}
             values={report.aboutYou}
           />
-          <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
+          <ReportSummarySection
+            title="About the patient"
+            fields={patientFieldSpecs(undefined, undefined, report.patient?.patientRaceOther, {
+              city: report.patient?.patientCity ?? "",
+              state: report.patient?.patientState ?? "",
+              county: report.patient?.patientCounty ?? "",
+              zip: report.patient?.patientZip ?? "",
+            })}
+            values={report.patient}
+          />
           <ReportSummarySection
             title="Vaccine information"
-            fields={vaccineFieldSpecs(report.submitterType === "hcp", undefined, report.vaccine?.vaccineType)}
+            fields={vaccineFieldSpecs(
+              report.submitterType === "hcp",
+              undefined,
+              report.vaccine?.vaccineType,
+              report.vaccine?.route,
+              report.vaccine?.bodySiteOther,
+              {
+                city: report.vaccine?.facilityCity ?? "",
+                state: report.vaccine?.facilityState ?? "",
+                zip: report.vaccine?.facilityZip ?? "",
+              }
+            )}
             values={report.vaccine}
           />
           {/* Mirrors getApplicableSteps' own gating (branchingRules.ts) and

@@ -18,6 +18,7 @@ function blankRow(overrides: Partial<AdditionalVaccineRow> = {}): AdditionalVacc
     lotNumber: "",
     route: "",
     bodySite: "",
+    bodySiteOther: "",
     doseNumber: "",
     ...overrides,
   };

@@ -52,6 +52,7 @@ export interface AdditionalVaccineRow {
   lotNumber: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   doseNumber: string;
 }
 
@@ -62,6 +63,7 @@ export interface PriorVaccineRow {
   lotNumber: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   doseNumber: string;
   administrationDate: string;
 }
@@ -76,6 +78,7 @@ export interface VaccineData {
   administrationTime: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   administeringFacility: string;
   facilityStreet: string;
   facilityCity: string;

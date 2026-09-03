@@ -95,6 +95,7 @@ model VaccineAdministration {
   administrationTime    String?
   route                 String?
   bodySite              String?
+  bodySiteOther         String? // free-text detail when bodySite is "other"
   administeringFacility String?
   facilityStreet        String?
   facilityCity          String?
@@ -121,6 +122,7 @@ model AdditionalVaccine {
   lotNumber    String?
   route        String?
   bodySite     String?
+  bodySiteOther String?
   doseNumber   String?
 }
 
@@ -135,6 +137,7 @@ model PriorVaccine {
   lotNumber        String?
   route            String?
   bodySite         String?
+  bodySiteOther    String?
   doseNumber       String?
   administrationDate String?
 }

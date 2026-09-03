@@ -27,6 +27,7 @@ function baseHcpVaccineData(overrides: Record<string, unknown> = {}) {
     lotNumber: "ABC123",
     route: "",
     bodySite: "",
+    bodySiteOther: "",
     administeringFacility: "",
     facilityType: "",
     otherVaccinesRecent: "",
@@ -44,6 +45,7 @@ const EMPTY_ADDITIONAL_ROW = {
   lotNumber: "",
   route: "",
   bodySite: "",
+  bodySiteOther: "",
   doseNumber: "",
 };
 
@@ -138,6 +140,7 @@ const EMPTY_PRIOR_ROW = {
   lotNumber: "",
   route: "",
   bodySite: "",
+  bodySiteOther: "",
   doseNumber: "",
   administrationDate: "",
 };
@@ -328,6 +331,57 @@ describe("vaccineSchema — manufacturer must match the selected vaccine", () =>
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.manufacturer");
+    }
+  });
+});
+
+describe("vaccineSchema — bodySite 'Other' requires a description (same pattern as vaccineTypeOther)", () => {
+  it("REGRESSION: rejects bodySite 'other' with no description, on the primary vaccine", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(baseHcpVaccineData({ bodySite: "other", bodySiteOther: "" }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("bodySiteOther");
+    }
+  });
+
+  it("accepts bodySite 'other' once a description is provided", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({ bodySite: "other", bodySiteOther: "Behind the left ear" })
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("does not require a description for any other bodySite value", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(baseHcpVaccineData({ bodySite: "left_arm", bodySiteOther: "" }));
+    expect(result.success).toBe(true);
+  });
+
+  it("REGRESSION: rejects bodySite 'other' with no description on an additionalVaccines row", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        additionalVaccines: [{ ...EMPTY_ADDITIONAL_ROW, vaccineType: "covid19", bodySite: "other" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("additionalVaccines.0.bodySiteOther");
+    }
+  });
+
+  it("REGRESSION: rejects bodySite 'other' with no description on a priorVaccines row", () => {
+    const schema = vaccineSchema("hcp");
+    const result = schema.safeParse(
+      baseHcpVaccineData({
+        priorVaccines: [{ ...EMPTY_PRIOR_ROW, vaccineType: "covid19", bodySite: "other" }],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path.join("."))).toContain("priorVaccines.0.bodySiteOther");
     }
   });
 });

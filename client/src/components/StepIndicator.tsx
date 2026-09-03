@@ -41,6 +41,13 @@ export function StepIndicator({ steps, currentStep, furthestCompletedStep, onSte
                 >
                   {label}
                 </button>
+              ) : status === "current" ? (
+                // Visible and un-clickable — the segments themselves gave
+                // no indication of *which one* was "you are here" (only
+                // completed steps had visible text), so the eye landed on
+                // whichever segment happened to have a label instead of the
+                // actual current position.
+                <span className="step-indicator__label step-indicator__label--current">{label}</span>
               ) : (
                 <span className="step-indicator__label">{label}</span>
               )}

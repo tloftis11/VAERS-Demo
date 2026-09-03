@@ -12,6 +12,7 @@ import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
+import { AddressFieldGroup, formatAddressSummary } from "../../components/AddressFieldGroup";
 
 interface PatientStepProps {
   submitterType: SubmitterType;
@@ -73,7 +74,15 @@ const EMPTY: PatientData = {
  * the same human-readable labels instead of raw field keys — those callers
  * pass no argument, which shows the full superset for display purposes.
  */
-export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = false): ConversationalFieldSpec[] {
+export function patientFieldSpecs(
+  dateOfBirthUnknown = true,
+  dobPartialMode = false,
+  patientRaceOtherValue?: string,
+  /** Only needed for the review-summary line — the live wizard's own
+   * `render` (attached in the component below) reads current values
+   * directly via closure instead. */
+  patientAddressValues?: { city: string; state: string; county: string; zip: string }
+): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     { id: "patientFirstName", label: "Patient's first name", required: true, kind: "text", icon: "person" },
     { id: "patientLastName", label: "Patient's last name", required: true, kind: "text", icon: "person" },
@@ -110,21 +119,28 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
   fields.push(
     {
       id: "patientStreet",
-      label: "Patient's street address (optional)",
+      label: "Patient's address (optional)",
       required: false,
-      kind: "text",
-      hint: "Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B.",
+      kind: "custom",
+      // Folds city/state/county/zip into this same question (see the
+      // `render` attached in the component below) — one screen instead of
+      // five, with real autoComplete attributes for browser address autofill.
+      alsoValidates: ["patientCity", "patientState", "patientCounty", "patientZip"],
+      describeError: (relativePath, message) => {
+        if (relativePath === "patientCity") return `Patient's city: ${message}`;
+        if (relativePath === "patientState") return `Patient's state: ${message}`;
+        if (relativePath === "patientZip") return `Patient's ZIP: ${message}`;
+        return message;
+      },
+      formatSummary: (streetValue) =>
+        patientAddressValues
+          ? formatAddressSummary({
+              street: (streetValue as string) ?? "",
+              ...patientAddressValues,
+              stateOptions: STATE_OR_FOREIGN_OPTIONS,
+            })
+          : String(streetValue ?? ""),
     },
-    { id: "patientCity", label: "Patient's city (optional)", required: false, kind: "text" },
-    {
-      id: "patientState",
-      label: "Patient's state (optional)",
-      required: false,
-      kind: "choice",
-      options: STATE_OR_FOREIGN_OPTIONS,
-    },
-    { id: "patientCounty", label: "Patient's county (optional)", required: false, kind: "text" },
-    { id: "patientZip", label: "Patient's ZIP code (optional)", required: false, kind: "text" },
     {
       id: "patientPhone",
       label: "Patient's phone (optional)",
@@ -192,8 +208,21 @@ export function patientFieldSpecs(dateOfBirthUnknown = true, dobPartialMode = fa
       required: false,
       kind: "checkboxGroup",
       options: RACE_OPTIONS,
+      hint: "Selecting \"Other\" adds a field to describe it, right here.",
+      // Same inline-detail pattern as the adverse-event step's symptoms
+      // question — see that field's own comment for the full rationale
+      // (avoids reintroducing an orphaned-nested-error display bug).
+      alsoValidates: ["patientRaceOther"],
+      describeError: (relativePath, message) =>
+        relativePath === "patientRaceOther" ? message : `Race: ${message}`,
+      formatSummary: (value) =>
+        ((value as string[]) ?? [])
+          .map((v) => {
+            const label = RACE_OPTIONS.find((o) => o.value === v)?.label ?? v;
+            return v === "other" && patientRaceOtherValue ? `${label} (${patientRaceOtherValue})` : label;
+          })
+          .join(", "),
     },
-    { id: "patientRaceOther", label: "Please describe the patient's race", required: false, kind: "text" },
     {
       id: "patientEthnicity",
       label: "Patient's ethnicity (optional)",
@@ -269,14 +298,54 @@ export function PatientStep({
   const ageMonthsSkipReason =
     bestAgeEstimate !== null && bestAgeEstimate > 2 ? "the patient's age makes this inapplicable" : null;
 
-  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode).filter((f) => {
-    if (f.id === "ageMonths") return !ageMonthsSkipReason;
-    if (f.id === "pregnant") return !pregnancySkipReason;
-    if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
-    if (f.id === "patientRaceOther") return (values.patientRace as string[]).includes("other");
-    if (f.id === "patientEmailConfirm") return !!(values.patientEmail as string).trim();
-    return true;
-  });
+  const showPatientRaceOther = (values.patientRace as string[]).includes("other");
+
+  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode, values.patientRaceOther as string, {
+    city: values.patientCity,
+    state: values.patientState,
+    county: values.patientCounty,
+    zip: values.patientZip,
+  })
+    .filter((f) => {
+      if (f.id === "ageMonths") return !ageMonthsSkipReason;
+      if (f.id === "pregnant") return !pregnancySkipReason;
+      if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
+      if (f.id === "patientEmailConfirm") return !!(values.patientEmail as string).trim();
+      return true;
+    })
+    .map((f) => {
+      // render is attached here, not in patientFieldSpecs, since it needs
+      // this component's own values/handleSetValue for the sibling
+      // city/state/county/zip fields folded into this same question.
+      if (f.id === "patientStreet") {
+        return {
+          ...f,
+          render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
+            <AddressFieldGroup
+              idPrefix="patient"
+              streetLabel="Patient's street address"
+              streetHint="Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B."
+              street={streetValue as string}
+              onStreetChange={onStreetChange}
+              streetError={errors.patientStreet}
+              city={values.patientCity}
+              onCityChange={(v) => handleSetValue("patientCity", v)}
+              cityError={errors.patientCity}
+              state={values.patientState}
+              onStateChange={(v) => handleSetValue("patientState", v)}
+              stateOptions={STATE_OR_FOREIGN_OPTIONS}
+              stateError={errors.patientState}
+              zip={values.patientZip}
+              onZipChange={(v) => handleSetValue("patientZip", v)}
+              zipError={errors.patientZip}
+              county={values.patientCounty}
+              onCountyChange={(v) => handleSetValue("patientCounty", v)}
+            />
+          ),
+        };
+      }
+      return f;
+    });
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof PatientData, value as any);
@@ -297,8 +366,14 @@ export function PatientStep({
     if (id === "patientEmail" && !String(value).trim()) setValue("patientEmailConfirm", "");
   }
 
+  // The two checkboxes below are alternatives ("These two options are
+  // different: one still lets us estimate age automatically, the other
+  // asks for age directly instead") but nothing enforced that — both could
+  // end up checked at once, which is self-contradictory (one still expects
+  // a birth date, the other says none of it is known).
   function handleDobPartialToggle(checked: boolean) {
     setDobPartialMode(checked);
+    if (checked) handleSetValue("dateOfBirthUnknown", false);
     const current = String(values.patientDateOfBirth ?? "");
     if (checked && /^\d{4}-\d{2}-\d{2}$/.test(current)) {
       // Keep whatever month/year they'd already entered, just drop the day.
@@ -307,6 +382,11 @@ export function PatientStep({
       // Can't recover a day that was never entered — start the full picker fresh.
       handleSetValue("patientDateOfBirth", "");
     }
+  }
+
+  function handleDateOfBirthUnknownToggle(checked: boolean) {
+    handleSetValue("dateOfBirthUnknown", checked);
+    if (checked && dobPartialMode) setDobPartialMode(false);
   }
 
   return (
@@ -344,7 +424,7 @@ export function PatientStep({
                   <input
                     type="checkbox"
                     checked={dateOfBirthUnknown}
-                    onChange={(e) => handleSetValue("dateOfBirthUnknown", e.target.checked)}
+                    onChange={(e) => handleDateOfBirthUnknownToggle(e.target.checked)}
                   />
                   I don't know any part of the date of birth
                 </label>
@@ -369,6 +449,27 @@ export function PatientStep({
             <p className="field__hint" role="status">
               We'll skip asking about pregnancy — {pregnancySkipReason}.
             </p>
+          ) : null,
+        patientRace: () =>
+          showPatientRaceOther ? (
+            <div className="field field--nested">
+              <label className="field__label" htmlFor="patient-race-other-input">
+                Describe the patient's race
+              </label>
+              <input
+                id="patient-race-other-input"
+                className="field__input"
+                value={values.patientRaceOther}
+                onChange={(e) => handleSetValue("patientRaceOther", e.target.value)}
+                aria-invalid={!!errors.patientRaceOther}
+                aria-describedby={errors.patientRaceOther ? "patient-race-other-error" : undefined}
+              />
+              {errors.patientRaceOther && (
+                <p id="patient-race-other-error" role="alert" className="field__error">
+                  {errors.patientRaceOther}
+                </p>
+              )}
+            </div>
           ) : null,
       }}
     />
