@@ -1163,9 +1163,20 @@ a {
 
 .convo-question__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+/* Fixed width regardless of whether this question has an icon, so the
+   label text after it always starts at the same horizontal position —
+   see the comment at its usage in ConversationalStep.tsx. */
+.convo-question__icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
 }
 
 .convo-question__icon {
@@ -1455,6 +1466,15 @@ a {
 .field--error .field__select,
 .field--error .field__textarea {
   border-color: var(--color-error);
+}
+
+/* Placeholder examples (e.g. the address fields' "e.g. 123 Main St...")
+   read as instructional text, not a value already typed in — a smaller,
+   more muted size than the real input text helps that distinction land,
+   and keeps a longer example from crowding a narrow field. */
+.field__input::placeholder {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
 }
 
 .field__error {
