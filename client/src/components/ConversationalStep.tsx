@@ -163,6 +163,16 @@ export function ConversationalStep({
   extraFieldValidation,
 }: ConversationalStepProps) {
   const [index, setIndex] = useState(initialIndex);
+  // The furthest question reached in this step so far — distinct from
+  // `index` (the one on screen *right now*), so that going back to fix an
+  // earlier answer doesn't strand later, already-answered questions as
+  // un-jumpable "upcoming" pills. Only ever grows; mutated directly during
+  // render (not via setState/useEffect) since it's a plain derived
+  // tracking value, not something that itself needs to trigger a render.
+  const maxIndexReachedRef = useRef(initialIndex);
+  if (index > maxIndexReachedRef.current) {
+    maxIndexReachedRef.current = index;
+  }
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Error shown under the *active* question. Deliberately not just
@@ -489,7 +499,18 @@ export function ConversationalStep({
     <div className="convo-step convo-step--question">
       <div className="recap-pill-list">
         {fields.map((f, i) => {
-          if (i < index) {
+          if (i === index) {
+            return (
+              <div key={f.id} className="recap-pill recap-pill--current" aria-current="true">
+                <span>{f.label}</span>
+              </div>
+            );
+          }
+          // Any question already reached — whether it sits before *or
+          // after* the one on screen right now (e.g. after going back to
+          // fix an earlier answer) — is safe to jump straight to instead
+          // of clicking "← Back"/"Next" through everything in between.
+          if (i < maxIndexReachedRef.current) {
             const display = formatValue(f, values[f.id]);
             return (
               <button
@@ -507,13 +528,6 @@ export function ConversationalStep({
                   ✎
                 </span>
               </button>
-            );
-          }
-          if (i === index) {
-            return (
-              <div key={f.id} className="recap-pill recap-pill--current" aria-current="true">
-                <span>{f.label}</span>
-              </div>
             );
           }
           return (

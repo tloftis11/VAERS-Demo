@@ -744,6 +744,23 @@ a {
   margin-bottom: 0;
 }
 
+.address-group__row {
+  margin-bottom: var(--space-3);
+}
+
+.address-group__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 500px) {
+  .address-group__grid {
+    /* city, state, zip — city gets the most room, zip the least. */
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+}
+
 .wizard-header {
   display: flex;
   align-items: flex-start;
@@ -846,6 +863,28 @@ a {
   .step-indicator__label--link:hover,
   .step-indicator__label--link:focus-visible {
     color: var(--color-primary);
+  }
+
+  /* "You are here" — visible but never a link (nothing to jump to on the
+     step you're already on). No underline, unlike the clickable completed-
+     step labels, so the two read as distinctly different affordances at a
+     glance, not just two blue labels. */
+  .step-indicator__label--current {
+    position: static;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    margin: var(--space-1) 0 0;
+    padding: 0;
+    overflow: hidden;
+    clip: auto;
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
   }
 }
 
@@ -1145,6 +1184,10 @@ a {
 
 .convo-input:focus {
   border-color: var(--color-primary);
+  /* The border color change above is already a clear, visible focus
+     indicator — the browser's own default focus ring on top of our own
+     2px border read as a distracting double outline. */
+  outline: none;
 }
 
 .convo-input--textarea,

@@ -132,13 +132,37 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
 
       <ReportSummarySection
         title="About you"
-        fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
+        fields={aboutYouFieldSpecs(report.submitterType ?? "public", null, true, {
+          city: report.aboutYou?.mailingCity ?? "",
+          state: report.aboutYou?.mailingState ?? "",
+          zip: report.aboutYou?.mailingZip ?? "",
+        })}
         values={report.aboutYou}
       />
-      <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
+      <ReportSummarySection
+        title="About the patient"
+        fields={patientFieldSpecs(undefined, undefined, report.patient?.patientRaceOther, {
+          city: report.patient?.patientCity ?? "",
+          state: report.patient?.patientState ?? "",
+          county: report.patient?.patientCounty ?? "",
+          zip: report.patient?.patientZip ?? "",
+        })}
+        values={report.patient}
+      />
       <ReportSummarySection
         title="Vaccine information"
-        fields={vaccineFieldSpecs(isHcp, undefined, report.vaccine?.vaccineType)}
+        fields={vaccineFieldSpecs(
+          isHcp,
+          undefined,
+          report.vaccine?.vaccineType,
+          report.vaccine?.route,
+          report.vaccine?.bodySiteOther,
+          {
+            city: report.vaccine?.facilityCity ?? "",
+            state: report.vaccine?.facilityState ?? "",
+            zip: report.vaccine?.facilityZip ?? "",
+          }
+        )}
         values={report.vaccine}
       />
       {/* Mirrors getApplicableSteps' own gating exactly (branchingRules.ts):

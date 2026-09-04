@@ -81,7 +81,9 @@ export function adverseEventFieldSpecs(
       required: true,
       kind: "textarea",
       rows: 5,
-      hint: isHcp ? undefined : "Describe the symptoms and what happened in your own words.",
+      hint: isHcp
+        ? undefined
+        : "Describe the symptoms and what happened in your own words — a short answer like \"Sudden vomiting starting 2 hours after the shot\" is enough.",
     },
     {
       id: "symptoms",
@@ -375,11 +377,11 @@ export function AdverseEventStep({
               onClick={handleCheckDescription}
               disabled={checking || !values.description.trim()}
             >
-              {checking ? "Checking…" : "Check my answers for consistency"}
+              {checking ? "Checking…" : "Double-check for inconsistencies"}
             </button>
             <p className="field__hint">
-              Compares what you described in "What happened?" against the outcomes and recovery
-              status you selected.
+              Optional — compares what you described in "What happened?" against the outcomes and
+              recovery status you selected, in case anything doesn't quite line up.
             </p>
             {checkError && (
               <p role="alert" className="field__error">

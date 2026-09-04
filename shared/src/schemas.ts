@@ -191,11 +191,13 @@ export const ETHNICITY_OPTIONS = [
  */
 export const VACCINE_TYPES = [
   { value: "covid19", label: "COVID-19" },
+  { value: "hpv", label: "HPV" },
   { value: "influenza", label: "Influenza (flu)" },
   { value: "mmr", label: "MMR (measles, mumps, rubella)" },
-  { value: "tdap", label: "Tdap / Tetanus" },
-  { value: "hpv", label: "HPV" },
   { value: "shingles", label: "Shingles" },
+  { value: "tdap", label: "Tdap / Tetanus" },
+  // "Other"/"Not sure" are escape hatches, not real vaccines — pinned at
+  // the end rather than sorted alphabetically among the real options.
   { value: "other", label: "Other / not listed" },
   { value: "unknown", label: "Not sure" },
 ] as const;
@@ -781,6 +783,9 @@ const additionalVaccineRowSchema = z.object({
   lotNumber: optionalString(),
   route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
   bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
+  // Mirrors vaccineTypeOther above — required only when bodySite is
+  // "other" (superRefine below).
+  bodySiteOther: optionalString(),
   doseNumber: optionalEnum(DOSE_NUMBER_OPTIONS.map((o) => o.value)),
 });
 
@@ -788,13 +793,14 @@ const additionalVaccineRowSchema = z.object({
  * never touched — every field still at its default empty value. This must
  * never block submission or be persisted; only a row with *something*
  * entered is held to "you must at least pick a vaccine". */
-function isBlankAdditionalVaccineRow(row: {
+export function isBlankAdditionalVaccineRow(row: {
   vaccineType: string;
   vaccineTypeOther: string;
   manufacturer: string;
   lotNumber: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   doseNumber: string;
 }): boolean {
   return (
@@ -804,6 +810,7 @@ function isBlankAdditionalVaccineRow(row: {
     !row.lotNumber &&
     !row.route &&
     !row.bodySite &&
+    !row.bodySiteOther &&
     !row.doseNumber
   );
 }
@@ -821,13 +828,14 @@ const priorVaccineRowSchema = additionalVaccineRowSchema.extend({
   administrationDate: optionalDate(),
 });
 
-function isBlankPriorVaccineRow(row: {
+export function isBlankPriorVaccineRow(row: {
   vaccineType: string;
   vaccineTypeOther: string;
   manufacturer: string;
   lotNumber: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   doseNumber: string;
   administrationDate: string;
 }): boolean {
@@ -867,6 +875,7 @@ export function vaccineSchema(submitterType: SubmitterType) {
       lotNumber: optionalString(),
       route: optionalEnum(ROUTE_OPTIONS.map((o) => o.value)),
       bodySite: optionalEnum(BODY_SITE_OPTIONS.map((o) => o.value)),
+      bodySiteOther: optionalString(),
       administeringFacility: optionalString(),
       facilityStreet: optionalString(),
       facilityCity: optionalString(),
@@ -902,6 +911,13 @@ export function vaccineSchema(submitterType: SubmitterType) {
           code: z.ZodIssueCode.custom,
           path: ["manufacturer"],
           message: "Select a manufacturer that matches the selected vaccine",
+        });
+      }
+      if (data.bodySite === "other" && !data.bodySiteOther) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["bodySiteOther"],
+          message: "Describe where it was given",
         });
       }
       if (data.facilityType === "other" && !data.facilityTypeOther) {
@@ -945,6 +961,13 @@ export function vaccineSchema(submitterType: SubmitterType) {
             message: "Select a manufacturer that matches this row's vaccine",
           });
         }
+        if (row.bodySite === "other" && !row.bodySiteOther) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["additionalVaccines", i, "bodySiteOther"],
+            message: "Describe where it was given for this row",
+          });
+        }
       });
       // Same rules as additionalVaccines above — a prior vaccine deserves
       // the same "you must pick a vaccine, or remove the row" enforcement.
@@ -972,6 +995,13 @@ export function vaccineSchema(submitterType: SubmitterType) {
               code: z.ZodIssueCode.custom,
               path: ["priorVaccines", i, "manufacturer"],
               message: "Select a manufacturer that matches this row's vaccine",
+            });
+          }
+          if (row.bodySite === "other" && !row.bodySiteOther) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["priorVaccines", i, "bodySiteOther"],
+              message: "Describe where it was given for this row",
             });
           }
         }
@@ -1024,9 +1054,14 @@ export function adverseEventSchema(_submitterType: SubmitterType) {
       "Onset date cannot be in the future"
     ),
     onsetTime: optionalString(),
+    // A short but complete answer (e.g. "Vomiting") is real information —
+    // length isn't a good proxy for quality, especially since the symptoms
+    // checklist right after this already captures structured detail. This
+    // minimum exists only to block an accidental single-keystroke submit,
+    // not to demand a longer answer.
     description: requiredString("Please describe what happened").min(
-      10,
-      "Please provide a bit more detail (at least 10 characters)"
+      3,
+      "Please provide a little more detail"
     ),
     // PUB-003: quick-select chips alongside (not instead of) the free-text description.
     symptoms: z.array(z.string()).optional().default([]),

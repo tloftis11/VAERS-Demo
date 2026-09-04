@@ -9,6 +9,8 @@ import {
   STATE_OR_FOREIGN_OPTIONS,
   getManufacturerOptions,
   getManufacturerOptionsForHcpVaccine,
+  isBlankAdditionalVaccineRow,
+  isBlankPriorVaccineRow,
 } from "../../../../shared/src/schemas";
 import { suggestBodySiteMismatch, isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
@@ -18,6 +20,7 @@ import { useStepForm } from "../../hooks/useStepForm";
 import { useVaccineOptions } from "../../hooks/useVaccineOptions";
 import { Combobox } from "../../components/Combobox";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
+import { AddressFieldGroup, formatAddressSummary } from "../../components/AddressFieldGroup";
 
 const OTHER_OR_FOREIGN = new Set(["other", "foreign"]);
 
@@ -40,6 +43,7 @@ const EMPTY: VaccineData = {
   administrationTime: "",
   route: "",
   bodySite: "",
+  bodySiteOther: "",
   administeringFacility: "",
   facilityStreet: "",
   facilityCity: "",
@@ -62,6 +66,7 @@ const EMPTY_ADDITIONAL_VACCINE: AdditionalVaccineRow = {
   lotNumber: "",
   route: "",
   bodySite: "",
+  bodySiteOther: "",
   doseNumber: "",
 };
 
@@ -70,6 +75,7 @@ function describeAdditionalVaccineError(relativePath: string, message: string): 
   const rowNumber = Number(rowIndexStr) + 2;
   if (field === "vaccineType") return `Additional vaccine ${rowNumber}: select a vaccine.`;
   if (field === "vaccineTypeOther") return `Additional vaccine ${rowNumber}: enter the vaccine name.`;
+  if (field === "bodySiteOther") return `Additional vaccine ${rowNumber}: describe where it was given.`;
   return `Additional vaccine ${rowNumber}: ${message}`;
 }
 
@@ -80,6 +86,7 @@ const EMPTY_PRIOR_VACCINE: PriorVaccineRow = {
   lotNumber: "",
   route: "",
   bodySite: "",
+  bodySiteOther: "",
   doseNumber: "",
   administrationDate: "",
 };
@@ -89,6 +96,7 @@ function describePriorVaccineError(relativePath: string, message: string): strin
   const rowNumber = Number(rowIndexStr) + 1;
   if (field === "vaccineType") return `Prior vaccine ${rowNumber}: select a vaccine.`;
   if (field === "vaccineTypeOther") return `Prior vaccine ${rowNumber}: enter the vaccine name.`;
+  if (field === "bodySiteOther") return `Prior vaccine ${rowNumber}: describe where it was given.`;
   return `Prior vaccine ${rowNumber}: ${message}`;
 }
 
@@ -112,7 +120,12 @@ export function vaccineFieldSpecs(
   /** Only used to seed the public path's manufacturer picklist (see below) — unused for HCP. */
   selectedVaccineType?: string,
   /** Narrows "where was it given?" to sites actually possible for this route. */
-  selectedRoute?: string
+  selectedRoute?: string,
+  bodySiteOtherValue?: string,
+  /** Only needed for the review-summary line — the live wizard's own
+   * `render` (attached in the component below) reads current values
+   * directly via closure instead. */
+  facilityAddressValues?: { city: string; state: string; zip: string }
 ): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     {
@@ -138,30 +151,33 @@ export function vaccineFieldSpecs(
     },
     { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
     { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
-    isHcp
-      ? {
-          id: "manufacturer",
-          label: "Manufacturer (optional)",
-          required: false,
-          kind: "choice",
-          // The selected vaccine already names a specific branded product,
-          // so this is normally a one-manufacturer pick plus Unknown — a
-          // reporter genuinely may not have it on hand even when they know
-          // the vaccine itself, so it stays skippable like every other
-          // vaccine-detail field here (never required merely because a
-          // vaccine was selected).
-          options: getManufacturerOptionsForHcpVaccine(selectedVaccineType ?? ""),
-        }
-      : {
-          id: "manufacturer",
-          label: "Manufacturer (optional)",
-          required: false,
-          kind: "choice",
-          // A public reporter picked a plain-language category, not a brand —
-          // seed the picklist with just the manufacturers that actually make
-          // that vaccine, so this is a quick pick instead of a guessing game.
-          options: getManufacturerOptions(selectedVaccineType ?? ""),
-        },
+    (() => {
+      const manufacturerOptions = isHcp
+        ? getManufacturerOptionsForHcpVaccine(selectedVaccineType ?? "")
+        : getManufacturerOptions(selectedVaccineType ?? "");
+      return {
+        id: "manufacturer",
+        label: "Manufacturer (optional)",
+        required: false,
+        kind: "choice" as const,
+        // The selected vaccine already names a specific branded product
+        // (HCP) or a specific-enough category (public), so this is
+        // normally a one-manufacturer pick plus Unknown — a reporter
+        // genuinely may not have it on hand even when they know the
+        // vaccine itself, so it stays skippable like every other
+        // vaccine-detail field here (never required merely because a
+        // vaccine was selected).
+        options: manufacturerOptions,
+        // "Unknown" being the only choice looks broken without an
+        // explanation — this is expected for "Other/Not sure" vaccine
+        // selections, or an HCP vaccine not in our curated manufacturer
+        // list, not a bug.
+        hint:
+          manufacturerOptions.length === 1
+            ? "We don't have a specific manufacturer list for this vaccine."
+            : undefined,
+      };
+    })(),
     {
       id: "lotNumber",
       label: "Lot number (optional)",
@@ -176,26 +192,41 @@ export function vaccineFieldSpecs(
       required: false,
       kind: "choice",
       options: getBodySiteOptionsForRoute(selectedRoute ?? ""),
+      hint: "Selecting \"Other\" adds a field to describe it, right here.",
+      alsoValidates: ["bodySiteOther"],
+      formatSummary: (value) => {
+        const opts = getBodySiteOptionsForRoute(selectedRoute ?? "");
+        const label = opts.find((o) => o.value === value)?.label ?? String(value);
+        return value === "other" && bodySiteOtherValue ? `${label} (${bodySiteOtherValue})` : label;
+      },
     },
   ];
   fields.push(
     { id: "administeringFacility", label: "Facility or clinic name (optional)", required: false, kind: "text" },
     {
       id: "facilityStreet",
-      label: "Facility street address (optional)",
+      label: "Facility address (optional)",
       required: false,
-      kind: "text",
-      hint: "Street number and name, plus suite/unit if any — e.g. 123 Main St, Suite 200.",
+      kind: "custom",
+      // Folds city/state/zip into this same question (see the `render`
+      // attached in the component below) — one screen instead of four,
+      // with real autoComplete attributes for browser address autofill.
+      alsoValidates: ["facilityCity", "facilityState", "facilityZip"],
+      describeError: (relativePath, message) => {
+        if (relativePath === "facilityCity") return `Facility city: ${message}`;
+        if (relativePath === "facilityState") return `Facility state: ${message}`;
+        if (relativePath === "facilityZip") return `Facility ZIP: ${message}`;
+        return message;
+      },
+      formatSummary: (streetValue) =>
+        facilityAddressValues
+          ? formatAddressSummary({
+              street: (streetValue as string) ?? "",
+              ...facilityAddressValues,
+              stateOptions: STATE_OR_FOREIGN_OPTIONS,
+            })
+          : String(streetValue ?? ""),
     },
-    { id: "facilityCity", label: "Facility city (optional)", required: false, kind: "text" },
-    {
-      id: "facilityState",
-      label: "Facility state (optional)",
-      required: false,
-      kind: "choice",
-      options: STATE_OR_FOREIGN_OPTIONS,
-    },
-    { id: "facilityZip", label: "Facility ZIP code (optional)", required: false, kind: "text" },
     {
       id: "facilityPhone",
       label: "Facility phone (optional)",
@@ -229,20 +260,23 @@ export function vaccineFieldSpecs(
       label: "Additional vaccines given at this same visit (optional)",
       required: false,
       kind: "custom",
+      // A completely blank row (added, then never touched) is silently
+      // dropped at submit time — counting it here too would show "2
+      // additional vaccines" when only 1 will actually be saved.
       formatSummary: (v) => {
-        const rows = v as AdditionalVaccineRow[];
-        return rows.length === 0 ? "" : `${rows.length} additional vaccine${rows.length === 1 ? "" : "s"}`;
+        const count = (v as AdditionalVaccineRow[]).filter((row) => !isBlankAdditionalVaccineRow(row)).length;
+        return count === 0 ? "" : `${count} additional vaccine${count === 1 ? "" : "s"}`;
       },
       describeError: describeAdditionalVaccineError,
     },
     {
       id: "priorVaccines",
-      label: "Other vaccines received in the month before this one (optional)",
+      label: "Other vaccines received in the month before the vaccination you're reporting (optional)",
       required: false,
       kind: "custom",
       formatSummary: (v) => {
-        const rows = v as PriorVaccineRow[];
-        return rows.length === 0 ? "" : `${rows.length} prior vaccine${rows.length === 1 ? "" : "s"}`;
+        const count = (v as PriorVaccineRow[]).filter((row) => !isBlankPriorVaccineRow(row)).length;
+        return count === 0 ? "" : `${count} prior vaccine${count === 1 ? "" : "s"}`;
       },
       describeError: describePriorVaccineError,
     }
@@ -274,7 +308,14 @@ export function VaccineStep({
         ? VACCINE_TYPES_HCP
         : VACCINE_TYPES;
   const fields = (liveVaccineTypeOptions
-    ? vaccineFieldSpecs(isHcp, vaccineTypeOptions, values.vaccineType as string, values.route as string)
+    ? vaccineFieldSpecs(
+        isHcp,
+        vaccineTypeOptions,
+        values.vaccineType as string,
+        values.route as string,
+        values.bodySiteOther as string,
+        { city: values.facilityCity, state: values.facilityState, zip: values.facilityZip }
+      )
     : []
   )
     .filter((f) => {
@@ -311,6 +352,31 @@ export function VaccineStep({
           ),
         };
       }
+      if (f.id === "facilityStreet") {
+        return {
+          ...f,
+          render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
+            <AddressFieldGroup
+              idPrefix="facility"
+              streetLabel="Facility street address"
+              streetHint="Street number and name, plus suite/unit if any — e.g. 123 Main St, Suite 200."
+              street={streetValue as string}
+              onStreetChange={onStreetChange}
+              streetError={errors.facilityStreet}
+              city={values.facilityCity}
+              onCityChange={(v) => handleSetValue("facilityCity", v)}
+              cityError={errors.facilityCity}
+              state={values.facilityState}
+              onStateChange={(v) => handleSetValue("facilityState", v)}
+              stateOptions={STATE_OR_FOREIGN_OPTIONS}
+              stateError={errors.facilityState}
+              zip={values.facilityZip}
+              onZipChange={(v) => handleSetValue("facilityZip", v)}
+              zipError={errors.facilityZip}
+            />
+          ),
+        };
+      }
       return f;
     });
   const siteMismatch = suggestBodySiteMismatch(values.route, values.bodySite);
@@ -323,8 +389,12 @@ export function VaccineStep({
     // picked) shouldn't linger as a stale, now-nonsensical answer.
     if (id === "route") {
       const stillValid = getBodySiteOptionsForRoute(String(value)).some((o) => o.value === values.bodySite);
-      if (!stillValid) setValue("bodySite", "");
+      if (!stillValid) {
+        setValue("bodySite", "");
+        setValue("bodySiteOther", "");
+      }
     }
+    if (id === "bodySite" && value !== "other") setValue("bodySiteOther", "");
     // Same idea for the primary vaccine — changing it can leave a
     // manufacturer or "please specify" detail behind that no longer makes
     // sense for the new selection (matches the same clearing already done
@@ -367,12 +437,35 @@ export function VaccineStep({
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extraFieldValidation={checkFieldLogic}
       extras={{
-        bodySite: () =>
-          siteMismatch ? (
-            <p role="status" className="field__advisory">
-              {siteMismatch}
-            </p>
-          ) : null,
+        bodySite: () => (
+          <>
+            {siteMismatch && (
+              <p role="status" className="field__advisory">
+                {siteMismatch}
+              </p>
+            )}
+            {values.bodySite === "other" && (
+              <div className="field field--nested">
+                <label className="field__label" htmlFor="body-site-other-input">
+                  Describe where it was given
+                </label>
+                <input
+                  id="body-site-other-input"
+                  className="field__input"
+                  value={values.bodySiteOther}
+                  onChange={(e) => handleSetValue("bodySiteOther", e.target.value)}
+                  aria-invalid={!!errors.bodySiteOther}
+                  aria-describedby={errors.bodySiteOther ? "body-site-other-error" : undefined}
+                />
+                {errors.bodySiteOther && (
+                  <p id="body-site-other-error" role="alert" className="field__error">
+                    {errors.bodySiteOther}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        ),
       }}
     />
   );
@@ -529,7 +622,10 @@ export function AdditionalVaccinesEditor({
                   onChange={(e) => {
                     const newRoute = e.target.value;
                     const stillValid = getBodySiteOptionsForRoute(newRoute).some((o) => o.value === row.bodySite);
-                    updateRow(i, { route: newRoute, ...(stillValid ? {} : { bodySite: "" }) });
+                    updateRow(i, {
+                      route: newRoute,
+                      ...(stillValid ? {} : { bodySite: "", bodySiteOther: "" }),
+                    });
                   }}
                 >
                   <option value="">Select…</option>
@@ -548,7 +644,13 @@ export function AdditionalVaccinesEditor({
                   id={`additional-${i}-site`}
                   className="field__select"
                   value={row.bodySite}
-                  onChange={(e) => updateRow(i, { bodySite: e.target.value })}
+                  onChange={(e) => {
+                    const newBodySite = e.target.value;
+                    updateRow(i, {
+                      bodySite: newBodySite,
+                      ...(newBodySite === "other" ? {} : { bodySiteOther: "" }),
+                    });
+                  }}
                 >
                   <option value="">Select…</option>
                   {getBodySiteOptionsForRoute(row.route).map((o) => (
@@ -557,6 +659,25 @@ export function AdditionalVaccinesEditor({
                     </option>
                   ))}
                 </select>
+                {row.bodySite === "other" && (
+                  <div className="field field--nested">
+                    <label className="field__label" htmlFor={`additional-${i}-site-other`}>
+                      Describe where it was given
+                    </label>
+                    <input
+                      id={`additional-${i}-site-other`}
+                      className="field__input"
+                      value={row.bodySiteOther}
+                      onChange={(e) => updateRow(i, { bodySiteOther: e.target.value })}
+                      aria-invalid={!!errors[`${i}.bodySiteOther`]}
+                    />
+                    {errors[`${i}.bodySiteOther`] && (
+                      <p role="alert" className="field__error">
+                        {errors[`${i}.bodySiteOther`]}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-dose`}>
@@ -741,7 +862,10 @@ function PriorVaccinesEditor({
                   onChange={(e) => {
                     const newRoute = e.target.value;
                     const stillValid = getBodySiteOptionsForRoute(newRoute).some((o) => o.value === row.bodySite);
-                    updateRow(i, { route: newRoute, ...(stillValid ? {} : { bodySite: "" }) });
+                    updateRow(i, {
+                      route: newRoute,
+                      ...(stillValid ? {} : { bodySite: "", bodySiteOther: "" }),
+                    });
                   }}
                 >
                   <option value="">Select…</option>
@@ -760,7 +884,13 @@ function PriorVaccinesEditor({
                   id={`prior-${i}-site`}
                   className="field__select"
                   value={row.bodySite}
-                  onChange={(e) => updateRow(i, { bodySite: e.target.value })}
+                  onChange={(e) => {
+                    const newBodySite = e.target.value;
+                    updateRow(i, {
+                      bodySite: newBodySite,
+                      ...(newBodySite === "other" ? {} : { bodySiteOther: "" }),
+                    });
+                  }}
                 >
                   <option value="">Select…</option>
                   {getBodySiteOptionsForRoute(row.route).map((o) => (
@@ -769,6 +899,25 @@ function PriorVaccinesEditor({
                     </option>
                   ))}
                 </select>
+                {row.bodySite === "other" && (
+                  <div className="field field--nested">
+                    <label className="field__label" htmlFor={`prior-${i}-site-other`}>
+                      Describe where it was given
+                    </label>
+                    <input
+                      id={`prior-${i}-site-other`}
+                      className="field__input"
+                      value={row.bodySiteOther}
+                      onChange={(e) => updateRow(i, { bodySiteOther: e.target.value })}
+                      aria-invalid={!!errors[`${i}.bodySiteOther`]}
+                    />
+                    {errors[`${i}.bodySiteOther`] && (
+                      <p role="alert" className="field__error">
+                        {errors[`${i}.bodySiteOther`]}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-dose`}>

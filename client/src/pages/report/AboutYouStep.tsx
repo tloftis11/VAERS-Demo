@@ -4,6 +4,7 @@ import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { AboutYouData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
+import { AddressFieldGroup, formatAddressSummary } from "../../components/AddressFieldGroup";
 
 /** Which submitter-type card the user actually clicked (see SubmitterTypeStep) — never persisted, just a same-session hint for simplifying this step. */
 export type RelationshipHint = "patient" | "caregiver" | "hcp" | null;
@@ -43,7 +44,11 @@ const EMPTY: AboutYouData = {
 export function aboutYouFieldSpecs(
   submitterType: SubmitterType,
   relationshipHint: RelationshipHint = null,
-  includeMailingAddress = true
+  includeMailingAddress = true,
+  /** Only needed for the review-summary line (street/city/state/zip
+   * combined) — the live wizard's own `render` (attached in the component
+   * below, not here) reads current values directly via closure instead. */
+  mailingAddressValues?: { city: string; state: string; zip: string }
 ): ConversationalFieldSpec[] {
   const isHcp = submitterType === "hcp";
   const fields: ConversationalFieldSpec[] = [
@@ -98,10 +103,10 @@ export function aboutYouFieldSpecs(
   fields.push(
     {
       id: "bestContactName",
-      label: "Best doctor or healthcare professional to contact about this adverse event (optional)",
+      label: "Is there a doctor or nurse we could contact for more details? (optional)",
       required: false,
       kind: "text",
-      hint: "If there's someone better placed than you to discuss the clinical details.",
+      hint: "Only if that's someone other than you.",
     },
     {
       id: "bestContactPhone",
@@ -113,18 +118,31 @@ export function aboutYouFieldSpecs(
     }
   );
   if (includeMailingAddress) {
-    fields.push(
-      {
-        id: "mailingStreet",
-        label: "Mailing street address",
-        required: false,
-        kind: "text",
-        hint: "Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B.",
+    fields.push({
+      id: "mailingStreet",
+      label: "Mailing address",
+      required: false,
+      kind: "custom",
+      // Folds mailingCity/State/Zip into this same question (see the
+      // `render` attached in the component below) — one screen instead of
+      // four, with real autoComplete attributes so a browser's own address
+      // autofill actually works.
+      alsoValidates: ["mailingCity", "mailingState", "mailingZip"],
+      describeError: (relativePath, message) => {
+        if (relativePath === "mailingCity") return `Mailing city: ${message}`;
+        if (relativePath === "mailingState") return `Mailing state: ${message}`;
+        if (relativePath === "mailingZip") return `Mailing ZIP: ${message}`;
+        return message;
       },
-      { id: "mailingCity", label: "Mailing city", required: false, kind: "text" },
-      { id: "mailingState", label: "Mailing state", required: false, kind: "choice", options: STATE_OPTIONS },
-      { id: "mailingZip", label: "Mailing ZIP code", required: false, kind: "text" }
-    );
+      formatSummary: (streetValue) =>
+        mailingAddressValues
+          ? formatAddressSummary({
+              street: (streetValue as string) ?? "",
+              ...mailingAddressValues,
+              stateOptions: STATE_OPTIONS,
+            })
+          : String(streetValue ?? ""),
+    });
   }
   return fields;
 }
@@ -151,10 +169,46 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
   const [wantsMailedResponse, setWantsMailedResponse] = useState(
     () => !!(initial.mailingStreet || initial.mailingCity || initial.mailingState || initial.mailingZip)
   );
-  const fields = aboutYouFieldSpecs(submitterType, relationshipHint, wantsMailedResponse).filter((f) => {
-    if (f.id === "relationshipOther") return values.relationship === "other";
-    return true;
-  });
+  const fields = aboutYouFieldSpecs(submitterType, relationshipHint, wantsMailedResponse, {
+    city: values.mailingCity,
+    state: values.mailingState,
+    zip: values.mailingZip,
+  })
+    .filter((f) => {
+      if (f.id === "relationshipOther") return values.relationship === "other";
+      return true;
+    })
+    .map((f) => {
+      // render is attached here, not in aboutYouFieldSpecs, since it needs
+      // this component's own values/handleSetValue for the sibling
+      // mailingCity/State/Zip fields folded into this same question.
+      if (f.id === "mailingStreet") {
+        return {
+          ...f,
+          render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
+            <AddressFieldGroup
+              idPrefix="mailing"
+              streetLabel="Mailing address"
+              streetHint="Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B."
+              street={streetValue as string}
+              onStreetChange={onStreetChange}
+              streetError={errors.mailingStreet}
+              city={values.mailingCity}
+              onCityChange={(v) => handleSetValue("mailingCity", v)}
+              cityError={errors.mailingCity}
+              state={values.mailingState}
+              onStateChange={(v) => handleSetValue("mailingState", v)}
+              stateOptions={STATE_OPTIONS}
+              stateError={errors.mailingState}
+              zip={values.mailingZip}
+              onZipChange={(v) => handleSetValue("mailingZip", v)}
+              zipError={errors.mailingZip}
+            />
+          ),
+        };
+      }
+      return f;
+    });
 
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof AboutYouData, value as any);
@@ -183,14 +237,20 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
       onBack={onBack}
       initialIndex={schema.safeParse(seededInitial).success ? fields.length : 0}
       extras={{
-        bestContactPhone: () => (
+        // Attached to the reporter's *own* phone question, not
+        // bestContactPhone (the HCP contact's number) a few questions
+        // later — that placement read as if the checkbox might be about
+        // mailing something to the HCP instead of the reporter. Checking
+        // it here reveals the mailing-address block once the flow reaches
+        // it, same as before.
+        contactPhone: () => (
           <label className="field__inline-toggle">
             <input
               type="checkbox"
               checked={wantsMailedResponse}
               onChange={(e) => handleMailToggle(e.target.checked)}
             />
-            I'd also like a mailed response
+            I'd like VAERS to also mail me a copy of this report, in addition to emailing it
           </label>
         ),
       }}
