@@ -334,6 +334,7 @@ export function VaccineStep({
               value={value}
               onChange={onChange}
               vaccineTypeOptions={vaccineTypeOptions}
+              isHcp={isHcp}
               errors={rowErrors}
             />
           ),
@@ -347,6 +348,7 @@ export function VaccineStep({
               value={value}
               onChange={onChange}
               vaccineTypeOptions={vaccineTypeOptions}
+              isHcp={isHcp}
               errors={rowErrors}
             />
           ),
@@ -477,11 +479,13 @@ export function AdditionalVaccinesEditor({
   value,
   onChange,
   vaccineTypeOptions,
+  isHcp,
   errors,
 }: {
   value: unknown;
   onChange: (value: unknown) => void;
   vaccineTypeOptions: readonly VaccineOption[];
+  isHcp: boolean;
   errors: Record<string, string>;
 }) {
   const rows = (value as AdditionalVaccineRow[] | undefined) ?? [];
@@ -529,7 +533,15 @@ export function AdditionalVaccinesEditor({
   return (
     <div className="vaccine-rows">
       {rows.map((row, i) => {
-        const manufacturerOptions = getManufacturerOptionsForHcpVaccine(row.vaccineType);
+        // Mirrors the primary vaccine question's own manufacturer matching
+        // (vaccineFieldSpecs above) — a public reporter's row uses the
+        // simplified plain-language vaccine codes, so it must resolve
+        // manufacturers through the same public-path function, not the
+        // HCP one (which expects the full clinical brand codes and would
+        // otherwise silently fall through to "Unknown" for every row).
+        const manufacturerOptions = isHcp
+          ? getManufacturerOptionsForHcpVaccine(row.vaccineType)
+          : getManufacturerOptions(row.vaccineType);
         const typeError = errors[`${i}.vaccineType`];
         const typeOtherError = errors[`${i}.vaccineTypeOther`];
         const typeErrorId = `additional-${i}-type-error`;
@@ -599,6 +611,9 @@ export function AdditionalVaccinesEditor({
                     </option>
                   ))}
                 </select>
+                {manufacturerOptions.length === 1 && (
+                  <p className="field__hint">We don't have a specific manufacturer list for this vaccine.</p>
+                )}
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-lot`}>
@@ -727,11 +742,13 @@ function PriorVaccinesEditor({
   value,
   onChange,
   vaccineTypeOptions,
+  isHcp,
   errors,
 }: {
   value: unknown;
   onChange: (value: unknown) => void;
   vaccineTypeOptions: readonly VaccineOption[];
+  isHcp: boolean;
   errors: Record<string, string>;
 }) {
   const rows = (value as PriorVaccineRow[] | undefined) ?? [];
@@ -769,7 +786,13 @@ function PriorVaccinesEditor({
   return (
     <div className="vaccine-rows">
       {rows.map((row, i) => {
-        const manufacturerOptions = getManufacturerOptionsForHcpVaccine(row.vaccineType);
+        // See the identical comment in AdditionalVaccinesEditor above —
+        // must match the reporter's own path (public vs. HCP), not always
+        // the HCP function, or a public reporter's row silently collapses
+        // to "Unknown" regardless of the vaccine actually selected.
+        const manufacturerOptions = isHcp
+          ? getManufacturerOptionsForHcpVaccine(row.vaccineType)
+          : getManufacturerOptions(row.vaccineType);
         const typeError = errors[`${i}.vaccineType`];
         const typeOtherError = errors[`${i}.vaccineTypeOther`];
         const typeErrorId = `prior-${i}-type-error`;
@@ -839,6 +862,9 @@ function PriorVaccinesEditor({
                     </option>
                   ))}
                 </select>
+                {manufacturerOptions.length === 1 && (
+                  <p className="field__hint">We don't have a specific manufacturer list for this vaccine.</p>
+                )}
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-lot`}>

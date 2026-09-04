@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdditionalVaccinesEditor } from "./VaccineStep";
 import type { AdditionalVaccineRow } from "../../api/client";
@@ -31,6 +31,7 @@ describe("AdditionalVaccinesEditor", () => {
         value={[blankRow()]}
         onChange={() => {}}
         vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
         errors={{}}
       />
     );
@@ -44,6 +45,7 @@ describe("AdditionalVaccinesEditor", () => {
         value={[blankRow({ manufacturer: "moderna" })]}
         onChange={() => {}}
         vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
         errors={{ "0.vaccineType": "Select the vaccine for this row, or remove it" }}
       />
     );
@@ -57,6 +59,7 @@ describe("AdditionalVaccinesEditor", () => {
         value={[blankRow({ manufacturer: "moderna" }), blankRow({ vaccineType: "flu" })]}
         onChange={() => {}}
         vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
         errors={{ "0.vaccineType": "Select the vaccine for this row, or remove it" }}
       />
     );
@@ -71,6 +74,7 @@ describe("AdditionalVaccinesEditor", () => {
         value={[blankRow({ manufacturer: "moderna" })]}
         onChange={onChange}
         vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
         errors={{ "0.vaccineType": "Select the vaccine for this row, or remove it" }}
       />
     );
@@ -88,7 +92,7 @@ describe("AdditionalVaccinesEditor", () => {
     const onChange = vi.fn();
     const rows = [blankRow({ vaccineType: "covid19" }), blankRow({ vaccineType: "flu" })];
     render(
-      <AdditionalVaccinesEditor value={rows} onChange={onChange} vaccineTypeOptions={VACCINE_OPTIONS} errors={{}} />
+      <AdditionalVaccinesEditor value={rows} onChange={onChange} vaccineTypeOptions={VACCINE_OPTIONS} isHcp={false} errors={{}} />
     );
     const removeButtons = screen.getAllByRole("button", { name: "Remove" });
     await user.click(removeButtons[0]);
@@ -101,6 +105,7 @@ describe("AdditionalVaccinesEditor", () => {
         value={[blankRow({ vaccineType: "other" })]}
         onChange={() => {}}
         vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
         errors={{}}
       />
     );
@@ -115,6 +120,7 @@ describe("AdditionalVaccinesEditor", () => {
         value={[blankRow({ vaccineType: "other", vaccineTypeOther: "Some old brand" })]}
         onChange={onChange}
         vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
         errors={{}}
       />
     );
@@ -126,5 +132,39 @@ describe("AdditionalVaccinesEditor", () => {
     expect(onChange).toHaveBeenCalledWith([
       expect.objectContaining({ vaccineType: "flu", vaccineTypeOther: "" }),
     ]);
+  });
+
+  it("REGRESSION: a public row's manufacturer list matches the selected vaccine, not just 'Unknown'", () => {
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ vaccineType: "covid19" })]}
+        onChange={() => {}}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={false}
+        errors={{}}
+      />
+    );
+    const manufacturerSelect = screen.getByLabelText("Manufacturer");
+    expect(within(manufacturerSelect).getByRole("option", { name: "Pfizer-BioNTech" })).toBeInTheDocument();
+    expect(within(manufacturerSelect).getByRole("option", { name: "Moderna" })).toBeInTheDocument();
+  });
+
+  it("an HCP row still resolves manufacturers through the HCP vaccine list", () => {
+    render(
+      <AdditionalVaccinesEditor
+        value={[blankRow({ vaccineType: "covid19" })]}
+        onChange={() => {}}
+        vaccineTypeOptions={VACCINE_OPTIONS}
+        isHcp={true}
+        errors={{}}
+      />
+    );
+    const manufacturerSelect = screen.getByLabelText("Manufacturer");
+    // The HCP vaccine-code space doesn't recognize the public "covid19"
+    // code, so it correctly falls back to the generic single-option list —
+    // this pins that an HCP row uses the HCP-path function at all (a wrong
+    // wire-up the other direction would show the public COVID-19 brands
+    // here instead).
+    expect(within(manufacturerSelect).getAllByRole("option")).toHaveLength(2);
   });
 });
