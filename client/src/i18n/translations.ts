@@ -59,12 +59,6 @@ export const translations = {
     en: "Opens the live VAERS data and download tools on vaers.hhs.gov in a new tab.",
     es: "Abre los datos y herramientas de descarga en vivo de VAERS en vaers.hhs.gov en una nueva pestaña.",
   },
-  "landing.tile.followUp.title": { en: "Provide Follow-up Information", es: "Proporcionar información de seguimiento" },
-  "landing.tile.followUp.body": {
-    en: "Add documents or updates to a report you've already submitted, using your reference number.",
-    es: "Agregue documentos o actualizaciones a un reporte que ya envió, usando su número de referencia.",
-  },
-
   "beforeYouStart.heading": { en: "Before You Start", es: "Antes de comenzar" },
   "beforeYouStart.notice.title": { en: "How Your Report Is Used", es: "Cómo se usa su reporte" },
   "beforeYouStart.notice.body": {
