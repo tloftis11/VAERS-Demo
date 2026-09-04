@@ -52,7 +52,7 @@ export function aboutYouFieldSpecs(
 ): ConversationalFieldSpec[] {
   const isHcp = submitterType === "hcp";
   const fields: ConversationalFieldSpec[] = [
-    { id: "contactName", label: "Your name", required: true, kind: "text", icon: "person" },
+    { id: "contactName", label: "Your name", required: true, kind: "text", icon: "person", autoComplete: "name" },
     {
       id: "contactEmail",
       label: "Your email",

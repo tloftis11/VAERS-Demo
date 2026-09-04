@@ -293,6 +293,7 @@ export function ReportWizard() {
         <PatientStep
           submitterType={report.submitterType!}
           isSelfReport={report.aboutYou?.relationship === "self"}
+          reporterEmail={report.aboutYou?.contactEmail}
           initialData={report.patient}
           onNext={handleNext}
           onBack={handleBack}
