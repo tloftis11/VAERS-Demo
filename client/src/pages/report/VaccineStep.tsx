@@ -194,6 +194,11 @@ export function vaccineFieldSpecs(
       options: getBodySiteOptionsForRoute(selectedRoute ?? ""),
       hint: "Selecting \"Other\" adds a field to describe it, right here.",
       alsoValidates: ["bodySiteOther"],
+      // Selecting "Other" reveals the inline description field below (via
+      // extras.bodySite) — auto-advancing straight past it, like every
+      // other option here does, would mean the reporter never sees that
+      // field appear on this screen at all.
+      optionsRequiringFollowUp: ["other"],
       formatSummary: (value) => {
         const opts = getBodySiteOptionsForRoute(selectedRoute ?? "");
         const label = opts.find((o) => o.value === value)?.label ?? String(value);
@@ -361,7 +366,7 @@ export function VaccineStep({
             <AddressFieldGroup
               idPrefix="facility"
               streetLabel="Facility street address"
-              streetHint="Street number and name, plus suite/unit if any — e.g. 123 Main St, Suite 200."
+              streetHint="e.g. 123 Main St, Suite 200"
               street={streetValue as string}
               onStreetChange={onStreetChange}
               streetError={errors.facilityStreet}

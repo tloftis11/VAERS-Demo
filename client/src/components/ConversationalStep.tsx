@@ -21,6 +21,19 @@ function firstErrorForFieldAndAliases(errors: Record<string, string>, field: Con
   return errorsForFieldAndAliases(errors, field)[0]?.message;
 }
 
+/** The generic banner's message, deliberately narrower than
+ * `firstErrorForFieldAndAliases` above: an aliased field (e.g.
+ * bodySiteOther, rendered inline via `extras`) already gets its own
+ * dedicated error line right next to that specific input, so surfacing the
+ * exact same message a second time up here would just repeat it — this
+ * returns a message only when the *question's own* field is the one at
+ * fault. Still fine for an alias-only error to leave this blank: `advance`
+ * being withheld (decided separately, using every alias) is what actually
+ * blocks Next; this only controls what the generic banner shows. */
+function ownErrorMessage(errors: Record<string, string>, field: ConversationalFieldSpec): string | undefined {
+  return errorsForField(errors, field.id)[0]?.message;
+}
+
 export type ConversationalFieldKind =
   | "text"
   | "email"
@@ -88,6 +101,17 @@ export interface ConversationalFieldSpec {
    * never as its own question.
    */
   alsoValidates?: string[];
+  /**
+   * kind "choice" only — option values that reveal more required content on
+   * this same screen (typically an "Other, please specify" input rendered
+   * via `extras`) and so must NOT auto-advance to the next question when
+   * picked, unlike every other option. Without this, picking one of these
+   * values still advances immediately (matching every other choice card),
+   * so the newly-revealed field is never seen — the reporter lands on the
+   * next question already, the field goes unfilled, and Next later blocks
+   * with an error for a field they never got a chance to see.
+   */
+  optionsRequiringFollowUp?: string[];
 }
 
 interface ConversationalStepProps {
@@ -204,7 +228,7 @@ export function ConversationalStep({
       return;
     }
     const prevField = fields[index - 1];
-    setActiveError(firstErrorForFieldAndAliases(errors, prevField) ?? null);
+    setActiveError(ownErrorMessage(errors, prevField) ?? null);
     setIndex(index - 1);
   }
 
@@ -215,7 +239,7 @@ export function ConversationalStep({
 
   function jumpTo(targetIndex: number) {
     const targetField = fields[targetIndex];
-    setActiveError((targetField && firstErrorForFieldAndAliases(errors, targetField)) ?? null);
+    setActiveError((targetField && ownErrorMessage(errors, targetField)) ?? null);
     setIndex(targetIndex);
   }
 
@@ -338,7 +362,12 @@ export function ConversationalStep({
       // why, since no top-level key matched.
       const message = firstErrorForFieldAndAliases(result.errors, field);
       if (message) {
-        setActiveError(message);
+        // The banner itself only shows a message when it's the question's
+        // *own* field at fault — an alias's error (e.g. bodySiteOther)
+        // already has its own inline error line via extras, so this would
+        // otherwise repeat the exact same text a second time. Next still
+        // stays blocked either way; only what's displayed up here differs.
+        setActiveError(ownErrorMessage(result.errors, field) ?? null);
         return;
       }
     }
@@ -373,7 +402,9 @@ export function ConversationalStep({
                 className={`choice-card${value === opt.value ? " choice-card--selected" : ""}`}
                 onClick={() => {
                   setValue(field.id, opt.value);
-                  advance();
+                  if (!field.optionsRequiringFollowUp?.includes(opt.value)) {
+                    advance();
+                  }
                 }}
               >
                 {opt.label}
@@ -544,7 +575,13 @@ export function ConversationalStep({
             Question {index + 1} of {fields.length}
           </p>
           <div className="convo-question__head">
-            {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
+            {/* Always reserves the same slot whether or not this question
+                has an icon — otherwise the question text itself starts at a
+                different horizontal position depending on the field, which
+                reads as the whole question "jumping" from one to the next. */}
+            <span className="convo-question__icon-slot" aria-hidden="true">
+              {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
+            </span>
             {isGroupControl ? (
               <h2 id={labelId} className="convo-question__label" ref={questionHeadingRef as never} tabIndex={-1}>
                 {field.label}
@@ -583,7 +620,13 @@ export function ConversationalStep({
                 // answer already counts, so a required question with no
                 // Skip button left the user with no forward button at all
                 // unless they thought to re-click their own answer.
-                <button type="button" className="button button--primary" onClick={advance}>
+                // Routed through handleNextClick (not a bare `advance`) so a
+                // choice with a required alsoValidates follow-up (e.g. an
+                // "Other" selection needing its own description) is actually
+                // checked here — otherwise nothing catches a still-blank
+                // follow-up until the end-of-step review, several questions
+                // and a "why am I blocked" moment later.
+                <button type="button" className="button button--primary" onClick={handleNextClick}>
                   Next →
                 </button>
               ) : (

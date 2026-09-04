@@ -365,7 +365,7 @@ export function PatientStep({
             <AddressFieldGroup
               idPrefix="patient"
               streetLabel="Patient's street address"
-              streetHint="Street number and name, plus apartment/suite/unit if any — e.g. 123 Main St, Apt 4B."
+              streetHint="e.g. 123 Main St, Apt 4B"
               street={streetValue as string}
               onStreetChange={onStreetChange}
               streetError={errors.patientStreet}
