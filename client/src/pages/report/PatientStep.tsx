@@ -6,7 +6,7 @@ import {
   RACE_OPTIONS,
   ETHNICITY_OPTIONS,
 } from "../../../../shared/src/schemas";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ageInYears, todayIsoDate, PREGNANCY_MIN_PLAUSIBLE_AGE } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
 import type { PatientData } from "../../api/client";
@@ -20,6 +20,10 @@ interface PatientStepProps {
    * they're reporting for themselves — the only case where the person
    * filling this out and the patient are guaranteed to be the same person. */
   isSelfReport: boolean;
+  /** The reporter's own email from About You — only used to silently mirror
+   * it into patientEmail for a self-report (see isSelfReport below), so the
+   * already-answered address isn't asked again under a different label. */
+  reporterEmail?: string;
   initialData: PatientData | null;
   onNext: (data: Record<string, unknown>) => Promise<void>;
   onBack: () => void;
@@ -84,8 +88,22 @@ export function patientFieldSpecs(
   patientAddressValues?: { city: string; state: string; county: string; zip: string }
 ): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
-    { id: "patientFirstName", label: "Patient's first name", required: true, kind: "text", icon: "person" },
-    { id: "patientLastName", label: "Patient's last name", required: true, kind: "text", icon: "person" },
+    {
+      id: "patientFirstName",
+      label: "Patient's first name",
+      required: true,
+      kind: "text",
+      icon: "person",
+      autoComplete: "given-name",
+    },
+    {
+      id: "patientLastName",
+      label: "Patient's last name",
+      required: true,
+      kind: "text",
+      icon: "person",
+      autoComplete: "family-name",
+    },
     {
       id: "patientDateOfBirth",
       label: "Date of birth",
@@ -237,6 +255,7 @@ export function patientFieldSpecs(
 export function PatientStep({
   submitterType,
   isSelfReport,
+  reporterEmail,
   initialData,
   onNext,
   onBack,
@@ -245,6 +264,19 @@ export function PatientStep({
   const schema = patientSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
+  // Self-reporting means the patient *is* the reporter — their email was
+  // already collected (and confirmed) in About You, so asking for it again
+  // here under a different label is pure redundancy. Instead of asking,
+  // silently mirror it into patientEmail (both copies, since they're
+  // already confirmed-equal) so the data is still there for anything
+  // downstream that reads the patient record specifically.
+  useEffect(() => {
+    if (isSelfReport && reporterEmail && values.patientEmail !== reporterEmail) {
+      setValue("patientEmail", reporterEmail);
+      setValue("patientEmailConfirm", reporterEmail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSelfReport, reporterEmail, values.patientEmail]);
   // Reporting for yourself means you inherently know your own exact
   // birthdate — the "I don't know" escape hatch only makes sense for a
   // caregiver or HCP reporting on someone else's behalf.
@@ -310,10 +342,19 @@ export function PatientStep({
       if (f.id === "ageMonths") return !ageMonthsSkipReason;
       if (f.id === "pregnant") return !pregnancySkipReason;
       if (f.id === "pregnancyDetails") return !pregnancySkipReason && values.pregnant === "yes";
-      if (f.id === "patientEmailConfirm") return !!(values.patientEmail as string).trim();
+      if (f.id === "patientEmail" && isSelfReport) return false;
+      if (f.id === "patientEmailConfirm") return isSelfReport ? false : !!(values.patientEmail as string).trim();
       return true;
     })
     .map((f) => {
+      // A browser's saved "name" profile belongs to whoever is using the
+      // browser, not necessarily the patient — offering it here would be
+      // actively wrong for a caregiver reporting on someone else's behalf.
+      // Only self-reports get the autofill hint; everyone else gets it
+      // explicitly turned off rather than left to the browser's own guess.
+      if ((f.id === "patientFirstName" || f.id === "patientLastName") && !isSelfReport) {
+        return { ...f, autoComplete: "off" };
+      }
       // render is attached here, not in patientFieldSpecs, since it needs
       // this component's own values/handleSetValue for the sibling
       // city/state/county/zip fields folded into this same question.
@@ -453,12 +494,13 @@ export function PatientStep({
         patientRace: () =>
           showPatientRaceOther ? (
             <div className="field field--nested">
-              <label className="field__label" htmlFor="patient-race-other-input">
+              <label className="sr-only" htmlFor="patient-race-other-input">
                 Describe the patient's race
               </label>
               <input
                 id="patient-race-other-input"
                 className="field__input"
+                placeholder="Please specify"
                 value={values.patientRaceOther}
                 onChange={(e) => handleSetValue("patientRaceOther", e.target.value)}
                 aria-invalid={!!errors.patientRaceOther}

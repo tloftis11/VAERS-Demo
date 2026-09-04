@@ -61,19 +61,14 @@ export function AddressFieldGroup({
         <label className="field__label" htmlFor={`${idPrefix}-street`}>
           {streetLabel}
         </label>
-        {streetHint && (
-          <p id={`${idPrefix}-street-hint`} className="field__hint">
-            {streetHint}
-          </p>
-        )}
         <input
           id={`${idPrefix}-street`}
           className="field__input"
           value={street}
           onChange={(e) => onStreetChange(e.target.value)}
           autoComplete="street-address"
+          placeholder={streetHint}
           aria-invalid={!!streetError}
-          aria-describedby={streetHint ? `${idPrefix}-street-hint` : undefined}
         />
         {streetError && (
           <p role="alert" className="field__error">
