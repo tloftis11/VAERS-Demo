@@ -72,13 +72,6 @@ export function Landing() {
           <h2>{t("landing.tile.data.title")}</h2>
           <p>{t("landing.tile.data.body")}</p>
         </a>
-        <Link to="/follow-up" className="tile card-surface">
-          <span className="icon-chip">
-            <FieldIcon name="document" size={22} />
-          </span>
-          <h2>{t("landing.tile.followUp.title")}</h2>
-          <p>{t("landing.tile.followUp.body")}</p>
-        </Link>
       </section>
     </div>
   );
