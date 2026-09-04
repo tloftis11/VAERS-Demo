@@ -154,6 +154,20 @@ a {
   color: var(--color-primary);
 }
 
+/* Prototype/demo disclaimer banner — the opposite of the admin row above:
+   deliberately loud and shown on every viewport size (mobile included),
+   since the whole point is that no visitor mistakes this for the real
+   CDC VAERS system. Sits above everything else in the header, so it's the
+   first thing anyone sees regardless of screen size. */
+.nav-bar__prototype-banner {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: var(--space-2) var(--space-4);
+}
+
 /* Staff-only entry point to the admin portal — a thin strip of its own
    above the main nav row (not squeezed into the flex-wrapping links row),
    deliberately muted and desktop-only so it reads like a real production
@@ -1828,6 +1842,27 @@ a {
   color: var(--color-error);
   font-size: 0.85rem;
   margin: calc(-1 * var(--space-3)) 0 var(--space-5);
+}
+
+/* Persistent prototype/demo disclaimer at the bottom of every page — see
+   the matching, shorter banner at the very top in .nav-bar__prototype-banner.
+   Kept in normal document flow (not fixed) so it never overlaps the
+   fixed-position FAQ/feedback buttons in the bottom corners. */
+.prototype-footer {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  text-align: center;
+  /* Extra bottom clearance so the fixed-position FAQ/feedback buttons
+     (anchored to the viewport's bottom corners) land on this footer's
+     plain background rather than overlapping its text on a short page. */
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + 56px);
+}
+
+.prototype-footer p {
+  max-width: 800px;
+  margin: 0 auto;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 /* Notices */

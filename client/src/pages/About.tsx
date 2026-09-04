@@ -1,7 +1,14 @@
+import { useLanguage } from "../i18n/LanguageContext";
+
 export function About() {
+  const { t } = useLanguage();
+
   return (
     <div className="page page--prose">
       <h1>About VAERS</h1>
+      <div className="notice notice--warning" role="note">
+        <p>{t("prototype.aboutPageNotice")}</p>
+      </div>
       <p>
         The Vaccine Adverse Event Reporting System (VAERS) is the national early-warning system
         for vaccine safety in the United States. Established in 1990, it's co-managed by the

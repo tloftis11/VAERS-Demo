@@ -9,6 +9,9 @@ export function NavBar() {
 
   return (
     <header className="nav-bar">
+      <div className="nav-bar__prototype-banner" role="note">
+        {t("prototype.bannerNotice")}
+      </div>
       <div className="nav-bar__admin-row">
         <div className="nav-bar__admin-row-inner">
           <Link to="/admin" className="nav-bar__admin-link">
