@@ -87,6 +87,25 @@ export const translations = {
   "common.back": { en: "← Back", es: "← Atrás" },
   "common.continue": { en: "Continue", es: "Continuar" },
 
+  // Appears in three places, deliberately with escalating detail: the
+  // header banner is the shortest (every page, top of screen, first thing
+  // anyone sees), the footer repeats it in fuller form (every page,
+  // bottom), and the About page's own notice gives the fullest context
+  // specifically where VAERS itself is being described in real terms —
+  // see PrototypeBanner.tsx, PrototypeFooter.tsx, and About.tsx.
+  "prototype.bannerNotice": {
+    en: "⚠ Demonstration prototype — not the real CDC VAERS system. No data entered here is sent to CDC, VAERS, or any government agency.",
+    es: "⚠ Prototipo de demostración — no es el sistema real de VAERS de los CDC. Ningún dato ingresado aquí se envía a los CDC, VAERS ni a ninguna agencia gubernamental.",
+  },
+  "prototype.footerNotice": {
+    en: "This website is a prototype built for demonstration purposes only. It is not part of the real CDC VAERS system, and nothing entered here is transmitted to CDC, VAERS, or any other government or third-party system — no real adverse event report is filed.",
+    es: "Este sitio web es un prototipo creado únicamente con fines de demostración. No forma parte del sistema real de VAERS de los CDC, y ningún dato ingresado aquí se transmite a los CDC, VAERS ni a ningún otro sistema gubernamental o de terceros — no se presenta ningún reporte real de eventos adversos.",
+  },
+  "prototype.aboutPageNotice": {
+    en: "The information below describes the real, official VAERS program for context. This website itself is a demonstration prototype, not the real VAERS system — nothing you submit here reaches CDC, VAERS, or any government agency.",
+    es: "La información a continuación describe el programa real y oficial de VAERS como contexto. Este sitio web en sí es un prototipo de demostración, no el sistema real de VAERS — nada de lo que envíe aquí llega a los CDC, VAERS ni a ninguna agencia gubernamental.",
+  },
+
   "legal.falseReportWarning": {
     en: "Knowingly submitting false information is a federal crime under 18 U.S.C. § 1001.",
     es: "Enviar información falsa a sabiendas es un delito federal bajo el Código 18 de EE. UU., Sección 1001.",
