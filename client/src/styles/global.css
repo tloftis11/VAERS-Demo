@@ -70,6 +70,12 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   line-height: 1.5;
+  /* Reserves room at the very bottom of every page for the fixed-position
+     FAQ/feedback buttons (anchored to the viewport's bottom corners) so
+     they never sit on top of the last bit of real content on a short
+     page — as plain body background, not colored padding tacked onto
+     whichever element happens to render last (see .prototype-footer). */
+  padding-bottom: 56px;
 }
 
 h1,
@@ -1847,15 +1853,14 @@ a {
 /* Persistent prototype/demo disclaimer at the bottom of every page — see
    the matching, shorter banner at the very top in .nav-bar__prototype-banner.
    Kept in normal document flow (not fixed) so it never overlaps the
-   fixed-position FAQ/feedback buttons in the bottom corners. */
+   fixed-position FAQ/feedback buttons in the bottom corners — clearance for
+   that lives on <body> (below), not as extra padding here, so this stays a
+   normal, tight banner instead of a big colored block with dead space in it. */
 .prototype-footer {
   background: var(--color-warning-bg);
   color: var(--color-warning-text);
   text-align: center;
-  /* Extra bottom clearance so the fixed-position FAQ/feedback buttons
-     (anchored to the viewport's bottom corners) land on this footer's
-     plain background rather than overlapping its text on a short page. */
-  padding: var(--space-4) var(--space-4) calc(var(--space-4) + 56px);
+  padding: var(--space-4);
 }
 
 .prototype-footer p {
