@@ -47,6 +47,7 @@ test("HCP vaccine section is usable on a mobile viewport — no horizontal scrol
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1); // +1 for sub-pixel rounding
 
   await selectFromCombobox(page, "Vaccine", "Fluzone", "Influenza (Seasonal) (Fluzone)");
+  await skipQuestion(page); // manufacturer (asked right after the vaccine itself)
   await fillAndAdvance(page, "Date administered", "2026-06-01");
 
   const scrollWidthAfter = await page.evaluate(() => document.documentElement.scrollWidth);
