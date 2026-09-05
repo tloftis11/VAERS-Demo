@@ -217,9 +217,25 @@ export function ConversationalStep({
   // announces the change, even though it doesn't drop focus straight into
   // the control itself (which varies too much by field kind to target
   // uniformly).
+  //
+  // `.focus()` alone also scrolls — but only via the browser's own "scroll
+  // the minimum distance needed" heuristic, which lands the heading at a
+  // different point in the viewport depending on where the *previous*
+  // question's scroll position happened to be (a short question after a
+  // tall one lands high; the reverse lands low). That read as the question
+  // text "bouncing" between screens even though its position in the
+  // document never actually changed. `preventScroll` stops that default
+  // scroll so the explicit `scrollIntoView` below is the only thing
+  // deciding where the page lands — always the panel's top edge, every
+  // question, every time, with no min-height/scroll-region trickery needed.
   const questionHeadingRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    questionHeadingRef.current?.focus();
+    const heading = questionHeadingRef.current;
+    heading?.focus({ preventScroll: true });
+    const panel = heading?.closest(".convo-question-panel") ?? heading;
+    // Optional call, not just optional chaining on `panel` — jsdom (this
+    // app's test environment) doesn't implement scrollIntoView at all.
+    panel?.scrollIntoView?.({ block: "start" });
   }, [index]);
 
   function goBack() {
