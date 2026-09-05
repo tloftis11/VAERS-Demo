@@ -141,16 +141,10 @@ export function vaccineFieldSpecs(
       icon: "vaccine",
     },
     { id: "vaccineTypeOther", label: "Please specify the vaccine", required: false, kind: "text" },
-    {
-      id: "administrationDate",
-      label: "Date administered",
-      required: true,
-      kind: "date",
-      icon: "calendar",
-      max: todayIsoDate(),
-    },
-    { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
-    { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
+    // Manufacturer sits right after the vaccine itself (not several
+    // unrelated questions later) — the two are directly linked, so asking
+    // "which manufacturer made the vaccine you just picked" while it's
+    // still front of mind reads more naturally than circling back to it.
     (() => {
       const manufacturerOptions = isHcp
         ? getManufacturerOptionsForHcpVaccine(selectedVaccineType ?? "")
@@ -178,6 +172,16 @@ export function vaccineFieldSpecs(
             : undefined,
       };
     })(),
+    {
+      id: "administrationDate",
+      label: "Date administered",
+      required: true,
+      kind: "date",
+      icon: "calendar",
+      max: todayIsoDate(),
+    },
+    { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
+    { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
     {
       id: "lotNumber",
       label: "Lot number (optional)",
