@@ -141,12 +141,18 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
       />
       <ReportSummarySection
         title="About the patient"
-        fields={patientFieldSpecs(undefined, undefined, report.patient?.patientRaceOther, {
-          city: report.patient?.patientCity ?? "",
-          state: report.patient?.patientState ?? "",
-          county: report.patient?.patientCounty ?? "",
-          zip: report.patient?.patientZip ?? "",
-        })}
+        fields={patientFieldSpecs(
+          undefined,
+          undefined,
+          report.patient?.patientRaceOther,
+          {
+            city: report.patient?.patientCity ?? "",
+            state: report.patient?.patientState ?? "",
+            county: report.patient?.patientCounty ?? "",
+            zip: report.patient?.patientZip ?? "",
+          },
+          isSelfReport
+        )}
         values={report.patient}
       />
       <ReportSummarySection

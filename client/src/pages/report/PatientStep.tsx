@@ -85,12 +85,19 @@ export function patientFieldSpecs(
   /** Only needed for the review-summary line — the live wizard's own
    * `render` (attached in the component below) reads current values
    * directly via closure instead. */
-  patientAddressValues?: { city: string; state: string; county: string; zip: string }
+  patientAddressValues?: { city: string; state: string; county: string; zip: string },
+  /** True only for a "public" submitter reporting on themselves — see
+   * PatientStep's own prop doc. Every label below defaults to third-person
+   * ("the patient") since that's correct for both a caregiver and an HCP;
+   * a self-report is the one case where the person answering and the
+   * patient are the same, so it's the only branch that switches to
+   * "you"/"your" instead. */
+  isSelfReport = false
 ): ConversationalFieldSpec[] {
   const fields: ConversationalFieldSpec[] = [
     {
       id: "patientFirstName",
-      label: "Patient's first name",
+      label: isSelfReport ? "Your first name" : "Patient's first name",
       required: true,
       kind: "text",
       icon: "person",
@@ -98,7 +105,7 @@ export function patientFieldSpecs(
     },
     {
       id: "patientLastName",
-      label: "Patient's last name",
+      label: isSelfReport ? "Your last name" : "Patient's last name",
       required: true,
       kind: "text",
       icon: "person",
@@ -110,7 +117,9 @@ export function patientFieldSpecs(
       required: !dateOfBirthUnknown,
       kind: dobPartialMode ? "monthYear" : "date",
       icon: "calendar",
-      hint: "We use this to work out the patient's age at vaccination automatically.",
+      hint: isSelfReport
+        ? "We use this to work out your age at vaccination automatically."
+        : "We use this to work out the patient's age at vaccination automatically.",
       min: "1900-01-01",
       max: todayIsoDate(),
     },
@@ -137,7 +146,7 @@ export function patientFieldSpecs(
   fields.push(
     {
       id: "patientStreet",
-      label: "Patient's address (optional)",
+      label: isSelfReport ? "Your address (optional)" : "Patient's address (optional)",
       required: false,
       kind: "custom",
       // Folds city/state/county/zip into this same question (see the
@@ -145,9 +154,10 @@ export function patientFieldSpecs(
       // five, with real autoComplete attributes for browser address autofill.
       alsoValidates: ["patientCity", "patientState", "patientCounty", "patientZip"],
       describeError: (relativePath, message) => {
-        if (relativePath === "patientCity") return `Patient's city: ${message}`;
-        if (relativePath === "patientState") return `Patient's state: ${message}`;
-        if (relativePath === "patientZip") return `Patient's ZIP: ${message}`;
+        const prefix = isSelfReport ? "Your" : "Patient's";
+        if (relativePath === "patientCity") return `${prefix} city: ${message}`;
+        if (relativePath === "patientState") return `${prefix} state: ${message}`;
+        if (relativePath === "patientZip") return `${prefix} ZIP: ${message}`;
         return message;
       },
       formatSummary: (streetValue) =>
@@ -161,7 +171,7 @@ export function patientFieldSpecs(
     },
     {
       id: "patientPhone",
-      label: "Patient's phone (optional)",
+      label: isSelfReport ? "Your phone (optional)" : "Patient's phone (optional)",
       required: false,
       kind: "tel",
       autoComplete: "tel",
@@ -177,7 +187,9 @@ export function patientFieldSpecs(
     },
     {
       id: "pregnant",
-      label: "Was the patient pregnant at the time of vaccination? (optional)",
+      label: isSelfReport
+        ? "Were you pregnant at the time of vaccination? (optional)"
+        : "Was the patient pregnant at the time of vaccination? (optional)",
       required: false,
       kind: "choice",
       options: YES_NO_UNKNOWN_OPTIONS,
@@ -222,7 +234,7 @@ export function patientFieldSpecs(
     },
     {
       id: "patientRace",
-      label: "Patient's race (optional, select all that apply)",
+      label: isSelfReport ? "Your race (optional, select all that apply)" : "Patient's race (optional, select all that apply)",
       required: false,
       kind: "checkboxGroup",
       options: RACE_OPTIONS,
@@ -243,7 +255,7 @@ export function patientFieldSpecs(
     },
     {
       id: "patientEthnicity",
-      label: "Patient's ethnicity (optional)",
+      label: isSelfReport ? "Your ethnicity (optional)" : "Patient's ethnicity (optional)",
       required: false,
       kind: "choice",
       options: ETHNICITY_OPTIONS,
@@ -319,9 +331,13 @@ export function PatientStep({
 
   const pregnancySkipReason =
     values.patientSex === "male"
-      ? "the patient is recorded as male"
+      ? isSelfReport
+        ? "you're recorded as male"
+        : "the patient is recorded as male"
       : bestAgeEstimate !== null && bestAgeEstimate < PREGNANCY_MIN_PLAUSIBLE_AGE
-        ? "the patient's age makes this inapplicable"
+        ? isSelfReport
+          ? "your age makes this inapplicable"
+          : "the patient's age makes this inapplicable"
         : null;
 
   // Once the patient is clearly past toddlerhood, "additional months" has
@@ -332,12 +348,18 @@ export function PatientStep({
 
   const showPatientRaceOther = (values.patientRace as string[]).includes("other");
 
-  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode, values.patientRaceOther as string, {
-    city: values.patientCity,
-    state: values.patientState,
-    county: values.patientCounty,
-    zip: values.patientZip,
-  })
+  const fields = patientFieldSpecs(
+    dateOfBirthUnknown,
+    dobPartialMode,
+    values.patientRaceOther as string,
+    {
+      city: values.patientCity,
+      state: values.patientState,
+      county: values.patientCounty,
+      zip: values.patientZip,
+    },
+    isSelfReport
+  )
     .filter((f) => {
       if (f.id === "ageMonths") return !ageMonthsSkipReason;
       if (f.id === "pregnant") return !pregnancySkipReason;
@@ -364,7 +386,7 @@ export function PatientStep({
           render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
             <AddressFieldGroup
               idPrefix="patient"
-              streetLabel="Patient's street address"
+              streetLabel={isSelfReport ? "Your street address" : "Patient's street address"}
               streetHint="e.g. 123 Main St, Apt 4B"
               street={streetValue as string}
               onStreetChange={onStreetChange}
@@ -495,7 +517,7 @@ export function PatientStep({
           showPatientRaceOther ? (
             <div className="field field--nested">
               <label className="sr-only" htmlFor="patient-race-other-input">
-                Describe the patient's race
+                {isSelfReport ? "Describe your race" : "Describe the patient's race"}
               </label>
               <input
                 id="patient-race-other-input"
