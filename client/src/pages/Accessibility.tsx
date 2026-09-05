@@ -1,17 +1,13 @@
+import { useLanguage } from "../i18n/LanguageContext";
+
 export function Accessibility() {
+  const { t } = useLanguage();
+
   return (
     <div className="page page--prose">
-      <h1>Accessibility Statement</h1>
-      <p>
-        This prototype targets WCAG 2.0 Level A and AA success criteria (design doc §6.6):
-        semantic form structure, labeled fields, visible focus states, keyboard-only operability,
-        and error messages that are programmatically associated with their fields.
-      </p>
-      <p>
-        In a real deployment, this page would also include a contact path for reporting
-        accessibility issues and a link to the current Accessibility Conformance Report
-        (ACR/VPAT).
-      </p>
+      <h1>{t("accessibility.heading")}</h1>
+      <p>{t("accessibility.para1")}</p>
+      <p>{t("accessibility.para2")}</p>
     </div>
   );
 }

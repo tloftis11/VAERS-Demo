@@ -5,6 +5,16 @@ import type { AboutYouData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 import { AddressFieldGroup, formatAddressSummary } from "../../components/AddressFieldGroup";
+import { useLanguage } from "../../i18n/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
+
+/** Every `*FieldSpecs` builder function in the wizard takes this as its
+ * first parameter — the field labels/hints/errors it builds are user-
+ * facing text, but the builder itself is a plain function, not a
+ * component/hook, so it can't call `useLanguage()` itself. Each of its 3
+ * callers (the live step component, ReviewStep, FollowUp) already has
+ * `t` in scope via its own `useLanguage()` call and just passes it in. */
+type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
 /** Which submitter-type card the user actually clicked (see SubmitterTypeStep) — never persisted, just a same-session hint for simplifying this step. */
 export type RelationshipHint = "patient" | "caregiver" | "hcp" | null;
@@ -42,6 +52,7 @@ const EMPTY: AboutYouData = {
  * for review/follow-up display.
  */
 export function aboutYouFieldSpecs(
+  t: Translate,
   submitterType: SubmitterType,
   relationshipHint: RelationshipHint = null,
   includeMailingAddress = true,
@@ -52,31 +63,38 @@ export function aboutYouFieldSpecs(
 ): ConversationalFieldSpec[] {
   const isHcp = submitterType === "hcp";
   const fields: ConversationalFieldSpec[] = [
-    { id: "contactName", label: "Your name", required: true, kind: "text", icon: "person", autoComplete: "name" },
+    {
+      id: "contactName",
+      label: t("aboutYou.contactName"),
+      required: true,
+      kind: "text",
+      icon: "person",
+      autoComplete: "name",
+    },
     {
       id: "contactEmail",
-      label: "Your email",
+      label: t("aboutYou.contactEmail"),
       required: true,
       kind: "email",
-      hint: "Used only if we need to follow up about this report.",
+      hint: t("aboutYou.contactEmailHint"),
       icon: "mail",
       autoComplete: "email",
     },
     {
       id: "contactEmailConfirm",
-      label: "Confirm your email",
+      label: t("aboutYou.contactEmailConfirm"),
       required: true,
       kind: "email",
       autoComplete: "email",
     },
     {
       id: "contactPhone",
-      label: "Your phone (optional)",
+      label: t("aboutYou.contactPhone"),
       required: false,
       kind: "tel",
       icon: "phone",
       autoComplete: "tel",
-      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+      hint: t("aboutYou.phoneHint"),
     },
   ];
   // The real VAERS form has no healthcare-provider sub-role breakdown — HCPs
@@ -89,7 +107,7 @@ export function aboutYouFieldSpecs(
     fields.push(
       {
         id: "relationship",
-        label: "Your relationship to the patient",
+        label: t("aboutYou.relationship"),
         required: true,
         kind: "choice",
         options:
@@ -97,30 +115,30 @@ export function aboutYouFieldSpecs(
             ? RELATIONSHIP_OPTIONS_PUBLIC.filter((o) => o.value !== "self")
             : RELATIONSHIP_OPTIONS_PUBLIC,
       },
-      { id: "relationshipOther", label: "Please describe your relationship to the patient", required: false, kind: "text" }
+      { id: "relationshipOther", label: t("aboutYou.relationshipOther"), required: false, kind: "text" }
     );
   }
   fields.push(
     {
       id: "bestContactName",
-      label: "Is there a doctor or nurse we could contact for more details? (optional)",
+      label: t("aboutYou.bestContactName"),
       required: false,
       kind: "text",
-      hint: "Only if that's someone other than you.",
+      hint: t("aboutYou.bestContactNameHint"),
     },
     {
       id: "bestContactPhone",
-      label: "Their phone number (optional)",
+      label: t("aboutYou.bestContactPhone"),
       required: false,
       kind: "tel",
       autoComplete: "tel",
-      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+      hint: t("aboutYou.phoneHint"),
     }
   );
   if (includeMailingAddress) {
     fields.push({
       id: "mailingStreet",
-      label: "Mailing address",
+      label: t("aboutYou.mailingAddress"),
       required: false,
       kind: "custom",
       // Folds mailingCity/State/Zip into this same question (see the
@@ -129,9 +147,9 @@ export function aboutYouFieldSpecs(
       // autofill actually works.
       alsoValidates: ["mailingCity", "mailingState", "mailingZip"],
       describeError: (relativePath, message) => {
-        if (relativePath === "mailingCity") return `Mailing city: ${message}`;
-        if (relativePath === "mailingState") return `Mailing state: ${message}`;
-        if (relativePath === "mailingZip") return `Mailing ZIP: ${message}`;
+        if (relativePath === "mailingCity") return `${t("aboutYou.mailingCity")}: ${message}`;
+        if (relativePath === "mailingState") return `${t("aboutYou.mailingState")}: ${message}`;
+        if (relativePath === "mailingZip") return `${t("aboutYou.mailingZip")}: ${message}`;
         return message;
       },
       formatSummary: (streetValue) =>
@@ -148,6 +166,7 @@ export function aboutYouFieldSpecs(
 }
 
 export function AboutYouStep({ submitterType, initialData, relationshipHint = null, onNext, onBack }: AboutYouStepProps) {
+  const { t } = useLanguage();
   const schema = aboutYouSchema(submitterType);
   const initial = initialData ?? EMPTY;
   // "self" is a valid *schema* value regardless of hint, so switching from
@@ -169,7 +188,7 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
   const [wantsMailedResponse, setWantsMailedResponse] = useState(
     () => !!(initial.mailingStreet || initial.mailingCity || initial.mailingState || initial.mailingZip)
   );
-  const fields = aboutYouFieldSpecs(submitterType, relationshipHint, wantsMailedResponse, {
+  const fields = aboutYouFieldSpecs(t, submitterType, relationshipHint, wantsMailedResponse, {
     city: values.mailingCity,
     state: values.mailingState,
     zip: values.mailingZip,
@@ -188,8 +207,8 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
           render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
             <AddressFieldGroup
               idPrefix="mailing"
-              streetLabel="Mailing address"
-              streetHint="e.g. 123 Main St, Apt 4B"
+              streetLabel={t("aboutYou.mailingAddress")}
+              streetHint={t("address.streetPlaceholderApt")}
               street={streetValue as string}
               onStreetChange={onStreetChange}
               streetError={errors.mailingStreet}
@@ -227,7 +246,7 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
 
   return (
     <ConversationalStep
-      stepTitle="About you"
+      stepTitle={t("step.about-you")}
       fields={fields}
       values={values as unknown as Record<string, unknown>}
       setValue={handleSetValue}
@@ -250,7 +269,7 @@ export function AboutYouStep({ submitterType, initialData, relationshipHint = nu
               checked={wantsMailedResponse}
               onChange={(e) => handleMailToggle(e.target.checked)}
             />
-            I'd like VAERS to also mail me a copy of this report, in addition to emailing it
+            {t("aboutYou.mailToggle")}
           </label>
         ),
       }}

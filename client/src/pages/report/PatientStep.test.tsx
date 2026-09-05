@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PatientStep } from "./PatientStep";
+import { LanguageProvider } from "../../i18n/LanguageContext";
 import type { PatientData } from "../../api/client";
 
 const VALID_SELF_REPORT_PARTIAL_DOB: PatientData = {
@@ -37,14 +38,16 @@ describe("PatientStep — self-report date-of-birth redirect notice", () => {
   it("REGRESSION: a self-report with only month/year of birth shows the 'unusual for a self-report' notice and a switch-to-caregiver button", async () => {
     const user = userEvent.setup();
     render(
-      <PatientStep
-        submitterType="public"
-        isSelfReport={true}
-        initialData={VALID_SELF_REPORT_PARTIAL_DOB}
-        onNext={noop}
-        onBack={noop}
-        onSwitchSubmitterType={() => {}}
-      />
+      <LanguageProvider>
+        <PatientStep
+          submitterType="public"
+          isSelfReport={true}
+          initialData={VALID_SELF_REPORT_PARTIAL_DOB}
+          onNext={noop}
+          onBack={noop}
+          onSwitchSubmitterType={() => {}}
+        />
+      </LanguageProvider>
     );
     // Starts on the review screen (initialData is already schema-valid) —
     // jump back to the date-of-birth question specifically, exactly as a
@@ -59,14 +62,16 @@ describe("PatientStep — self-report date-of-birth redirect notice", () => {
   it("does not show the redirect notice for a caregiver report with the same partial date of birth", async () => {
     const user = userEvent.setup();
     render(
-      <PatientStep
-        submitterType="public"
-        isSelfReport={false}
-        initialData={VALID_SELF_REPORT_PARTIAL_DOB}
-        onNext={noop}
-        onBack={noop}
-        onSwitchSubmitterType={() => {}}
-      />
+      <LanguageProvider>
+        <PatientStep
+          submitterType="public"
+          isSelfReport={false}
+          initialData={VALID_SELF_REPORT_PARTIAL_DOB}
+          onNext={noop}
+          onBack={noop}
+          onSwitchSubmitterType={() => {}}
+        />
+      </LanguageProvider>
     );
     await user.click(screen.getByRole("button", { name: /Edit answer: Date of birth/i }));
     expect(

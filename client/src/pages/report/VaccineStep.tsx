@@ -21,8 +21,15 @@ import { useVaccineOptions } from "../../hooks/useVaccineOptions";
 import { Combobox } from "../../components/Combobox";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 import { AddressFieldGroup, formatAddressSummary } from "../../components/AddressFieldGroup";
+import { useLanguage } from "../../i18n/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
 
 const OTHER_OR_FOREIGN = new Set(["other", "foreign"]);
+
+/** Every `*FieldSpecs` builder in the wizard is a plain function, not a
+ * component/hook, so it can't call `useLanguage()` itself — `t` is threaded
+ * in as the first parameter instead, matching `patientFieldSpecs` etc. */
+type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
 interface VaccineStepProps {
   submitterType: SubmitterType;
@@ -70,13 +77,14 @@ const EMPTY_ADDITIONAL_VACCINE: AdditionalVaccineRow = {
   doseNumber: "",
 };
 
-function describeAdditionalVaccineError(relativePath: string, message: string): string {
+function describeAdditionalVaccineError(t: Translate, relativePath: string, message: string): string {
   const [rowIndexStr, field] = relativePath.split(".");
   const rowNumber = Number(rowIndexStr) + 2;
-  if (field === "vaccineType") return `Additional vaccine ${rowNumber}: select a vaccine.`;
-  if (field === "vaccineTypeOther") return `Additional vaccine ${rowNumber}: enter the vaccine name.`;
-  if (field === "bodySiteOther") return `Additional vaccine ${rowNumber}: describe where it was given.`;
-  return `Additional vaccine ${rowNumber}: ${message}`;
+  const prefix = t("vaccine.additionalRowPrefix", { n: rowNumber });
+  if (field === "vaccineType") return `${prefix} ${t("vaccine.rowSelectVaccine")}`;
+  if (field === "vaccineTypeOther") return `${prefix} ${t("vaccine.rowEnterName")}`;
+  if (field === "bodySiteOther") return `${prefix} ${t("vaccine.rowDescribeSite")}`;
+  return `${prefix} ${message}`;
 }
 
 const EMPTY_PRIOR_VACCINE: PriorVaccineRow = {
@@ -91,13 +99,14 @@ const EMPTY_PRIOR_VACCINE: PriorVaccineRow = {
   administrationDate: "",
 };
 
-function describePriorVaccineError(relativePath: string, message: string): string {
+function describePriorVaccineError(t: Translate, relativePath: string, message: string): string {
   const [rowIndexStr, field] = relativePath.split(".");
   const rowNumber = Number(rowIndexStr) + 1;
-  if (field === "vaccineType") return `Prior vaccine ${rowNumber}: select a vaccine.`;
-  if (field === "vaccineTypeOther") return `Prior vaccine ${rowNumber}: enter the vaccine name.`;
-  if (field === "bodySiteOther") return `Prior vaccine ${rowNumber}: describe where it was given.`;
-  return `Prior vaccine ${rowNumber}: ${message}`;
+  const prefix = t("vaccine.priorRowPrefix", { n: rowNumber });
+  if (field === "vaccineType") return `${prefix} ${t("vaccine.rowSelectVaccine")}`;
+  if (field === "vaccineTypeOther") return `${prefix} ${t("vaccine.rowEnterName")}`;
+  if (field === "bodySiteOther") return `${prefix} ${t("vaccine.rowDescribeSite")}`;
+  return `${prefix} ${message}`;
 }
 
 /**
@@ -115,6 +124,7 @@ function describePriorVaccineError(relativePath: string, message: string): strin
  * without a redeploy — see useVaccineOptions.
  */
 export function vaccineFieldSpecs(
+  t: Translate,
   isHcp: boolean,
   vaccineTypeOptions: readonly VaccineOption[] = isHcp ? VACCINE_TYPES_HCP : VACCINE_TYPES,
   /** Only used to seed the public path's manufacturer picklist (see below) — unused for HCP. */
@@ -130,7 +140,7 @@ export function vaccineFieldSpecs(
   const fields: ConversationalFieldSpec[] = [
     {
       id: "vaccineType",
-      label: "Vaccine",
+      label: t("vaccine.type"),
       required: true,
       kind: "choice",
       // HCP reporters plausibly have the exact product on hand — give them
@@ -140,7 +150,7 @@ export function vaccineFieldSpecs(
       options: vaccineTypeOptions,
       icon: "vaccine",
     },
-    { id: "vaccineTypeOther", label: "Please specify the vaccine", required: false, kind: "text" },
+    { id: "vaccineTypeOther", label: t("vaccine.typeOther"), required: false, kind: "text" },
     // Manufacturer sits right after the vaccine itself (not several
     // unrelated questions later) — the two are directly linked, so asking
     // "which manufacturer made the vaccine you just picked" while it's
@@ -151,7 +161,7 @@ export function vaccineFieldSpecs(
         : getManufacturerOptions(selectedVaccineType ?? "");
       return {
         id: "manufacturer",
-        label: "Manufacturer (optional)",
+        label: t("vaccine.manufacturer"),
         required: false,
         kind: "choice" as const,
         // The selected vaccine already names a specific branded product
@@ -166,37 +176,34 @@ export function vaccineFieldSpecs(
         // explanation — this is expected for "Other/Not sure" vaccine
         // selections, or an HCP vaccine not in our curated manufacturer
         // list, not a bug.
-        hint:
-          manufacturerOptions.length === 1
-            ? "We don't have a specific manufacturer list for this vaccine."
-            : undefined,
+        hint: manufacturerOptions.length === 1 ? t("vaccine.manufacturerHint") : undefined,
       };
     })(),
     {
       id: "administrationDate",
-      label: "Date administered",
+      label: t("vaccine.administrationDate"),
       required: true,
       kind: "date",
       icon: "calendar",
       max: todayIsoDate(),
     },
-    { id: "administrationTime", label: "Time administered (optional)", required: false, kind: "time12" },
-    { id: "doseNumber", label: "Dose number (optional)", required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
+    { id: "administrationTime", label: t("vaccine.administrationTime"), required: false, kind: "time12" },
+    { id: "doseNumber", label: t("vaccine.doseNumber"), required: false, kind: "choice", options: DOSE_NUMBER_OPTIONS },
     {
       id: "lotNumber",
-      label: "Lot number (optional)",
+      label: t("vaccine.lotNumber"),
       required: false,
       kind: "text",
-      hint: "Check your vaccination card if you have it — otherwise leave blank.",
+      hint: t("vaccine.lotNumberHint"),
     },
-    { id: "route", label: "How was it given? (optional)", required: false, kind: "choice", options: ROUTE_OPTIONS },
+    { id: "route", label: t("vaccine.route"), required: false, kind: "choice", options: ROUTE_OPTIONS },
     {
       id: "bodySite",
-      label: "Where was it given? (optional)",
+      label: t("vaccine.bodySite"),
       required: false,
       kind: "choice",
       options: getBodySiteOptionsForRoute(selectedRoute ?? ""),
-      hint: "Selecting \"Other\" adds a field to describe it, right here.",
+      hint: t("vaccine.bodySiteHint"),
       alsoValidates: ["bodySiteOther"],
       // Selecting "Other" reveals the inline description field below (via
       // extras.bodySite) — auto-advancing straight past it, like every
@@ -211,10 +218,10 @@ export function vaccineFieldSpecs(
     },
   ];
   fields.push(
-    { id: "administeringFacility", label: "Facility or clinic name (optional)", required: false, kind: "text" },
+    { id: "administeringFacility", label: t("vaccine.facilityName"), required: false, kind: "text" },
     {
       id: "facilityStreet",
-      label: "Facility address (optional)",
+      label: t("vaccine.facilityAddress"),
       required: false,
       kind: "custom",
       // Folds city/state/zip into this same question (see the `render`
@@ -222,9 +229,9 @@ export function vaccineFieldSpecs(
       // with real autoComplete attributes for browser address autofill.
       alsoValidates: ["facilityCity", "facilityState", "facilityZip"],
       describeError: (relativePath, message) => {
-        if (relativePath === "facilityCity") return `Facility city: ${message}`;
-        if (relativePath === "facilityState") return `Facility state: ${message}`;
-        if (relativePath === "facilityZip") return `Facility ZIP: ${message}`;
+        if (relativePath === "facilityCity") return t("vaccine.facilityCityError", { msg: message });
+        if (relativePath === "facilityState") return t("vaccine.facilityStateError", { msg: message });
+        if (relativePath === "facilityZip") return t("vaccine.facilityZipError", { msg: message });
         return message;
       },
       formatSummary: (streetValue) =>
@@ -238,21 +245,21 @@ export function vaccineFieldSpecs(
     },
     {
       id: "facilityPhone",
-      label: "Facility phone (optional)",
+      label: t("vaccine.facilityPhone"),
       required: false,
       kind: "tel",
       autoComplete: "tel",
       hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
     },
-    { id: "facilityFax", label: "Facility fax (optional)", required: false, kind: "tel" },
+    { id: "facilityFax", label: t("vaccine.facilityFax"), required: false, kind: "tel" },
     {
       id: "facilityType",
-      label: "Type of facility (optional)",
+      label: t("vaccine.facilityType"),
       required: false,
       kind: "choice",
       options: FACILITY_TYPE_OPTIONS,
     },
-    { id: "facilityTypeOther", label: "Please describe the type of facility", required: false, kind: "text" }
+    { id: "facilityTypeOther", label: t("vaccine.facilityTypeOther"), required: false, kind: "text" }
   );
   // Same structured, repeatable-row format for every submitter type — not
   // just HCP — so "what else did you get" is captured with the same
@@ -266,7 +273,7 @@ export function vaccineFieldSpecs(
   fields.push(
     {
       id: "additionalVaccines",
-      label: "Additional vaccines given at this same visit (optional)",
+      label: t("vaccine.additionalVaccines"),
       required: false,
       kind: "custom",
       // A completely blank row (added, then never touched) is silently
@@ -274,20 +281,22 @@ export function vaccineFieldSpecs(
       // additional vaccines" when only 1 will actually be saved.
       formatSummary: (v) => {
         const count = (v as AdditionalVaccineRow[]).filter((row) => !isBlankAdditionalVaccineRow(row)).length;
-        return count === 0 ? "" : `${count} additional vaccine${count === 1 ? "" : "s"}`;
+        return count === 0
+          ? ""
+          : t("vaccine.additionalVaccinesCount", { n: count, plural: count === 1 ? "" : "s" });
       },
-      describeError: describeAdditionalVaccineError,
+      describeError: (relativePath, message) => describeAdditionalVaccineError(t, relativePath, message),
     },
     {
       id: "priorVaccines",
-      label: "Other vaccines received in the month before the vaccination you're reporting (optional)",
+      label: t("vaccine.priorVaccines"),
       required: false,
       kind: "custom",
       formatSummary: (v) => {
         const count = (v as PriorVaccineRow[]).filter((row) => !isBlankPriorVaccineRow(row)).length;
-        return count === 0 ? "" : `${count} prior vaccine${count === 1 ? "" : "s"}`;
+        return count === 0 ? "" : t("vaccine.priorVaccinesCount", { n: count, plural: count === 1 ? "" : "s" });
       },
-      describeError: describePriorVaccineError,
+      describeError: (relativePath, message) => describePriorVaccineError(t, relativePath, message),
     }
   );
   return fields;
@@ -300,6 +309,7 @@ export function VaccineStep({
   onNext,
   onBack,
 }: VaccineStepProps) {
+  const { t } = useLanguage();
   const schema = vaccineSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
@@ -318,6 +328,7 @@ export function VaccineStep({
         : VACCINE_TYPES;
   const fields = (liveVaccineTypeOptions
     ? vaccineFieldSpecs(
+        t,
         isHcp,
         vaccineTypeOptions,
         values.vaccineType as string,
@@ -369,8 +380,8 @@ export function VaccineStep({
           render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
             <AddressFieldGroup
               idPrefix="facility"
-              streetLabel="Facility street address"
-              streetHint="e.g. 123 Main St, Suite 200"
+              streetLabel={t("vaccine.facilityStreetAddress")}
+              streetHint={t("address.streetPlaceholderSuite")}
               street={streetValue as string}
               onStreetChange={onStreetChange}
               streetError={errors.facilityStreet}
@@ -425,19 +436,19 @@ export function VaccineStep({
     if (fieldId === "administrationDate" && patientDateOfBirth) {
       const administrationDate = String(liveValues.administrationDate ?? "");
       if (administrationDate && isDateBefore(administrationDate, patientDateOfBirth)) {
-        return "Vaccination date can't be before the patient's date of birth.";
+        return t("vaccine.dateBeforeBirth");
       }
     }
     return null;
   }
 
   if (!liveVaccineTypeOptions) {
-    return <div className="page">Loading…</div>;
+    return <div className="page">{t("vaccine.loading")}</div>;
   }
 
   return (
     <ConversationalStep
-      stepTitle="Vaccine information"
+      stepTitle={t("step.vaccine")}
       fields={fields}
       values={values as unknown as Record<string, unknown>}
       setValue={handleSetValue}
@@ -458,7 +469,7 @@ export function VaccineStep({
             {values.bodySite === "other" && (
               <div className="field field--nested">
                 <label className="field__label" htmlFor="body-site-other-input">
-                  Describe where it was given
+                  {t("vaccine.bodySiteOtherDescribe")}
                 </label>
                 <input
                   id="body-site-other-input"
@@ -497,6 +508,7 @@ export function AdditionalVaccinesEditor({
   isHcp: boolean;
   errors: Record<string, string>;
 }) {
+  const { t } = useLanguage();
   const rows = (value as AdditionalVaccineRow[] | undefined) ?? [];
   const hasFocusedRef = useRef(false);
 
@@ -558,15 +570,15 @@ export function AdditionalVaccinesEditor({
         return (
           <div className="vaccine-row" key={i}>
             <div className="vaccine-row__header">
-              <span>Vaccine {i + 2}</span>
+              <span>{t("vaccineRow.header", { n: i + 2 })}</span>
               <button type="button" className="button button--text" onClick={() => removeRow(i)}>
-                Remove
+                {t("vaccineRow.remove")}
               </button>
             </div>
             <div className="vaccine-row__grid">
               <div className="field">
                 <label className="field__label" id={`additional-${i}-type-label`}>
-                  Vaccine
+                  {t("vaccineRow.vaccine")}
                 </label>
                 <Combobox
                   id={`additional-${i}-type`}
@@ -586,7 +598,7 @@ export function AdditionalVaccinesEditor({
               {OTHER_OR_FOREIGN.has(row.vaccineType) && (
                 <div className="field">
                   <label className="field__label" htmlFor={`additional-${i}-type-other`}>
-                    Please specify the vaccine
+                    {t("vaccineRow.specifyVaccine")}
                   </label>
                   <input
                     id={`additional-${i}-type-other`}
@@ -605,7 +617,7 @@ export function AdditionalVaccinesEditor({
               )}
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-manufacturer`}>
-                  Manufacturer
+                  {t("vaccineRow.manufacturer")}
                 </label>
                 <select
                   id={`additional-${i}-manufacturer`}
@@ -613,7 +625,7 @@ export function AdditionalVaccinesEditor({
                   value={row.manufacturer}
                   onChange={(e) => updateRow(i, { manufacturer: e.target.value })}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {manufacturerOptions.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -621,12 +633,12 @@ export function AdditionalVaccinesEditor({
                   ))}
                 </select>
                 {manufacturerOptions.length === 1 && (
-                  <p className="field__hint">We don't have a specific manufacturer list for this vaccine.</p>
+                  <p className="field__hint">{t("vaccine.manufacturerHint")}</p>
                 )}
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-lot`}>
-                  Lot number
+                  {t("vaccineRow.lotNumber")}
                 </label>
                 <input
                   id={`additional-${i}-lot`}
@@ -637,7 +649,7 @@ export function AdditionalVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-route`}>
-                  How was it given? (optional)
+                  {t("vaccineRow.route")}
                 </label>
                 <select
                   id={`additional-${i}-route`}
@@ -652,7 +664,7 @@ export function AdditionalVaccinesEditor({
                     });
                   }}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {ROUTE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -662,7 +674,7 @@ export function AdditionalVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-site`}>
-                  Where was it given? (optional)
+                  {t("vaccineRow.site")}
                 </label>
                 <select
                   id={`additional-${i}-site`}
@@ -676,7 +688,7 @@ export function AdditionalVaccinesEditor({
                     });
                   }}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {getBodySiteOptionsForRoute(row.route).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -686,7 +698,7 @@ export function AdditionalVaccinesEditor({
                 {row.bodySite === "other" && (
                   <div className="field field--nested">
                     <label className="field__label" htmlFor={`additional-${i}-site-other`}>
-                      Describe where it was given
+                      {t("vaccine.bodySiteOtherDescribe")}
                     </label>
                     <input
                       id={`additional-${i}-site-other`}
@@ -705,7 +717,7 @@ export function AdditionalVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`additional-${i}-dose`}>
-                  Dose number (optional)
+                  {t("vaccineRow.dose")}
                 </label>
                 <select
                   id={`additional-${i}-dose`}
@@ -713,7 +725,7 @@ export function AdditionalVaccinesEditor({
                   value={row.doseNumber}
                   onChange={(e) => updateRow(i, { doseNumber: e.target.value })}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {DOSE_NUMBER_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -730,7 +742,7 @@ export function AdditionalVaccinesEditor({
         className="button button--secondary"
         onClick={() => onChange([...rows, { ...EMPTY_ADDITIONAL_VACCINE }])}
       >
-        + Add another vaccine
+        {t("vaccineRow.addAnother")}
       </button>
     </div>
   );
@@ -760,6 +772,7 @@ function PriorVaccinesEditor({
   isHcp: boolean;
   errors: Record<string, string>;
 }) {
+  const { t } = useLanguage();
   const rows = (value as PriorVaccineRow[] | undefined) ?? [];
   const hasFocusedRef = useRef(false);
 
@@ -809,15 +822,15 @@ function PriorVaccinesEditor({
         return (
           <div className="vaccine-row" key={i}>
             <div className="vaccine-row__header">
-              <span>Prior vaccine {i + 1}</span>
+              <span>{t("vaccineRow.priorHeader", { n: i + 1 })}</span>
               <button type="button" className="button button--text" onClick={() => removeRow(i)}>
-                Remove
+                {t("vaccineRow.remove")}
               </button>
             </div>
             <div className="vaccine-row__grid">
               <div className="field">
                 <label className="field__label" id={`prior-${i}-type-label`}>
-                  Vaccine
+                  {t("vaccineRow.vaccine")}
                 </label>
                 <Combobox
                   id={`prior-${i}-type`}
@@ -837,7 +850,7 @@ function PriorVaccinesEditor({
               {OTHER_OR_FOREIGN.has(row.vaccineType) && (
                 <div className="field">
                   <label className="field__label" htmlFor={`prior-${i}-type-other`}>
-                    Please specify the vaccine
+                    {t("vaccineRow.specifyVaccine")}
                   </label>
                   <input
                     id={`prior-${i}-type-other`}
@@ -856,7 +869,7 @@ function PriorVaccinesEditor({
               )}
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-manufacturer`}>
-                  Manufacturer
+                  {t("vaccineRow.manufacturer")}
                 </label>
                 <select
                   id={`prior-${i}-manufacturer`}
@@ -864,7 +877,7 @@ function PriorVaccinesEditor({
                   value={row.manufacturer}
                   onChange={(e) => updateRow(i, { manufacturer: e.target.value })}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {manufacturerOptions.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -872,12 +885,12 @@ function PriorVaccinesEditor({
                   ))}
                 </select>
                 {manufacturerOptions.length === 1 && (
-                  <p className="field__hint">We don't have a specific manufacturer list for this vaccine.</p>
+                  <p className="field__hint">{t("vaccine.manufacturerHint")}</p>
                 )}
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-lot`}>
-                  Lot number
+                  {t("vaccineRow.lotNumber")}
                 </label>
                 <input
                   id={`prior-${i}-lot`}
@@ -888,7 +901,7 @@ function PriorVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-route`}>
-                  How was it given? (optional)
+                  {t("vaccineRow.route")}
                 </label>
                 <select
                   id={`prior-${i}-route`}
@@ -903,7 +916,7 @@ function PriorVaccinesEditor({
                     });
                   }}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {ROUTE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -913,7 +926,7 @@ function PriorVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-site`}>
-                  Where was it given? (optional)
+                  {t("vaccineRow.site")}
                 </label>
                 <select
                   id={`prior-${i}-site`}
@@ -927,7 +940,7 @@ function PriorVaccinesEditor({
                     });
                   }}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {getBodySiteOptionsForRoute(row.route).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -937,7 +950,7 @@ function PriorVaccinesEditor({
                 {row.bodySite === "other" && (
                   <div className="field field--nested">
                     <label className="field__label" htmlFor={`prior-${i}-site-other`}>
-                      Describe where it was given
+                      {t("vaccine.bodySiteOtherDescribe")}
                     </label>
                     <input
                       id={`prior-${i}-site-other`}
@@ -956,7 +969,7 @@ function PriorVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-dose`}>
-                  Dose number (optional)
+                  {t("vaccineRow.dose")}
                 </label>
                 <select
                   id={`prior-${i}-dose`}
@@ -964,7 +977,7 @@ function PriorVaccinesEditor({
                   value={row.doseNumber}
                   onChange={(e) => updateRow(i, { doseNumber: e.target.value })}
                 >
-                  <option value="">Select…</option>
+                  <option value="">{t("address.selectPlaceholder")}</option>
                   {DOSE_NUMBER_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -974,7 +987,7 @@ function PriorVaccinesEditor({
               </div>
               <div className="field">
                 <label className="field__label" htmlFor={`prior-${i}-date`}>
-                  Date administered (optional)
+                  {t("vaccineRow.date")}
                 </label>
                 <input
                   id={`prior-${i}-date`}
@@ -994,7 +1007,7 @@ function PriorVaccinesEditor({
         className="button button--secondary"
         onClick={() => onChange([...rows, { ...EMPTY_PRIOR_VACCINE }])}
       >
-        + Add another vaccine
+        {t("vaccineRow.addAnother")}
       </button>
     </div>
   );

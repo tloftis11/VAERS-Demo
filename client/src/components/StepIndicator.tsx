@@ -1,4 +1,6 @@
-import { STEP_LABELS, type StepId } from "../../../shared/src/branchingRules";
+import { type StepId } from "../../../shared/src/branchingRules";
+import { useLanguage } from "../i18n/LanguageContext";
+import { stepLabelKey } from "../i18n/translations";
 
 interface StepIndicatorProps {
   steps: StepId[];
@@ -16,17 +18,18 @@ interface StepIndicatorProps {
 
 /** Persistent breadcrumb-style step indicator (design doc §4.2): gives users a clear sense of location and remaining effort. */
 export function StepIndicator({ steps, currentStep, furthestCompletedStep, onStepClick }: StepIndicatorProps) {
+  const { t } = useLanguage();
   const currentIndex = steps.indexOf(currentStep);
   const completedIndex = steps.indexOf(furthestCompletedStep ?? currentStep);
   const completedSteps = steps.filter((step, index) => index < completedIndex && step !== currentStep);
 
   return (
-    <nav aria-label="Report progress" className="step-indicator">
+    <nav aria-label={t("stepIndicator.ariaLabel")} className="step-indicator">
       <ol>
         {steps.map((step, index) => {
           const status =
             step === currentStep ? "current" : index < completedIndex ? "complete" : "upcoming";
-          const label = STEP_LABELS[step];
+          const label = t(stepLabelKey(step));
           return (
             <li key={step} className={`step-indicator__item step-indicator__item--${status}`}>
               <span
@@ -56,7 +59,11 @@ export function StepIndicator({ steps, currentStep, furthestCompletedStep, onSte
         })}
       </ol>
       <p className="step-indicator__progress-text">
-        Step {currentIndex + 1} of {steps.length}: {STEP_LABELS[currentStep]}
+        {t("stepIndicator.progressText", {
+          n: currentIndex + 1,
+          total: steps.length,
+          label: t(stepLabelKey(currentStep)),
+        })}
       </p>
       {/* Mobile counterpart to the desktop step-indicator__label--link jump
           controls: those rely on real label text next to each segment,
@@ -67,7 +74,7 @@ export function StepIndicator({ steps, currentStep, furthestCompletedStep, onSte
           per-segment labels already cover this. */}
       {onStepClick && completedSteps.length > 0 && (
         <label className="step-indicator__jump">
-          <span className="sr-only">Jump to a completed step</span>
+          <span className="sr-only">{t("stepIndicator.jumpSrLabel")}</span>
           <select
             className="step-indicator__jump-select"
             value=""
@@ -76,10 +83,10 @@ export function StepIndicator({ steps, currentStep, furthestCompletedStep, onSte
               if (target) onStepClick(target);
             }}
           >
-            <option value="">Jump to a completed step…</option>
+            <option value="">{t("stepIndicator.jumpPlaceholder")}</option>
             {completedSteps.map((step) => (
               <option key={step} value={step}>
-                {STEP_LABELS[step]}
+                {t(stepLabelKey(step))}
               </option>
             ))}
           </select>

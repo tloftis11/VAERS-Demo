@@ -6,7 +6,6 @@ import {
   nextStep,
   prevStep,
   STEP_IDS,
-  STEP_LABELS,
   type StepId,
 } from "../../../../shared/src/branchingRules";
 import {
@@ -24,6 +23,8 @@ import {
   mergeServerUpdate,
 } from "../../reportProgress";
 import { getDraftToken } from "../../draftAuth";
+import { useLanguage } from "../../i18n/LanguageContext";
+import { stepLabelKey } from "../../i18n/translations";
 import { StepIndicator } from "../../components/StepIndicator";
 import { FaqWidget } from "../../components/FaqWidget";
 import { MilestoneBanner } from "../../components/MilestoneBanner";
@@ -71,6 +72,7 @@ function skipNoticeForVaccineExit(state: {
 }
 
 export function ReportWizard() {
+  const { t } = useLanguage();
   const { reportId, step: stepParam } = useParams<{ reportId: string; step: string }>();
   const navigate = useNavigate();
   const [report, setReport] = useState<ClientReport | null>(null);
@@ -396,7 +398,10 @@ export function ReportWizard() {
       )}
       {returnToStep && (
         <p role="status" className="notice notice--info">
-          Editing "{STEP_LABELS[currentStep]}" — you'll return to "{STEP_LABELS[returnToStep]}" once you continue.
+          {t("step.editingBanner", {
+            current: t(stepLabelKey(currentStep)),
+            returnTo: t(stepLabelKey(returnToStep)),
+          })}
         </p>
       )}
       {stepContent}

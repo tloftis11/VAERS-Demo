@@ -2,13 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StepIndicator } from "./StepIndicator";
+import { LanguageProvider } from "../i18n/LanguageContext";
 import type { StepId } from "../../../shared/src/branchingRules";
+import type { ReactElement } from "react";
 
 const STEPS: StepId[] = ["submitter-type", "before-you-start", "about-you", "patient", "vaccine"];
 
+function renderIndicator(element: ReactElement) {
+  return render(<LanguageProvider>{element}</LanguageProvider>);
+}
+
 describe("StepIndicator — jump-to-completed-step controls", () => {
   it("REGRESSION: without onStepClick, completed steps render as plain (non-interactive) labels", () => {
-    render(<StepIndicator steps={STEPS} currentStep="vaccine" />);
+    renderIndicator(<StepIndicator steps={STEPS} currentStep="vaccine" />);
     expect(screen.queryByRole("button", { name: "About you" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Jump to a completed step" })).not.toBeInTheDocument();
   });
@@ -16,7 +22,7 @@ describe("StepIndicator — jump-to-completed-step controls", () => {
   it("renders a clickable label for each completed step, and none for the current/upcoming ones", async () => {
     const onStepClick = vi.fn();
     const user = userEvent.setup();
-    render(<StepIndicator steps={STEPS} currentStep="patient" onStepClick={onStepClick} />);
+    renderIndicator(<StepIndicator steps={STEPS} currentStep="patient" onStepClick={onStepClick} />);
 
     await user.click(screen.getByRole("button", { name: "About you" }));
     expect(onStepClick).toHaveBeenCalledWith("about-you");
@@ -28,7 +34,7 @@ describe("StepIndicator — jump-to-completed-step controls", () => {
   it("the mobile jump select lists only completed steps and reports a selection", async () => {
     const onStepClick = vi.fn();
     const user = userEvent.setup();
-    render(<StepIndicator steps={STEPS} currentStep="vaccine" onStepClick={onStepClick} />);
+    renderIndicator(<StepIndicator steps={STEPS} currentStep="vaccine" onStepClick={onStepClick} />);
 
     const select = screen.getByRole("combobox", { name: "Jump to a completed step" });
     expect(screen.getAllByRole("option")).toHaveLength(4 + 1); // 4 completed steps + the placeholder
@@ -39,7 +45,7 @@ describe("StepIndicator — jump-to-completed-step controls", () => {
   });
 
   it("REGRESSION: no jump select renders when there are no completed steps yet", () => {
-    render(<StepIndicator steps={STEPS} currentStep="submitter-type" onStepClick={vi.fn()} />);
+    renderIndicator(<StepIndicator steps={STEPS} currentStep="submitter-type" onStepClick={vi.fn()} />);
     expect(screen.queryByRole("combobox", { name: "Jump to a completed step" })).not.toBeInTheDocument();
   });
 
@@ -48,7 +54,7 @@ describe("StepIndicator — jump-to-completed-step controls", () => {
     const user = userEvent.setup();
     // Reporter went back to "about-you" after having already completed
     // through "vaccine" — those later steps must still be reachable.
-    render(
+    renderIndicator(
       <StepIndicator
         steps={STEPS}
         currentStep="about-you"
@@ -68,7 +74,7 @@ describe("StepIndicator — jump-to-completed-step controls", () => {
   it("the mobile jump select includes steps both before and after the current one when they're already completed", async () => {
     const onStepClick = vi.fn();
     const user = userEvent.setup();
-    render(
+    renderIndicator(
       <StepIndicator
         steps={STEPS}
         currentStep="about-you"
