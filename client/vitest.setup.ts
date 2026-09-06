@@ -9,3 +9,12 @@ import { cleanup } from "@testing-library/react";
 afterEach(() => {
   cleanup();
 });
+
+// jsdom doesn't implement window.scrollTo — calling it logs a noisy "Not
+// implemented" error to the console instead of throwing. ConversationalStep
+// calls it on every question change, which every test rendering that
+// component (directly or via a *Step wrapper) hits, so this is a global
+// no-op default rather than something each test file has to stub for
+// itself. Individual tests that need to assert on the call still override
+// it with their own `vi.spyOn(window, "scrollTo")`.
+window.scrollTo = () => {};
