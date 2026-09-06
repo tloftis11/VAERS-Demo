@@ -223,15 +223,27 @@ export function ConversationalStep({
   // `useLayoutEffect`, not `useEffect` — it runs before the browser paints,
   // so the scroll position is already correct in the very first frame the
   // user sees for this question, instead of visibly jumping a frame after
-  // the old position was already on screen.
+  // the old position was already on screen. The scroll itself is computed
+  // explicitly (document position of the panel, minus a fixed top offset)
+  // rather than via `scrollIntoView`, so the landing position is exact and
+  // doesn't anchor to the progress bar or any other sticky element above it.
   const questionHeadingRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const heading = questionHeadingRef.current;
-    heading?.focus({ preventScroll: true });
-    const panel = heading?.closest(".convo-question-panel") ?? heading;
-    // Optional call, not just optional chaining on `panel` — jsdom (this
-    // app's test environment) doesn't implement scrollIntoView at all.
-    panel?.scrollIntoView?.({ block: "start", behavior: "auto" });
+    if (!heading) return;
+
+    heading.focus({ preventScroll: true });
+
+    const panel = heading.closest(".convo-question-panel");
+    if (!panel) return;
+
+    const offset = window.innerWidth < 640 ? 16 : 24;
+    const top = window.scrollY + panel.getBoundingClientRect().top - offset;
+
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: "auto",
+    });
   }, [index]);
 
   function goBack() {

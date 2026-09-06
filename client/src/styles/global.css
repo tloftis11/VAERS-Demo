@@ -22,13 +22,12 @@
   box-sizing: border-box;
 }
 
-/* Questions vary in height, so the vertical scrollbar appears/disappears
-   as the reporter moves between them — without a reserved gutter, that
-   shifts the whole centered layout sideways by the scrollbar's width on
-   every such transition. Reserving the gutter unconditionally (the
-   `overflow-y: scroll` fallback for browsers without `scrollbar-gutter`
-   support) keeps the layout's horizontal position stable regardless of
-   whether a given question actually needs to scroll. */
+/* Reserves the vertical scrollbar's width on every page, whether or not
+   that page's content actually overflows — otherwise the centered layout
+   (the nav bar, the conversational question panel) visibly shifts sideways
+   whenever the scrollbar appears or disappears, e.g. moving between a short
+   question and a tall one. The `overflow-y: scroll` fallback covers
+   browsers without `scrollbar-gutter` support. */
 html {
   overflow-y: scroll;
 }
@@ -73,14 +72,6 @@ html,
 body {
   margin: 0;
   padding: 0;
-}
-
-/* Reserves the vertical scrollbar's width on every page, whether or not
-   that page's content actually overflows — otherwise the nav bar (centered
-   via margin:auto) visibly shifts sideways when navigating between a page
-   tall enough to scroll and one that isn't. */
-html {
-  scrollbar-gutter: stable;
 }
 
 body {
@@ -1011,13 +1002,6 @@ a {
 
 .convo-step--review {
   max-width: 720px;
-}
-
-/* Gives ConversationalStep's scrollIntoView({ block: "start" }) a
-   consistent gap above the panel instead of landing it flush against the
-   viewport edge, at any width. */
-.convo-question-panel {
-  scroll-margin-top: var(--space-4);
 }
 
 /* Desktop: recap becomes a sticky left-hand sidebar next to the active
