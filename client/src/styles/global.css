@@ -22,6 +22,24 @@
   box-sizing: border-box;
 }
 
+/* Questions vary in height, so the vertical scrollbar appears/disappears
+   as the reporter moves between them — without a reserved gutter, that
+   shifts the whole centered layout sideways by the scrollbar's width on
+   every such transition. Reserving the gutter unconditionally (the
+   `overflow-y: scroll` fallback for browsers without `scrollbar-gutter`
+   support) keeps the layout's horizontal position stable regardless of
+   whether a given question actually needs to scroll. */
+html {
+  overflow-y: scroll;
+}
+
+@supports (scrollbar-gutter: stable) {
+  html {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
 /* Browsers give native form controls their own default UI font instead of
    inheriting the page's — without this, any button/input/select/table
    introduced without its own explicit font-family override silently renders
@@ -590,8 +608,18 @@ a {
 
 /* Choice steps (submitter type / report characteristic) */
 
+/* These screens (submitter type, admin-error/adverse-event yes/no,
+   "Continue your report?") sit between ConversationalStep questions in the
+   same flow but don't share its layout system, so without a floor here
+   they visibly changed height at the transition in a way the questions
+   themselves (see .convo-question's own min-height) no longer do. */
+.choice-step {
+  min-height: 420px;
+}
+
 .choice-step h1 {
-  margin-bottom: var(--space-2);
+  margin: 0 0 var(--space-2);
+  line-height: 1.2;
 }
 
 /* Single-column, full-width rows — a horizontal icon+text card reads better
@@ -985,6 +1013,13 @@ a {
   max-width: 720px;
 }
 
+/* Gives ConversationalStep's scrollIntoView({ block: "start" }) a
+   consistent gap above the panel instead of landing it flush against the
+   viewport edge, at any width. */
+.convo-question-panel {
+  scroll-margin-top: var(--space-4);
+}
+
 /* Desktop: recap becomes a sticky left-hand sidebar next to the active
    question instead of a full-width stack above it — uses the extra width a
    computer has rather than just centering a mobile-width column in empty
@@ -1018,20 +1053,16 @@ a {
   .convo-step--question .convo-question-panel {
     grid-area: panel;
   }
-}
 
-/* A question with no icon/hint/error is noticeably shorter than one with
-   them (label + single-line input vs. label + hint + input + error), so
-   the Back/Next row visibly jumped up and down between adjacent questions
-   in the same step. A floor here absorbs that jump for the common case
-   without capping genuinely tall questions (checkbox groups, multi-row
-   vaccine editors, address blocks), which already exceed it. Applies at
-   every width (not just desktop) — a short question's total page height
-   also has to be tall enough for ConversationalStep's own scroll-to-the-
-   same-position-every-time logic to actually reach that position, instead
-   of hitting the bottom of the page first and landing short. */
-.convo-question {
-  min-height: 200px;
+  /* A question with no icon/hint/error is noticeably shorter than one with
+     them (label + single-line input vs. label + hint + input + error), so
+     the Back/Next row visibly jumped up and down between adjacent
+     questions in the same step. A floor here absorbs that jump for the
+     common case without capping genuinely tall questions (checkbox
+     groups, multi-row vaccine editors), which already exceed it. */
+  .convo-step--question .convo-question {
+    min-height: 200px;
+  }
 }
 
 .convo-step__review-title {
@@ -1515,40 +1546,6 @@ a {
   margin-top: var(--space-6);
 }
 
-/* Consistency check (AI-assisted) */
-
-.consistency-check {
-  margin: var(--space-3) 0 var(--space-2);
-}
-
-.consistency-check__clear {
-  color: var(--color-success-text);
-  margin-top: var(--space-2);
-}
-
-.consistency-check__list {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-3) 0 0;
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
-}
-
-.consistency-check__list li {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.consistency-check__list li:last-child {
-  border-bottom: none;
-}
-
-.consistency-check__list p {
-  margin: var(--space-1) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-}
-
 /* Documents step */
 
 .suggestion-box {
@@ -1562,31 +1559,6 @@ a {
 .suggestion-box h2 {
   margin-top: 0;
   font-size: 1rem;
-}
-
-.suggestion-box--ai {
-  border-style: dashed;
-  border-color: var(--color-primary);
-}
-
-.suggestion-box__ai-badge {
-  display: inline-block;
-  background: var(--color-accent);
-  color: var(--color-accent-dark);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  margin-right: var(--space-2);
-  vertical-align: middle;
-}
-
-.suggestion-box__ai-disclaimer {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
 }
 
 .dropzone {
@@ -2170,26 +2142,6 @@ a {
 
 .faq-widget__empty {
   color: var(--color-text-muted);
-}
-
-.faq-widget__ask {
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-}
-
-.faq-widget__ai-answer {
-  margin-top: var(--space-3);
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  font-size: 0.9rem;
-}
-
-.faq-widget__ai-disclaimer {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
 }
 
 /* FAQ page */

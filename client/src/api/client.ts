@@ -370,14 +370,6 @@ export function postSubmissionSurvey(
   }).then((r) => asJson(r));
 }
 
-export function askFaqAssistant(question: string, step?: string): Promise<{ answer: string }> {
-  return fetch(`${API_ROOT}/assistant/faq`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, step }),
-  }).then((r) => asJson(r));
-}
-
 export interface VaccineOption {
   value: string;
   label: string;
@@ -427,36 +419,3 @@ export function adminUpdateVaccineOption(
   }).then((r) => asJson(r));
 }
 
-export interface ConsistencyIssue {
-  field: "description" | "outcomes" | "recoveryStatus";
-  issue: string;
-  suggestion: string;
-}
-
-export function checkDescriptionConsistency(input: {
-  description: string;
-  outcomes: string[];
-  recoveryStatus?: string;
-  submitterType: "public" | "hcp";
-}): Promise<{ issues: ConsistencyIssue[] }> {
-  return fetch(`${API_ROOT}/assistant/check-description`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  }).then((r) => asJson(r));
-}
-
-export interface AiDocumentSuggestion {
-  documentType: string;
-  reason: string;
-}
-
-export function suggestDocumentsFromNarrative(
-  reportId: string
-): Promise<{ suggestions: AiDocumentSuggestion[] }> {
-  return fetch(`${API_ROOT}/assistant/suggest-documents`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reportId }),
-  }).then((r) => asJson(r));
-}
