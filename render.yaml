@@ -48,8 +48,11 @@ services:
         generateValue: true
       - key: UPLOAD_DIR
         value: ./uploads
+      # Comma-separated allowlist (see server/src/index.ts's cors() setup) —
+      # keeps the onrender.com URL working alongside the custom domain
+      # during the DNS transition, rather than cutting over all at once.
       - key: CLIENT_ORIGIN
-        value: "https://vaers-client.onrender.com"
+        value: "https://vaers-client.onrender.com,https://demovaersprototype.com,https://www.demovaersprototype.com"
       # Prototype-only shared token gating /admin — see server/src/routes/admin.ts.
       - key: ADMIN_TOKEN
         value: "staff"
@@ -65,6 +68,10 @@ services:
     runtime: static
     buildCommand: npm install && npm run build --workspace=client
     staticPublishPath: client/dist
+    # Render auto-adds the www. subdomain too, redirecting it to the root
+    # (see https://render.com/docs/blueprint-spec) — no separate entry needed.
+    domains:
+      - demovaersprototype.com
     envVars:
       - key: VITE_API_URL
         value: "https://vaers-api.onrender.com"
