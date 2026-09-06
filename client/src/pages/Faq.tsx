@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import { searchFaq, type FaqEntry } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
 
 export function Faq() {
+  const { t, language } = useLanguage();
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<FaqEntry[]>([]);
 
   useEffect(() => {
-    searchFaq(query).then(setEntries);
-  }, [query]);
+    searchFaq(query, undefined, language).then(setEntries);
+  }, [query, language]);
 
   return (
     <div className="page page--prose">
-      <h1>Frequently Asked Questions</h1>
+      <h1>{t("faqPage.heading")}</h1>
       <label htmlFor="faq-search-page" className="field__label">
-        Search
+        {t("faqPage.searchLabel")}
       </label>
       <input
         id="faq-search-page"
@@ -21,7 +23,7 @@ export function Faq() {
         className="field__input"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="e.g. privacy, lot number, how long"
+        placeholder={t("faqPage.searchPlaceholder")}
       />
       <ul className="faq-page__list">
         {entries.map((entry) => (

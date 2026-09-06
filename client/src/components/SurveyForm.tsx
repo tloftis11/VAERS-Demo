@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface SurveyFormProps {
   title: string;
@@ -16,6 +17,7 @@ interface SurveyFormProps {
  * ≤10-minute median submission-time target.
  */
 export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: SurveyFormProps) {
+  const { t } = useLanguage();
   const [rating, setRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -36,7 +38,7 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: S
   if (submitted) {
     return (
       <div className="survey">
-        <p role="status">Thank you for your feedback.</p>
+        <p role="status">{t("survey.thankYou")}</p>
       </div>
     );
   }
@@ -47,7 +49,7 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: S
         <div className="survey__header">
           <h2 className="survey__title">{title}</h2>
           {onDismiss && (
-            <button type="button" className="survey__dismiss" onClick={onDismiss} aria-label="Dismiss survey">
+            <button type="button" className="survey__dismiss" onClick={onDismiss} aria-label={t("survey.dismissAriaLabel")}>
               ×
             </button>
           )}
@@ -55,7 +57,7 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: S
       )}
       <fieldset className="survey__fieldset">
         <legend>{prompt}</legend>
-        <div className="survey__rating" role="radiogroup" aria-label="Rating, 1 to 5">
+        <div className="survey__rating" role="radiogroup" aria-label={t("survey.ratingAriaLabel")}>
           {[1, 2, 3, 4, 5].map((value) => (
             <label key={value} className="survey__rating-option">
               <input
@@ -71,12 +73,12 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: S
           ))}
         </div>
         <div className="survey__rating-labels" aria-hidden="true">
-          <span>Not great</span>
-          <span>Excellent</span>
+          <span>{t("survey.notGreat")}</span>
+          <span>{t("survey.excellent")}</span>
         </div>
       </fieldset>
       <label htmlFor="survey-comment" className="field__label">
-        Comments (optional)
+        {t("survey.comments")}
       </label>
       <textarea
         id="survey-comment"
@@ -86,7 +88,7 @@ export function SurveyForm({ title, prompt, onSubmit, onDismiss, hideHeader }: S
         onChange={(e) => setComment(e.target.value)}
       />
       <button type="submit" className="button button--secondary" disabled={rating === null || submitting}>
-        {submitting ? "Submitting…" : "Submit feedback"}
+        {submitting ? t("survey.submitting") : t("survey.submitFeedback")}
       </button>
     </form>
   );

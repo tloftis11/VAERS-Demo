@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import type { StepId } from "../../../shared/src/branchingRules";
 import { askFaqAssistant, searchFaq, type FaqEntry } from "../api/client";
 import { Mascot } from "./Mascot";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface FaqWidgetProps {
   step?: StepId;
@@ -14,6 +15,7 @@ interface FaqWidgetProps {
  * grounded in this same FAQ dataset, for questions the keyword match misses.
  */
 export function FaqWidget({ step }: FaqWidgetProps) {
+  const { t, language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<FaqEntry[]>([]);
@@ -26,8 +28,8 @@ export function FaqWidget({ step }: FaqWidgetProps) {
 
   useEffect(() => {
     if (!open) return;
-    searchFaq(query, query ? undefined : step).then(setEntries);
-  }, [open, query, step]);
+    searchFaq(query, query ? undefined : step, language).then(setEntries);
+  }, [open, query, step, language]);
 
   const quickReplies = entries.slice(0, 4);
   const selectedEntry = entries.find((e) => e.id === selectedId) ?? null;
@@ -42,7 +44,7 @@ export function FaqWidget({ step }: FaqWidgetProps) {
       const { answer } = await askFaqAssistant(askText.trim(), step);
       setAiAnswer(answer);
     } catch {
-      setAskError("Couldn't reach the assistant right now — try the FAQ list above instead.");
+      setAskError(t("faqWidget.askErrorGeneric"));
     } finally {
       setAsking(false);
     }
@@ -60,12 +62,12 @@ export function FaqWidget({ step }: FaqWidgetProps) {
         <span className="faq-widget__toggle-avatar">
           <Mascot size={22} />
         </span>
-        {open ? "Close help" : "Need help? Ask me!"}
+        {open ? t("faqWidget.closeHelp") : t("faqWidget.needHelp")}
       </button>
       {open && (
-        <div id={panelId} className="faq-widget__panel" role="region" aria-label="Frequently asked questions">
+        <div id={panelId} className="faq-widget__panel" role="region" aria-label={t("faqWidget.panelAriaLabel")}>
           <label htmlFor="faq-search" className="field__label">
-            Search the FAQ
+            {t("faqWidget.searchLabel")}
           </label>
           <input
             id="faq-search"
@@ -76,11 +78,11 @@ export function FaqWidget({ step }: FaqWidgetProps) {
               setQuery(e.target.value);
               setSelectedId(null);
             }}
-            placeholder="e.g. lot number, privacy, how long"
+            placeholder={t("faqWidget.searchPlaceholder")}
           />
 
           {quickReplies.length > 0 && (
-            <div className="faq-widget__chip-list" role="group" aria-label="Suggested questions">
+            <div className="faq-widget__chip-list" role="group" aria-label={t("faqWidget.suggestedQuestionsAriaLabel")}>
               {quickReplies.map((entry) => (
                 <button
                   key={entry.id}
@@ -104,7 +106,7 @@ export function FaqWidget({ step }: FaqWidgetProps) {
           ) : (
             query && (
               <ul className="faq-widget__list">
-                {entries.length === 0 && <li className="faq-widget__empty">No matching questions found.</li>}
+                {entries.length === 0 && <li className="faq-widget__empty">{t("faqWidget.noMatches")}</li>}
                 {entries.map((entry) => (
                   <li key={entry.id} className="faq-widget__entry">
                     <p className="faq-widget__question">{entry.question}</p>
@@ -117,7 +119,7 @@ export function FaqWidget({ step }: FaqWidgetProps) {
 
           <form className="faq-widget__ask" onSubmit={handleAsk}>
             <label htmlFor="faq-ask" className="field__label">
-              Or ask in your own words
+              {t("faqWidget.askLabel")}
             </label>
             <textarea
               id="faq-ask"
@@ -125,10 +127,10 @@ export function FaqWidget({ step }: FaqWidgetProps) {
               rows={2}
               value={askText}
               onChange={(e) => setAskText(e.target.value)}
-              placeholder="e.g. do I have to know exactly when symptoms started?"
+              placeholder={t("faqWidget.askPlaceholder")}
             />
             <button type="submit" className="button button--secondary" disabled={asking || !askText.trim()}>
-              {asking ? "Asking…" : "Ask"}
+              {asking ? t("faqWidget.asking") : t("faqWidget.ask")}
             </button>
             {askError && (
               <p role="alert" className="field__error">
@@ -138,9 +140,7 @@ export function FaqWidget({ step }: FaqWidgetProps) {
             {aiAnswer && (
               <div className="faq-widget__ai-answer" role="status">
                 <p>{aiAnswer}</p>
-                <p className="faq-widget__ai-disclaimer">
-                  AI-generated answer — not a substitute for medical advice.
-                </p>
+                <p className="faq-widget__ai-disclaimer">{t("faqWidget.aiAnswerDisclaimer")}</p>
               </div>
             )}
           </form>

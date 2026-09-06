@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdditionalVaccinesEditor } from "./VaccineStep";
+import { LanguageProvider } from "../../i18n/LanguageContext";
 import type { AdditionalVaccineRow } from "../../api/client";
+import type { ReactElement } from "react";
+
+function renderEditor(element: ReactElement) {
+  return render(<LanguageProvider>{element}</LanguageProvider>);
+}
 
 const VACCINE_OPTIONS = [
   { value: "covid19", label: "COVID-19" },
@@ -26,7 +32,7 @@ function blankRow(overrides: Partial<AdditionalVaccineRow> = {}): AdditionalVacc
 
 describe("AdditionalVaccinesEditor", () => {
   it("a blank row shows no error and is not marked invalid", () => {
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow()]}
         onChange={() => {}}
@@ -40,7 +46,7 @@ describe("AdditionalVaccinesEditor", () => {
   });
 
   it("REGRESSION: a partial row's error is visible with an accessible message identifying the row", () => {
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ manufacturer: "moderna" })]}
         onChange={() => {}}
@@ -54,7 +60,7 @@ describe("AdditionalVaccinesEditor", () => {
   });
 
   it("REGRESSION: the first invalid row's control receives focus", () => {
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ manufacturer: "moderna" }), blankRow({ vaccineType: "flu" })]}
         onChange={() => {}}
@@ -69,7 +75,7 @@ describe("AdditionalVaccinesEditor", () => {
   it("correcting the row (selecting a vaccine) reports the fix to the parent", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ manufacturer: "moderna" })]}
         onChange={onChange}
@@ -91,7 +97,7 @@ describe("AdditionalVaccinesEditor", () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const rows = [blankRow({ vaccineType: "covid19" }), blankRow({ vaccineType: "flu" })];
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor value={rows} onChange={onChange} vaccineTypeOptions={VACCINE_OPTIONS} isHcp={false} errors={{}} />
     );
     const removeButtons = screen.getAllByRole("button", { name: "Remove" });
@@ -100,7 +106,7 @@ describe("AdditionalVaccinesEditor", () => {
   });
 
   it("selecting 'Other' reveals a plain-text vaccine-name field", () => {
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ vaccineType: "other" })]}
         onChange={() => {}}
@@ -115,7 +121,7 @@ describe("AdditionalVaccinesEditor", () => {
   it("changing away from 'Other' clears the stale vaccine-name text", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ vaccineType: "other", vaccineTypeOther: "Some old brand" })]}
         onChange={onChange}
@@ -135,7 +141,7 @@ describe("AdditionalVaccinesEditor", () => {
   });
 
   it("REGRESSION: a public row's manufacturer list matches the selected vaccine, not just 'Unknown'", () => {
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ vaccineType: "covid19" })]}
         onChange={() => {}}
@@ -150,7 +156,7 @@ describe("AdditionalVaccinesEditor", () => {
   });
 
   it("an HCP row still resolves manufacturers through the HCP vaccine list", () => {
-    render(
+    renderEditor(
       <AdditionalVaccinesEditor
         value={[blankRow({ vaccineType: "covid19" })]}
         onChange={() => {}}

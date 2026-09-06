@@ -183,7 +183,7 @@ function VaccineOptionsAdmin({ token, onSignOut }: { token: string; onSignOut: (
           <p className="field__hint">
             {audience === "hcp"
               ? "Shown to reporters who identified as a healthcare professional."
-              : "Shown to reporters filing on their own or a family member's behalf — kept short and plain-language, distinct from the HCP list above."}
+              : "Shown to reporters filing on their own or a family member's behalf — kept short and plain-language, distinct from the HCP list below."}
           </p>
           <table className="admin-table">
             <thead>

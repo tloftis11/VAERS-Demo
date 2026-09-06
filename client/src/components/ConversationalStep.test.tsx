@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConversationalStep, type ConversationalFieldSpec } from "./ConversationalStep";
+import { LanguageProvider } from "../i18n/LanguageContext";
 
 const FIELDS: ConversationalFieldSpec[] = [
   { id: "name", label: "Your name", required: true, kind: "text" },
@@ -10,17 +11,19 @@ const FIELDS: ConversationalFieldSpec[] = [
 
 function setup(onNext: (data: Record<string, unknown>) => Promise<void>) {
   return render(
-    <ConversationalStep
-      stepTitle="Test step"
-      fields={FIELDS}
-      values={{ name: "Jane Doe" }}
-      setValue={() => {}}
-      errors={{}}
-      validate={() => ({ success: true, data: { name: "Jane Doe" } })}
-      onNext={onNext}
-      onBack={() => {}}
-      initialIndex={FIELDS.length}
-    />
+    <LanguageProvider>
+      <ConversationalStep
+        stepTitle="Test step"
+        fields={FIELDS}
+        values={{ name: "Jane Doe" }}
+        setValue={() => {}}
+        errors={{}}
+        validate={() => ({ success: true, data: { name: "Jane Doe" } })}
+        onNext={onNext}
+        onBack={() => {}}
+        initialIndex={FIELDS.length}
+      />
+    </LanguageProvider>
   );
 }
 
@@ -147,7 +150,11 @@ function SiteChoiceHarness({ onNext }: { onNext: (data: Record<string, unknown>)
 describe("ConversationalStep — a choice option requiring inline follow-up", () => {
   it("REGRESSION: selecting 'Other' does not auto-advance, so the revealed field is actually visible", async () => {
     const user = userEvent.setup();
-    render(<SiteChoiceHarness onNext={vi.fn()} />);
+    render(
+      <LanguageProvider>
+        <SiteChoiceHarness onNext={vi.fn()} />
+      </LanguageProvider>
+    );
 
     await user.click(screen.getByRole("button", { name: "Other" }));
 
@@ -157,7 +164,11 @@ describe("ConversationalStep — a choice option requiring inline follow-up", ()
 
   it("REGRESSION: clicking Next with the follow-up still blank blocks, without a duplicated error banner", async () => {
     const user = userEvent.setup();
-    render(<SiteChoiceHarness onNext={vi.fn()} />);
+    render(
+      <LanguageProvider>
+        <SiteChoiceHarness onNext={vi.fn()} />
+      </LanguageProvider>
+    );
 
     await user.click(screen.getByRole("button", { name: "Other" }));
     await user.click(screen.getByRole("button", { name: "Next →" }));
@@ -174,7 +185,11 @@ describe("ConversationalStep — a choice option requiring inline follow-up", ()
   it("advances once the follow-up is filled in", async () => {
     const user = userEvent.setup();
     const onNext = vi.fn().mockResolvedValue(undefined);
-    render(<SiteChoiceHarness onNext={onNext} />);
+    render(
+      <LanguageProvider>
+        <SiteChoiceHarness onNext={onNext} />
+      </LanguageProvider>
+    );
 
     await user.click(screen.getByRole("button", { name: "Other" }));
     await user.type(screen.getByLabelText("Describe where it was given"), "Buttock");

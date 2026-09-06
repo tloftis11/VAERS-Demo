@@ -1018,16 +1018,20 @@ a {
   .convo-step--question .convo-question-panel {
     grid-area: panel;
   }
+}
 
-  /* A question with no icon/hint/error is noticeably shorter than one with
-     them (label + single-line input vs. label + hint + input + error), so
-     the Back/Next row visibly jumped up and down between adjacent
-     questions in the same step. A floor here absorbs that jump for the
-     common case without capping genuinely tall questions (checkbox
-     groups, multi-row vaccine editors), which already exceed it. */
-  .convo-step--question .convo-question {
-    min-height: 200px;
-  }
+/* A question with no icon/hint/error is noticeably shorter than one with
+   them (label + single-line input vs. label + hint + input + error), so
+   the Back/Next row visibly jumped up and down between adjacent questions
+   in the same step. A floor here absorbs that jump for the common case
+   without capping genuinely tall questions (checkbox groups, multi-row
+   vaccine editors, address blocks), which already exceed it. Applies at
+   every width (not just desktop) — a short question's total page height
+   also has to be tall enough for ConversationalStep's own scroll-to-the-
+   same-position-every-time logic to actually reach that position, instead
+   of hitting the bottom of the page first and landing short. */
+.convo-question {
+  min-height: 200px;
 }
 
 .convo-step__review-title {

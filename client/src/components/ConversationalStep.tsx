@@ -6,6 +6,7 @@ import { MultiSelect } from "./MultiSelect";
 import { TimeInput12 } from "./TimeInput12";
 import { MonthYearInput } from "./MonthYearInput";
 import { errorsForField, relativeErrorsForField } from "../utils/fieldErrors";
+import { useLanguage } from "../i18n/LanguageContext";
 
 /** Errors for a field plus any it claims via `alsoValidates` (see that
  * field's doc comment) — same shape as errorsForField, just unioned across
@@ -186,6 +187,7 @@ export function ConversationalStep({
   extras,
   extraFieldValidation,
 }: ConversationalStepProps) {
+  const { t } = useLanguage();
   const [index, setIndex] = useState(initialIndex);
   // The furthest question reached in this step so far — distinct from
   // `index` (the one on screen *right now*), so that going back to fix an
@@ -217,9 +219,25 @@ export function ConversationalStep({
   // announces the change, even though it doesn't drop focus straight into
   // the control itself (which varies too much by field kind to target
   // uniformly).
+  //
+  // `.focus()` alone also scrolls — but only via the browser's own "scroll
+  // the minimum distance needed" heuristic, which lands the heading at a
+  // different point in the viewport depending on where the *previous*
+  // question's scroll position happened to be (a short question after a
+  // tall one lands high; the reverse lands low). That read as the question
+  // text "bouncing" between screens even though its position in the
+  // document never actually changed. `preventScroll` stops that default
+  // scroll so the explicit `scrollIntoView` below is the only thing
+  // deciding where the page lands — always the panel's top edge, every
+  // question, every time, with no min-height/scroll-region trickery needed.
   const questionHeadingRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    questionHeadingRef.current?.focus();
+    const heading = questionHeadingRef.current;
+    heading?.focus({ preventScroll: true });
+    const panel = heading?.closest(".convo-question-panel") ?? heading;
+    // Optional call, not just optional chaining on `panel` — jsdom (this
+    // app's test environment) doesn't implement scrollIntoView at all.
+    panel?.scrollIntoView?.({ block: "start" });
   }, [index]);
 
   function goBack() {
@@ -281,12 +299,12 @@ export function ConversationalStep({
     return (
       <div className="convo-step convo-step--review">
         <h1 className="convo-step__review-title" ref={questionHeadingRef as never} tabIndex={-1}>
-          Review: {stepTitle}
+          {t("convo.reviewTitle", { title: stepTitle })}
         </h1>
 
         {errorRows.length > 0 && (
           <div className="review-error" role="alert">
-            <p>Please fix the following before continuing:</p>
+            <p>{t("convo.fixBeforeContinuing")}</p>
             <ul>
               {errorRows.map(({ key, fieldIdx, summary }) => (
                 <li key={key}>
@@ -311,14 +329,18 @@ export function ConversationalStep({
               <div key={field.id} className="review-list__row">
                 <dt>{field.label}</dt>
                 <dd>
-                  {display ? <span>{display}</span> : <span className="review-list__empty">Not provided</span>}
+                  {display ? (
+                    <span>{display}</span>
+                  ) : (
+                    <span className="review-list__empty">{t("convo.notProvided")}</span>
+                  )}
                   <button
                     type="button"
                     className="review-list__edit"
                     onClick={() => jumpTo(i)}
-                    aria-label={`Edit answer: ${field.label}`}
+                    aria-label={t("convo.editAnswer", { label: field.label })}
                   >
-                    Edit
+                    {t("convo.edit")}
                   </button>
                 </dd>
               </div>
@@ -328,10 +350,10 @@ export function ConversationalStep({
 
         <div className="step-form__actions">
           <button type="button" className="button button--text" onClick={() => jumpTo(fields.length - 1)}>
-            ← Back
+            {t("common.back")}
           </button>
           <button type="button" className="button button--primary" onClick={handleReviewContinue} disabled={submitting}>
-            {submitting ? "Saving…" : "Continue"}
+            {submitting ? t("convo.saving") : t("common.continue")}
           </button>
         </div>
       </div>
@@ -549,11 +571,11 @@ export function ConversationalStep({
                 type="button"
                 className={`recap-pill recap-pill--complete${display ? "" : " recap-pill--empty"}`}
                 onClick={() => jumpTo(i)}
-                aria-label={`Edit answer: ${f.label}`}
+                aria-label={t("convo.editAnswer", { label: f.label })}
               >
                 <span className="recap-pill__text">
                   <span className="recap-pill__label">{f.label}</span>
-                  <span className="recap-pill__value">{display || "Not provided"}</span>
+                  <span className="recap-pill__value">{display || t("convo.notProvided")}</span>
                 </span>
                 <span className="recap-pill__edit" aria-hidden="true">
                   ✎
@@ -572,7 +594,7 @@ export function ConversationalStep({
       <div className="convo-question-panel">
         <div className="convo-question">
           <p className="convo-question__counter">
-            Question {index + 1} of {fields.length}
+            {t("convo.questionOf", { n: index + 1, total: fields.length })}
           </p>
           <div className="convo-question__head">
             {/* Always reserves the same slot whether or not this question
@@ -610,7 +632,7 @@ export function ConversationalStep({
 
         <div className="step-form__actions">
           <button type="button" className="button button--text" onClick={goBack}>
-            ← Back
+            {t("common.back")}
           </button>
           {isCardChoice
             ? (!isEmptyValue(value) ? (
@@ -627,12 +649,12 @@ export function ConversationalStep({
                 // follow-up until the end-of-step review, several questions
                 // and a "why am I blocked" moment later.
                 <button type="button" className="button button--primary" onClick={handleNextClick}>
-                  Next →
+                  {t("convo.next")}
                 </button>
               ) : (
                 canSkip && (
                   <button type="button" className="button button--text" onClick={advance}>
-                    Skip →
+                    {t("convo.skip")}
                   </button>
                 )
               ))
@@ -643,7 +665,7 @@ export function ConversationalStep({
                 onClick={handleNextClick}
                 disabled={!!field.required && isEmptyValue(value)}
               >
-                Next →
+                {t("convo.next")}
               </button>
             )}
         </div>

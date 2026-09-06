@@ -1,5 +1,5 @@
-export type { FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
-import type { FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
+export type { ResolvedFaqEntry as FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
+import type { ResolvedFaqEntry as FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
 
 const API_ROOT = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
 
@@ -342,10 +342,11 @@ export function getDocumentSuggestions(reportId: string): Promise<DocumentSugges
   return fetch(`${API_ROOT}/reports/${reportId}/document-suggestions`).then((r) => asJson(r));
 }
 
-export function searchFaq(query: string, step?: string): Promise<FaqEntry[]> {
+export function searchFaq(query: string, step?: string, lang?: string): Promise<FaqEntry[]> {
   const params = new URLSearchParams();
   if (query) params.set("query", query);
   if (step) params.set("step", step);
+  if (lang) params.set("lang", lang);
   return fetch(`${API_ROOT}/faq?${params.toString()}`).then((r) => asJson(r));
 }
 

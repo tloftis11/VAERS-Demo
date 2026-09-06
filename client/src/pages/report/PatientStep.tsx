@@ -13,6 +13,10 @@ import type { PatientData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 import { AddressFieldGroup, formatAddressSummary } from "../../components/AddressFieldGroup";
+import { useLanguage } from "../../i18n/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
+
+type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
 interface PatientStepProps {
   submitterType: SubmitterType;
@@ -79,18 +83,27 @@ const EMPTY: PatientData = {
  * pass no argument, which shows the full superset for display purposes.
  */
 export function patientFieldSpecs(
+  t: Translate,
   dateOfBirthUnknown = true,
   dobPartialMode = false,
   patientRaceOtherValue?: string,
   /** Only needed for the review-summary line — the live wizard's own
    * `render` (attached in the component below) reads current values
    * directly via closure instead. */
-  patientAddressValues?: { city: string; state: string; county: string; zip: string }
+  patientAddressValues?: { city: string; state: string; county: string; zip: string },
+  /** True only for a "public" submitter reporting on themselves — see
+   * PatientStep's own prop doc. Every label below defaults to third-person
+   * ("the patient") since that's correct for both a caregiver and an HCP;
+   * a self-report is the one case where the person answering and the
+   * patient are the same, so it's the only branch that switches to
+   * "you"/"your" instead. */
+  isSelfReport = false
 ): ConversationalFieldSpec[] {
+  const who = isSelfReport ? "self" : "other";
   const fields: ConversationalFieldSpec[] = [
     {
       id: "patientFirstName",
-      label: "Patient's first name",
+      label: t(`patient.firstName.${who}`),
       required: true,
       kind: "text",
       icon: "person",
@@ -98,7 +111,7 @@ export function patientFieldSpecs(
     },
     {
       id: "patientLastName",
-      label: "Patient's last name",
+      label: t(`patient.lastName.${who}`),
       required: true,
       kind: "text",
       icon: "person",
@@ -106,38 +119,38 @@ export function patientFieldSpecs(
     },
     {
       id: "patientDateOfBirth",
-      label: "Date of birth",
+      label: t("patient.dob"),
       required: !dateOfBirthUnknown,
       kind: dobPartialMode ? "monthYear" : "date",
       icon: "calendar",
-      hint: "We use this to work out the patient's age at vaccination automatically.",
+      hint: t(`patient.dobHint.${who}`),
       min: "1900-01-01",
       max: todayIsoDate(),
     },
-    { id: "patientSex", label: "Sex", required: true, kind: "choice", options: SEX_OPTIONS },
+    { id: "patientSex", label: t("patient.sex"), required: true, kind: "choice", options: SEX_OPTIONS },
   ];
   if (dateOfBirthUnknown) {
     fields.push(
       {
         id: "ageYears",
-        label: "How old was the patient when they got the vaccine? (years)",
+        label: t("patient.ageYears"),
         required: true,
         kind: "number",
-        hint: "Whole years only. If the patient was younger than 1 year old, enter 0 — you'll be able to add months next.",
+        hint: t("patient.ageYearsHint"),
       },
       {
         id: "ageMonths",
-        label: "If younger than 2 years old, how many additional months? (optional)",
+        label: t("patient.ageMonths"),
         required: false,
         kind: "number",
-        hint: "Only for infants and toddlers. For example, a patient who was 1 year and 6 months old: enter 1 above, and 6 here.",
+        hint: t("patient.ageMonthsHint"),
       }
     );
   }
   fields.push(
     {
       id: "patientStreet",
-      label: "Patient's address (optional)",
+      label: t(`patient.address.${who}`),
       required: false,
       kind: "custom",
       // Folds city/state/county/zip into this same question (see the
@@ -145,9 +158,9 @@ export function patientFieldSpecs(
       // five, with real autoComplete attributes for browser address autofill.
       alsoValidates: ["patientCity", "patientState", "patientCounty", "patientZip"],
       describeError: (relativePath, message) => {
-        if (relativePath === "patientCity") return `Patient's city: ${message}`;
-        if (relativePath === "patientState") return `Patient's state: ${message}`;
-        if (relativePath === "patientZip") return `Patient's ZIP: ${message}`;
+        if (relativePath === "patientCity") return t(`patient.cityError.${who}`, { msg: message });
+        if (relativePath === "patientState") return t(`patient.stateError.${who}`, { msg: message });
+        if (relativePath === "patientZip") return t(`patient.zipError.${who}`, { msg: message });
         return message;
       },
       formatSummary: (streetValue) =>
@@ -161,78 +174,78 @@ export function patientFieldSpecs(
     },
     {
       id: "patientPhone",
-      label: "Patient's phone (optional)",
+      label: t(`patient.phone.${who}`),
       required: false,
       kind: "tel",
       autoComplete: "tel",
-      hint: "e.g. (404) 555-1212 or +1 404 555 1212.",
+      hint: t("aboutYou.phoneHint"),
     },
-    { id: "patientEmail", label: "Patient's email (optional)", required: false, kind: "email", autoComplete: "email" },
+    { id: "patientEmail", label: t("patient.email"), required: false, kind: "email", autoComplete: "email" },
     {
       id: "patientEmailConfirm",
-      label: "Confirm patient's email",
+      label: t("patient.emailConfirm"),
       required: false,
       kind: "email",
       autoComplete: "email",
     },
     {
       id: "pregnant",
-      label: "Was the patient pregnant at the time of vaccination? (optional)",
+      label: t(`patient.pregnant.${who}`),
       required: false,
       kind: "choice",
       options: YES_NO_UNKNOWN_OPTIONS,
-      hint: "If yes, you'll be able to describe the pregnancy and any complications next.",
+      hint: t("patient.pregnantHint"),
     },
     {
       id: "pregnancyDetails",
-      label: "Describe the pregnancy and any complications (optional)",
+      label: t("patient.pregnancyDetails"),
       required: false,
       kind: "textarea",
       rows: 3,
-      hint: "e.g. trimester at vaccination, and any pregnancy-related complications since.",
+      hint: t("patient.pregnancyDetailsHint"),
     },
     {
       id: "medicationsAtVaccination",
-      label: "Prescriptions, OTC medications, or supplements at the time of vaccination (optional)",
+      label: t("patient.medications"),
       required: false,
       kind: "textarea",
       rows: 3,
     },
     {
       id: "allergies",
-      label: "Allergies to medications, food, or other products (optional)",
+      label: t("patient.allergies"),
       required: false,
       kind: "textarea",
       rows: 3,
     },
     {
       id: "recentIllnesses",
-      label: "Other illnesses at the time of vaccination or in the month before (optional)",
+      label: t("patient.recentIllnesses"),
       required: false,
       kind: "textarea",
       rows: 3,
     },
     {
       id: "chronicConditions",
-      label: "Chronic or long-standing health conditions (optional)",
+      label: t("patient.chronicConditions"),
       required: false,
       kind: "textarea",
       rows: 3,
-      hint: "e.g. asthma, diabetes, heart disease.",
+      hint: t("patient.chronicConditionsHint"),
     },
     {
       id: "patientRace",
-      label: "Patient's race (optional, select all that apply)",
+      label: t(`patient.race.${who}`),
       required: false,
       kind: "checkboxGroup",
       options: RACE_OPTIONS,
-      hint: "Selecting \"Other\" adds a field to describe it, right here.",
+      hint: t("patient.raceHint"),
       // Same inline-detail pattern as the adverse-event step's symptoms
       // question — see that field's own comment for the full rationale
       // (avoids reintroducing an orphaned-nested-error display bug).
       alsoValidates: ["patientRaceOther"],
       describeError: (relativePath, message) =>
-        relativePath === "patientRaceOther" ? message : `Race: ${message}`,
+        relativePath === "patientRaceOther" ? message : t("patient.raceError", { msg: message }),
       formatSummary: (value) =>
         ((value as string[]) ?? [])
           .map((v) => {
@@ -243,7 +256,7 @@ export function patientFieldSpecs(
     },
     {
       id: "patientEthnicity",
-      label: "Patient's ethnicity (optional)",
+      label: t(`patient.ethnicity.${who}`),
       required: false,
       kind: "choice",
       options: ETHNICITY_OPTIONS,
@@ -261,6 +274,7 @@ export function PatientStep({
   onBack,
   onSwitchSubmitterType,
 }: PatientStepProps) {
+  const { t } = useLanguage();
   const schema = patientSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
@@ -312,32 +326,43 @@ export function PatientStep({
   // actually be a caregiver report.
   const selfReportPartialDobFlag = isSelfReport && dobPartialMode && Boolean(values.patientDateOfBirth);
   const selfReportRedirectMessage = selfReportAgeFlag
-    ? `This date of birth suggests the patient is younger than ${SELF_REPORT_MIN_PLAUSIBLE_AGE}.`
+    ? t("patient.selfReportAgeFlag", { age: SELF_REPORT_MIN_PLAUSIBLE_AGE })
     : selfReportPartialDobFlag
-      ? "Not knowing your own exact date of birth is unusual for a self-report."
+      ? t("patient.selfReportPartialDobFlag")
       : null;
 
   const pregnancySkipReason =
     values.patientSex === "male"
-      ? "the patient is recorded as male"
+      ? isSelfReport
+        ? t("patient.skipReason.maleSelf")
+        : t("patient.skipReason.maleOther")
       : bestAgeEstimate !== null && bestAgeEstimate < PREGNANCY_MIN_PLAUSIBLE_AGE
-        ? "the patient's age makes this inapplicable"
+        ? isSelfReport
+          ? t("patient.skipReason.ageSelf")
+          : t("patient.skipReason.ageOther")
         : null;
 
   // Once the patient is clearly past toddlerhood, "additional months" has
   // nothing left to add — asking it anyway reads as a mistake, not a real
   // question (matches the pregnancy-skip treatment below).
   const ageMonthsSkipReason =
-    bestAgeEstimate !== null && bestAgeEstimate > 2 ? "the patient's age makes this inapplicable" : null;
+    bestAgeEstimate !== null && bestAgeEstimate > 2 ? t("patient.skipReason.ageOther") : null;
 
   const showPatientRaceOther = (values.patientRace as string[]).includes("other");
 
-  const fields = patientFieldSpecs(dateOfBirthUnknown, dobPartialMode, values.patientRaceOther as string, {
-    city: values.patientCity,
-    state: values.patientState,
-    county: values.patientCounty,
-    zip: values.patientZip,
-  })
+  const fields = patientFieldSpecs(
+    t,
+    dateOfBirthUnknown,
+    dobPartialMode,
+    values.patientRaceOther as string,
+    {
+      city: values.patientCity,
+      state: values.patientState,
+      county: values.patientCounty,
+      zip: values.patientZip,
+    },
+    isSelfReport
+  )
     .filter((f) => {
       if (f.id === "ageMonths") return !ageMonthsSkipReason;
       if (f.id === "pregnant") return !pregnancySkipReason;
@@ -364,8 +389,8 @@ export function PatientStep({
           render: (streetValue: unknown, onStreetChange: (v: unknown) => void) => (
             <AddressFieldGroup
               idPrefix="patient"
-              streetLabel="Patient's street address"
-              streetHint="e.g. 123 Main St, Apt 4B"
+              streetLabel={t(isSelfReport ? "patient.streetAddress.self" : "patient.streetAddress.other")}
+              streetHint={t("address.streetPlaceholderApt")}
               street={streetValue as string}
               onStreetChange={onStreetChange}
               streetError={errors.patientStreet}
@@ -432,7 +457,7 @@ export function PatientStep({
 
   return (
     <ConversationalStep
-      stepTitle="About the patient"
+      stepTitle={t("step.patient")}
       fields={fields}
       values={values as unknown as Record<string, unknown>}
       setValue={handleSetValue}
@@ -444,21 +469,16 @@ export function PatientStep({
       extras={{
         patientDateOfBirth: () => (
           <>
-            {!isSelfReport && (
-              <p className="field__hint">
-                These two options are different: one still lets us estimate age automatically, the
-                other asks for age directly instead.
-              </p>
-            )}
+            {!isSelfReport && <p className="field__hint">{t("patient.dobToggleHint")}</p>}
             <label className="field__inline-toggle">
               <input
                 type="checkbox"
                 checked={dobPartialMode}
                 onChange={(e) => handleDobPartialToggle(e.target.checked)}
               />
-              I know the birth month and year, just not the exact day
+              {t("patient.dobPartialToggle")}
             </label>
-            <p className="field__hint field__hint--nested">We'll still estimate age automatically from this.</p>
+            <p className="field__hint field__hint--nested">{t("patient.dobPartialToggleHint")}</p>
             {!isSelfReport && (
               <>
                 <label className="field__inline-toggle">
@@ -467,19 +487,16 @@ export function PatientStep({
                     checked={dateOfBirthUnknown}
                     onChange={(e) => handleDateOfBirthUnknownToggle(e.target.checked)}
                   />
-                  I don't know any part of the date of birth
+                  {t("patient.dobUnknownToggle")}
                 </label>
-                <p className="field__hint field__hint--nested">
-                  We'll ask for the patient's age directly instead — skip this if you were able to
-                  give a month and year above.
-                </p>
+                <p className="field__hint field__hint--nested">{t("patient.dobUnknownToggleHint")}</p>
               </>
             )}
             {selfReportRedirectMessage && (
               <div className="notice notice--warning" role="status">
                 <p>{selfReportRedirectMessage}</p>
                 <button type="button" className="button button--secondary" onClick={onSwitchSubmitterType}>
-                  Change who's filling out this report
+                  {t("patient.changeWhoIsFilling")}
                 </button>
               </div>
             )}
@@ -488,19 +505,19 @@ export function PatientStep({
         patientState: () =>
           pregnancySkipReason ? (
             <p className="field__hint" role="status">
-              We'll skip asking about pregnancy — {pregnancySkipReason}.
+              {t("patient.skipPregnancy", { reason: pregnancySkipReason })}
             </p>
           ) : null,
         patientRace: () =>
           showPatientRaceOther ? (
             <div className="field field--nested">
               <label className="sr-only" htmlFor="patient-race-other-input">
-                Describe the patient's race
+                {t(isSelfReport ? "patient.raceOtherDescribe.self" : "patient.raceOtherDescribe.other")}
               </label>
               <input
                 id="patient-race-other-input"
                 className="field__input"
-                placeholder="Please specify"
+                placeholder={t("patient.raceOtherPlaceholder")}
                 value={values.patientRaceOther}
                 onChange={(e) => handleSetValue("patientRaceOther", e.target.value)}
                 aria-invalid={!!errors.patientRaceOther}

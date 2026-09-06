@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageContext";
+
 interface StateOption {
   value: string;
   label: string;
@@ -37,7 +39,7 @@ interface AddressFieldGroupProps {
  */
 export function AddressFieldGroup({
   idPrefix,
-  streetLabel = "Street address",
+  streetLabel,
   streetHint,
   street,
   onStreetChange,
@@ -55,11 +57,12 @@ export function AddressFieldGroup({
   county,
   onCountyChange,
 }: AddressFieldGroupProps) {
+  const { t } = useLanguage();
   return (
     <div className="address-group">
       <div className="field address-group__row">
         <label className="field__label" htmlFor={`${idPrefix}-street`}>
-          {streetLabel}
+          {streetLabel ?? t("address.streetDefault")}
         </label>
         <input
           id={`${idPrefix}-street`}
@@ -80,7 +83,7 @@ export function AddressFieldGroup({
       {onCountyChange !== undefined && (
         <div className="field address-group__row">
           <label className="field__label" htmlFor={`${idPrefix}-county`}>
-            County
+            {t("address.county")}
           </label>
           <input
             id={`${idPrefix}-county`}
@@ -94,7 +97,7 @@ export function AddressFieldGroup({
       <div className="address-group__grid">
         <div className="field">
           <label className="field__label" htmlFor={`${idPrefix}-city`}>
-            City
+            {t("address.city")}
           </label>
           <input
             id={`${idPrefix}-city`}
@@ -112,7 +115,7 @@ export function AddressFieldGroup({
         </div>
         <div className="field">
           <label className="field__label" htmlFor={`${idPrefix}-state`}>
-            State
+            {t("address.state")}
           </label>
           <select
             id={`${idPrefix}-state`}
@@ -122,7 +125,7 @@ export function AddressFieldGroup({
             autoComplete="address-level1"
             aria-invalid={!!stateError}
           >
-            <option value="">Select…</option>
+            <option value="">{t("address.selectPlaceholder")}</option>
             {stateOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -137,7 +140,7 @@ export function AddressFieldGroup({
         </div>
         <div className="field">
           <label className="field__label" htmlFor={`${idPrefix}-zip`}>
-            ZIP code
+            {t("address.zip")}
           </label>
           <input
             id={`${idPrefix}-zip`}

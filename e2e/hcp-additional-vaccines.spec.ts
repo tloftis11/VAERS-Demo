@@ -43,6 +43,7 @@ async function startHcpReportToVaccineStep(page: import("@playwright/test").Page
 
   // Vaccine information
   await selectFromCombobox(page, "Vaccine", "Fluzone", "Influenza (Seasonal) (Fluzone)");
+  await skipQuestion(page); // manufacturer (asked right after the vaccine itself)
   await fillAndAdvance(page, "Date administered", "2026-06-01");
 }
 

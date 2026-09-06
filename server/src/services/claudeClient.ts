@@ -18,7 +18,7 @@ const client = new Anthropic();
 const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5";
 
 export async function answerFaqQuestion(question: string, step?: string): Promise<string> {
-  const groundingFaq = FAQ_ENTRIES.map((e) => `Q: ${e.question}\nA: ${e.answer}`).join("\n\n");
+  const groundingFaq = FAQ_ENTRIES.map((e) => `Q: ${e.question.en}\nA: ${e.answer.en}`).join("\n\n");
 
   const response = await client.messages.create({
     model: MODEL,

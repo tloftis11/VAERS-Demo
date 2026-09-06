@@ -20,13 +20,13 @@ test("draft resumes correctly after a full page reload, once a step has actually
   await skipQuestion(page); // best contact phone
   await page.getByRole("button", { name: "Continue", exact: true }).click(); // saves "about-you", advances to "patient"
 
-  await expect(page.getByLabel("Patient's first name", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Your first name", { exact: true })).toBeVisible();
 
   await page.reload();
 
   // Still on "About the patient" (not bounced back to "About you"), and the
   // previous step's data survived the reload.
-  await expect(page.getByLabel("Patient's first name", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Your first name", { exact: true })).toBeVisible();
   await page.goBack().catch(() => {});
 });
 
@@ -63,5 +63,5 @@ test("a failed step save shows a retryable error and keeps entered data, without
 
   // Retry succeeds now that the route lets PATCH through.
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.getByLabel("Patient's first name", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Your first name", { exact: true })).toBeVisible();
 });
