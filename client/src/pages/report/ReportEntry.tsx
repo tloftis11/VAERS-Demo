@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { createReport, getReport, type ClientReport } from "../../api/client";
 import { firstIncompleteStep } from "../../reportProgress";
-
-const DRAFT_KEY = "vaers_draft_report_id";
+import { getDraftReportId, setDraftReportId, getDraftToken, setDraftToken } from "../../draftAuth";
 
 /**
  * Entry point for the reporting flow. If a draft is already in progress on
@@ -20,12 +19,13 @@ export function ReportEntry() {
     let cancelled = false;
 
     async function init() {
-      const existingId = localStorage.getItem(DRAFT_KEY);
+      const existingId = getDraftReportId();
 
       if (!existingId) {
         const report = await createReport();
         if (cancelled) return;
-        localStorage.setItem(DRAFT_KEY, report.id);
+        setDraftReportId(report.id);
+        setDraftToken(report.id, report.draftToken!);
         setTarget(`/report/${report.id}/submitter-type`);
         return;
       }
@@ -36,7 +36,7 @@ export function ReportEntry() {
       // the check before even starting the new report doubles a slow
       // request for nothing.
       const [existing, fresh] = await Promise.all([
-        getReport(existingId).catch(() => null),
+        getReport(existingId, getDraftToken(existingId)).catch(() => null),
         createReport(),
       ]);
       if (cancelled) return;
@@ -46,7 +46,8 @@ export function ReportEntry() {
         return;
       }
 
-      localStorage.setItem(DRAFT_KEY, fresh.id);
+      setDraftReportId(fresh.id);
+      setDraftToken(fresh.id, fresh.draftToken!);
       setTarget(`/report/${fresh.id}/submitter-type`);
     }
 
@@ -59,7 +60,8 @@ export function ReportEntry() {
   function startNew() {
     setDraft(null);
     createReport().then((report) => {
-      localStorage.setItem(DRAFT_KEY, report.id);
+      setDraftReportId(report.id);
+      setDraftToken(report.id, report.draftToken!);
       setTarget(`/report/${report.id}/submitter-type`);
     });
   }

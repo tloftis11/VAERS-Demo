@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   adverseEventSchema,
   OUTCOME_OPTIONS,
@@ -9,9 +8,16 @@ import {
 } from "../../../../shared/src/schemas";
 import { isDateBefore, hospitalizationExceedsElapsed, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
-import { checkDescriptionConsistency, type AdverseEventData, type ConsistencyIssue } from "../../api/client";
+import type { AdverseEventData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
+import { useLanguage } from "../../i18n/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
+
+/** Every `*FieldSpecs` builder in the wizard is a plain function, not a
+ * component/hook, so it can't call `useLanguage()` itself — `t` is threaded
+ * in as the first parameter instead, matching `patientFieldSpecs` etc. */
+type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
 interface AdverseEventStepProps {
   submitterType: SubmitterType;
@@ -60,94 +66,116 @@ const EMPTY: AdverseEventData = {
  * AdverseEventStep below), while the final review and read-only follow-up
  * lookup use it unfiltered and simply skip whichever fields are empty.
  */
-export function adverseEventFieldSpecs(isHcp: boolean, isSelfReport = false): ConversationalFieldSpec[] {
+export function adverseEventFieldSpecs(
+  t: Translate,
+  isHcp: boolean,
+  isSelfReport = false,
+  symptomsOtherValue?: string
+): ConversationalFieldSpec[] {
   return [
     {
       id: "onsetDate",
-      label: "When did symptoms start?",
+      label: t("adverseEvent.onsetDate"),
       required: true,
       kind: "date",
       icon: "calendar",
       max: todayIsoDate(),
     },
-    { id: "onsetTime", label: "Time symptoms started (optional)", required: false, kind: "time12" },
+    { id: "onsetTime", label: t("adverseEvent.onsetTime"), required: false, kind: "time12" },
     {
       id: "description",
-      label: isHcp ? "Clinical description" : "What happened?",
+      label: isHcp ? t("adverseEvent.description.hcp") : t("adverseEvent.description.public"),
       required: true,
       kind: "textarea",
       rows: 5,
-      hint: isHcp ? undefined : "Describe the symptoms and what happened in your own words.",
+      hint: isHcp ? undefined : t("adverseEvent.descriptionHint"),
     },
     {
       id: "symptoms",
-      label: "Did any of these symptoms occur? (optional, select all that apply)",
+      label: t("adverseEvent.symptoms"),
       required: false,
       kind: "checkboxGroup",
       options: SYMPTOM_OPTIONS,
-      hint: "This is a quick-select shortcut — it doesn't replace the description above.",
-    },
-    {
-      id: "symptomsOther",
-      label: "Describe the \"Other\" symptom",
-      required: false,
-      kind: "text",
+      hint: t("adverseEvent.symptomsHint"),
+      // The "Other, please describe" field lives inline under this same
+      // question (see the `extras` render in AdverseEventStep) rather than
+      // as its own separate sequential question — this just makes sure its
+      // validation error still shows up correctly here (live blocking,
+      // review-summary row, back-navigation) even though it's a distinct
+      // top-level schema field.
+      alsoValidates: ["symptomsOther"],
+      describeError: (relativePath, message) =>
+        relativePath === "symptomsOther" ? message : t("adverseEvent.symptomsError", { msg: message }),
+      // Without this, the review screen's recap of a checkboxGroup falls
+      // back to the plain option label ("Other") with no indication of
+      // what the reporter actually typed for it — the same visibility gap
+      // that alsoValidates exists to prevent for errors, just for the
+      // recap value instead.
+      formatSummary: (value) =>
+        ((value as string[]) ?? [])
+          .map((v) => {
+            const label = SYMPTOM_OPTIONS.find((o) => o.value === v)?.label ?? v;
+            return v === "other" && symptomsOtherValue ? `${label} (${symptomsOtherValue})` : label;
+          })
+          .join(", "),
     },
     {
       id: "labResults",
-      label: "Medical tests or lab results related to this event (optional)",
+      label: t("adverseEvent.labResults"),
       required: false,
       kind: "textarea",
       rows: 3,
-      hint: "Include dates if you can — both abnormal and normal/negative findings are useful.",
+      hint: t("adverseEvent.labResultsHint"),
     },
     {
       id: "outcomes",
-      label: "Did any of these occur? (optional, select all that apply)",
+      label: t("adverseEvent.outcomes"),
       required: false,
       kind: "checkboxGroup",
       options: OUTCOME_OPTIONS,
     },
     {
       id: "recoveryStatus",
-      label: isSelfReport ? "Have you recovered? (optional)" : "Has the patient recovered? (optional)",
+      label: t(isSelfReport ? "adverseEvent.recoveryStatus.self" : "adverseEvent.recoveryStatus.other"),
       required: false,
       kind: "choice",
       options: RECOVERY_OPTIONS,
     },
     {
       id: "hospitalizationDays",
-      label: "Number of days hospitalized",
+      label: t("adverseEvent.hospitalizationDays"),
       required: true,
       kind: "number",
-      hint: isSelfReport
-        ? "If you're still hospitalized, enter the number of days so far — you can update this later with a follow-up note."
-        : "If the patient is still hospitalized, enter the number of days so far — you can update this later with a follow-up note.",
+      hint: t(
+        isSelfReport
+          ? "adverseEvent.hospitalizationDaysHint.self"
+          : "adverseEvent.hospitalizationDaysHint.other"
+      ),
     },
-    { id: "hospitalName", label: "Hospital name (optional)", required: false, kind: "text" },
-    { id: "hospitalCity", label: "Hospital city (optional)", required: false, kind: "text" },
-    { id: "hospitalState", label: "Hospital state (optional)", required: false, kind: "choice", options: STATE_OPTIONS },
-    { id: "dateOfDeath", label: "Date of death", required: false, kind: "date", max: todayIsoDate() },
-    { id: "treatmentGiven", label: "Treatment given (optional)", required: false, kind: "textarea", rows: 3 },
+    { id: "hospitalName", label: t("adverseEvent.hospitalName"), required: false, kind: "text" },
+    { id: "hospitalCity", label: t("adverseEvent.hospitalCity"), required: false, kind: "text" },
+    { id: "hospitalState", label: t("adverseEvent.hospitalState"), required: false, kind: "choice", options: STATE_OPTIONS },
+    { id: "dateOfDeath", label: t("adverseEvent.dateOfDeath"), required: false, kind: "date", max: todayIsoDate() },
+    { id: "treatmentGiven", label: t("adverseEvent.treatmentGiven"), required: false, kind: "textarea", rows: 3 },
     {
       id: "clinicalCourseNotes",
-      label: "Clinical course notes (optional)",
+      label: t("adverseEvent.clinicalCourseNotes"),
       required: false,
       kind: "textarea",
       rows: 4,
     },
     {
       id: "previousAdverseEvent",
-      label: isSelfReport
-        ? "Have you ever had an adverse event after any previous vaccine? (optional)"
-        : "Has the patient ever had an adverse event after any previous vaccine? (optional)",
+      label: t(
+        isSelfReport ? "adverseEvent.previousAdverseEvent.self" : "adverseEvent.previousAdverseEvent.other"
+      ),
       required: false,
       kind: "choice",
       options: YES_NO_UNKNOWN_OPTIONS,
     },
     {
       id: "previousAdverseEventDetails",
-      label: "Describe the previous event (age at the time, vaccination date, vaccine type/brand)",
+      label: t("adverseEvent.previousAdverseEventDetails"),
       required: false,
       kind: "textarea",
       rows: 3,
@@ -164,6 +192,7 @@ export function AdverseEventStep({
   onBack,
   onSwitchSubmitterType,
 }: AdverseEventStepProps) {
+  const { t } = useLanguage();
   const schema = adverseEventSchema(submitterType);
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(schema, initial);
@@ -183,7 +212,7 @@ export function AdverseEventStep({
     if (fieldId === "onsetDate" && vaccineAdministrationDate) {
       const onsetDate = String(liveValues.onsetDate ?? "");
       if (onsetDate && isDateBefore(onsetDate, vaccineAdministrationDate)) {
-        return "Symptom onset date can't be before the vaccination date.";
+        return t("adverseEvent.onsetBeforeVaccination");
       }
     }
     if (fieldId === "hospitalizationDays") {
@@ -198,22 +227,17 @@ export function AdverseEventStep({
       const dateOfDeath = String(liveValues.dateOfDeath ?? "");
       const onsetDate = String(liveValues.onsetDate ?? "");
       if (dateOfDeath && vaccineAdministrationDate && isDateBefore(dateOfDeath, vaccineAdministrationDate)) {
-        return "Date of death can't be before the vaccination date.";
+        return t("adverseEvent.deathBeforeVaccination");
       }
       if (dateOfDeath && onsetDate && isDateBefore(dateOfDeath, onsetDate)) {
-        return "Date of death can't be before the symptom onset date.";
+        return t("adverseEvent.deathBeforeOnset");
       }
     }
     return null;
   }
 
-  const [checking, setChecking] = useState(false);
-  const [checkIssues, setCheckIssues] = useState<ConsistencyIssue[] | null>(null);
-  const [checkError, setCheckError] = useState<string | null>(null);
-
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof AdverseEventData, value as any);
-    if (id === "description" || id === "outcomes" || id === "recoveryStatus") setCheckIssues(null);
 
     // A field hidden because its trigger changed shouldn't leave stale data
     // behind to be silently submitted once it's no longer visible.
@@ -250,30 +274,8 @@ export function AdverseEventStep({
     }
   }
 
-  async function handleCheckDescription() {
-    if (!values.description.trim()) return;
-    setChecking(true);
-    setCheckError(null);
-    setCheckIssues(null);
-    try {
-      const { issues } = await checkDescriptionConsistency({
-        description: values.description,
-        outcomes: values.outcomes,
-        recoveryStatus: values.recoveryStatus,
-        submitterType,
-      });
-      setCheckIssues(issues);
-    } catch {
-      setCheckError("Couldn't run the check right now — you can still continue.");
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  const fields = adverseEventFieldSpecs(isHcp, isSelfReport).filter((f) => {
+  const fields = adverseEventFieldSpecs(t, isHcp, isSelfReport, values.symptomsOther as string).filter((f) => {
     switch (f.id) {
-      case "symptomsOther":
-        return showSymptomsOther;
       case "recoveryStatus":
         // Asking "has the patient recovered?" doesn't make sense once
         // "Patient died" is already recorded as an outcome.
@@ -296,7 +298,7 @@ export function AdverseEventStep({
 
   return (
     <ConversationalStep
-      stepTitle="What happened"
+      stepTitle={t("step.adverse-event")}
       fields={fields}
       values={values as unknown as Record<string, unknown>}
       setValue={handleSetValue}
@@ -307,64 +309,36 @@ export function AdverseEventStep({
       initialIndex={schema.safeParse(initial).success ? fields.length : 0}
       extraFieldValidation={checkFieldLogic}
       extras={{
+        symptoms: () =>
+          showSymptomsOther ? (
+            <div className="field field--nested">
+              <label className="field__label" htmlFor="symptoms-other-input">
+                {t("adverseEvent.symptomsOtherDescribe")}
+              </label>
+              <input
+                id="symptoms-other-input"
+                className="field__input"
+                value={values.symptomsOther}
+                onChange={(e) => handleSetValue("symptomsOther", e.target.value)}
+                aria-invalid={!!errors.symptomsOther}
+                aria-describedby={errors.symptomsOther ? "symptoms-other-error" : undefined}
+              />
+              {errors.symptomsOther && (
+                <p id="symptoms-other-error" role="alert" className="field__error">
+                  {errors.symptomsOther}
+                </p>
+              )}
+            </div>
+          ) : null,
         outcomes: () =>
           selfReportDeathFlag ? (
             <div className="notice notice--warning" role="status">
-              <p>
-                A report submitted by the patient themselves can't also report that the patient
-                died.
-              </p>
+              <p>{t("adverseEvent.selfReportDeathNotice")}</p>
               <button type="button" className="button button--secondary" onClick={onSwitchSubmitterType}>
-                Change who's filling out this report
+                {t("patient.changeWhoIsFilling")}
               </button>
             </div>
           ) : null,
-        // Deliberately attached here, not to "description" — this compares
-        // the narrative against outcomes/recovery status, and both of those
-        // questions come *after* description in the sequence. Running the
-        // check right after description meant those fields were always
-        // still blank, so the AI routinely (and correctly, given what it
-        // was told) flagged "no recovery status selected" as if something
-        // had been skipped, when the reporter simply hadn't reached that
-        // question yet. previousAdverseEvent is the first field after both
-        // outcomes and recoveryStatus that's always shown regardless of
-        // branch (recoveryStatus itself is hidden when death is recorded).
-        previousAdverseEvent: () => (
-          <div className="consistency-check">
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={handleCheckDescription}
-              disabled={checking || !values.description.trim()}
-            >
-              {checking ? "Checking…" : "Check my answers for consistency"}
-            </button>
-            <p className="field__hint">
-              Compares what you described in "What happened?" against the outcomes and recovery
-              status you selected.
-            </p>
-            {checkError && (
-              <p role="alert" className="field__error">
-                {checkError}
-              </p>
-            )}
-            {checkIssues && checkIssues.length === 0 && (
-              <p role="status" className="consistency-check__clear">
-                No inconsistencies found.
-              </p>
-            )}
-            {checkIssues && checkIssues.length > 0 && (
-              <ul className="consistency-check__list" role="status">
-                {checkIssues.map((issue, i) => (
-                  <li key={i}>
-                    <strong>{issue.issue}</strong>
-                    <p>{issue.suggestion}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ),
       }}
     />
   );

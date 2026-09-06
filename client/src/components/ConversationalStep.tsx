@@ -1,14 +1,44 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { FieldIcon, type FieldIconName } from "./illustrations";
 import { Combobox } from "./Combobox";
 import { MultiSelect } from "./MultiSelect";
 import { TimeInput12 } from "./TimeInput12";
 import { MonthYearInput } from "./MonthYearInput";
+import { errorsForField, relativeErrorsForField } from "../utils/fieldErrors";
+import { useLanguage } from "../i18n/LanguageContext";
+
+/** Errors for a field plus any it claims via `alsoValidates` (see that
+ * field's doc comment) — same shape as errorsForField, just unioned across
+ * every id this question is responsible for. */
+function errorsForFieldAndAliases(
+  errors: Record<string, string>,
+  field: ConversationalFieldSpec
+): Array<{ path: string; message: string }> {
+  return [field.id, ...(field.alsoValidates ?? [])].flatMap((id) => errorsForField(errors, id));
+}
+
+function firstErrorForFieldAndAliases(errors: Record<string, string>, field: ConversationalFieldSpec): string | undefined {
+  return errorsForFieldAndAliases(errors, field)[0]?.message;
+}
+
+/** The generic banner's message, deliberately narrower than
+ * `firstErrorForFieldAndAliases` above: an aliased field (e.g.
+ * bodySiteOther, rendered inline via `extras`) already gets its own
+ * dedicated error line right next to that specific input, so surfacing the
+ * exact same message a second time up here would just repeat it — this
+ * returns a message only when the *question's own* field is the one at
+ * fault. Still fine for an alias-only error to leave this blank: `advance`
+ * being withheld (decided separately, using every alias) is what actually
+ * blocks Next; this only controls what the generic banner shows. */
+function ownErrorMessage(errors: Record<string, string>, field: ConversationalFieldSpec): string | undefined {
+  return errorsForField(errors, field.id)[0]?.message;
+}
 
 export type ConversationalFieldKind =
   | "text"
   | "email"
+  | "tel"
   | "number"
   | "date"
   | "textarea"
@@ -37,13 +67,52 @@ export interface ConversationalFieldSpec {
   /** For kind "date"/"monthYear" — ISO "YYYY-MM-DD" bounds enforced by the input itself, not just the schema. */
   min?: string;
   max?: string;
+  /** Passed straight through to the rendered `<input autoComplete>` —
+   * e.g. "email"/"tel" so a browser's/password-manager's autofill can
+   * recognize the field for what it is. */
+  autoComplete?: string;
   /** kind "custom" only — the caller owns the entire input UI (e.g. a
-   * repeatable bundled-fields editor) instead of a single input control. */
-  render?: (value: unknown, onChange: (value: unknown) => void) => ReactNode;
+   * repeatable bundled-fields editor) instead of a single input control.
+   * `errors` is pre-scoped and re-based to this field (see
+   * relativeErrorsForField) — e.g. for field id "additionalVaccines", a
+   * zod error at "additionalVaccines.2.vaccineType" arrives here as
+   * "2.vaccineType", so the editor can look itself up by row index without
+   * knowing its own top-level field id. */
+  render?: (value: unknown, onChange: (value: unknown) => void, errors: Record<string, string>) => ReactNode;
+  /** kind "custom" only — describes ONE nested error for the review-screen
+   * summary, given its path relative to this field (e.g. "0.vaccineType",
+   * or "" for a top-level error on this field itself) and its message.
+   * Return a human-readable line identifying which row/field it's about,
+   * e.g. "Additional vaccine 2: select a vaccine." Falls back to
+   * `${field.label}: ${message}` when omitted. */
+  describeError?: (relativePath: string, message: string) => string;
   /** kind "custom" only — how to summarize this field's value on the review
    * screen, since formatValue's options-lookup doesn't apply to arbitrary
    * custom data shapes (e.g. an array of rows). */
   formatSummary?: (value: unknown) => string;
+  /**
+   * Other top-level schema field ids whose errors this question is also
+   * responsible for surfacing — for a field rendered inline via `extras`
+   * (e.g. a conditional "Other, please specify" input shown under a
+   * checkboxGroup question, not asked as its own sequential question) so
+   * its validation error isn't orphaned: invisible in the review-screen
+   * summary, not blocking the live per-question Next click, and not shown
+   * when navigating back to the question that owns it. The aliased field
+   * must NOT also appear in `fields` — it exists only in the schema/errors,
+   * never as its own question.
+   */
+  alsoValidates?: string[];
+  /**
+   * kind "choice" only — option values that reveal more required content on
+   * this same screen (typically an "Other, please specify" input rendered
+   * via `extras`) and so must NOT auto-advance to the next question when
+   * picked, unlike every other option. Without this, picking one of these
+   * values still advances immediately (matching every other choice card),
+   * so the newly-revealed field is never seen — the reporter lands on the
+   * next question already, the field goes unfilled, and Next later blocks
+   * with an error for a field they never got a chance to see.
+   */
+  optionsRequiringFollowUp?: string[];
 }
 
 interface ConversationalStepProps {
@@ -118,7 +187,18 @@ export function ConversationalStep({
   extras,
   extraFieldValidation,
 }: ConversationalStepProps) {
+  const { t } = useLanguage();
   const [index, setIndex] = useState(initialIndex);
+  // The furthest question reached in this step so far — distinct from
+  // `index` (the one on screen *right now*), so that going back to fix an
+  // earlier answer doesn't strand later, already-answered questions as
+  // un-jumpable "upcoming" pills. Only ever grows; mutated directly during
+  // render (not via setState/useEffect) since it's a plain derived
+  // tracking value, not something that itself needs to trigger a render.
+  const maxIndexReachedRef = useRef(initialIndex);
+  if (index > maxIndexReachedRef.current) {
+    maxIndexReachedRef.current = index;
+  }
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Error shown under the *active* question. Deliberately not just
@@ -139,9 +219,31 @@ export function ConversationalStep({
   // announces the change, even though it doesn't drop focus straight into
   // the control itself (which varies too much by field kind to target
   // uniformly).
+  //
+  // `useLayoutEffect`, not `useEffect` — it runs before the browser paints,
+  // so the scroll position is already correct in the very first frame the
+  // user sees for this question, instead of visibly jumping a frame after
+  // the old position was already on screen. The scroll itself is computed
+  // explicitly (document position of the panel, minus a fixed top offset)
+  // rather than via `scrollIntoView`, so the landing position is exact and
+  // doesn't anchor to the progress bar or any other sticky element above it.
   const questionHeadingRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    questionHeadingRef.current?.focus();
+  useLayoutEffect(() => {
+    const heading = questionHeadingRef.current;
+    if (!heading) return;
+
+    heading.focus({ preventScroll: true });
+
+    const panel = heading.closest(".convo-question-panel");
+    if (!panel) return;
+
+    const offset = window.innerWidth < 640 ? 16 : 24;
+    const top = window.scrollY + panel.getBoundingClientRect().top - offset;
+
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: "auto",
+    });
   }, [index]);
 
   function goBack() {
@@ -150,7 +252,7 @@ export function ConversationalStep({
       return;
     }
     const prevField = fields[index - 1];
-    setActiveError(errors[prevField.id] ?? null);
+    setActiveError(ownErrorMessage(errors, prevField) ?? null);
     setIndex(index - 1);
   }
 
@@ -161,7 +263,7 @@ export function ConversationalStep({
 
   function jumpTo(targetIndex: number) {
     const targetField = fields[targetIndex];
-    setActiveError((targetField && errors[targetField.id]) ?? null);
+    setActiveError((targetField && ownErrorMessage(errors, targetField)) ?? null);
     setIndex(targetIndex);
   }
 
@@ -180,29 +282,43 @@ export function ConversationalStep({
   }
 
   if (reviewing) {
-    const errorFieldIds = Object.keys(errors).filter((key) => fields.some((f) => f.id === key));
+    // One summary row per underlying error, not per field — a field like
+    // additionalVaccines can have several distinct nested problems (e.g.
+    // row 2 needs a vaccine, row 3 needs its "Other" detail), and each
+    // needs its own identifiable, clickable line rather than being
+    // collapsed into one generic "additionalVaccines: <first message>".
+    const errorRows = fields.flatMap((field, fieldIdx) =>
+      errorsForFieldAndAliases(errors, field).map(({ path, message }) => {
+        const relativePath = field.alsoValidates?.includes(path)
+          ? path
+          : path === field.id
+            ? ""
+            : path.startsWith(`${field.id}[`)
+              ? path.slice(field.id.length)
+              : path.slice(field.id.length + 1);
+        const summary = field.describeError
+          ? field.describeError(relativePath, message)
+          : `${field.label}: ${message}`;
+        return { key: path, fieldIdx, summary };
+      })
+    );
     return (
       <div className="convo-step convo-step--review">
         <h1 className="convo-step__review-title" ref={questionHeadingRef as never} tabIndex={-1}>
-          Review: {stepTitle}
+          {t("convo.reviewTitle", { title: stepTitle })}
         </h1>
 
-        {errorFieldIds.length > 0 && (
+        {errorRows.length > 0 && (
           <div className="review-error" role="alert">
-            <p>Please fix the following before continuing:</p>
+            <p>{t("convo.fixBeforeContinuing")}</p>
             <ul>
-              {errorFieldIds.map((id) => {
-                const fieldIdx = fields.findIndex((f) => f.id === id);
-                const field = fields[fieldIdx];
-                if (!field) return null;
-                return (
-                  <li key={id}>
-                    <button type="button" className="button button--text" onClick={() => jumpTo(fieldIdx)}>
-                      {field.label}: {errors[id]}
-                    </button>
-                  </li>
-                );
-              })}
+              {errorRows.map(({ key, fieldIdx, summary }) => (
+                <li key={key}>
+                  <button type="button" className="button button--text" onClick={() => jumpTo(fieldIdx)}>
+                    {summary}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
         )}
@@ -219,14 +335,18 @@ export function ConversationalStep({
               <div key={field.id} className="review-list__row">
                 <dt>{field.label}</dt>
                 <dd>
-                  {display ? <span>{display}</span> : <span className="review-list__empty">Not provided</span>}
+                  {display ? (
+                    <span>{display}</span>
+                  ) : (
+                    <span className="review-list__empty">{t("convo.notProvided")}</span>
+                  )}
                   <button
                     type="button"
                     className="review-list__edit"
                     onClick={() => jumpTo(i)}
-                    aria-label={`Edit answer: ${field.label}`}
+                    aria-label={t("convo.editAnswer", { label: field.label })}
                   >
-                    Edit
+                    {t("convo.edit")}
                   </button>
                 </dd>
               </div>
@@ -236,10 +356,10 @@ export function ConversationalStep({
 
         <div className="step-form__actions">
           <button type="button" className="button button--text" onClick={() => jumpTo(fields.length - 1)}>
-            ← Back
+            {t("common.back")}
           </button>
           <button type="button" className="button button--primary" onClick={handleReviewContinue} disabled={submitting}>
-            {submitting ? "Saving…" : "Continue"}
+            {submitting ? t("convo.saving") : t("common.continue")}
           </button>
         </div>
       </div>
@@ -263,9 +383,21 @@ export function ConversationalStep({
   // more questions and have to navigate back to fix it.
   function handleNextClick() {
     const result = validate();
-    if (!result.success && result.errors[field.id]) {
-      setActiveError(result.errors[field.id]);
-      return;
+    if (!result.success) {
+      // Exact match only would miss a nested error like
+      // "additionalVaccines.0.vaccineType" entirely — Continue stayed
+      // blocked (validate() still failed) but nothing ever told the user
+      // why, since no top-level key matched.
+      const message = firstErrorForFieldAndAliases(result.errors, field);
+      if (message) {
+        // The banner itself only shows a message when it's the question's
+        // *own* field at fault — an alias's error (e.g. bodySiteOther)
+        // already has its own inline error line via extras, so this would
+        // otherwise repeat the exact same text a second time. Next still
+        // stays blocked either way; only what's displayed up here differs.
+        setActiveError(ownErrorMessage(result.errors, field) ?? null);
+        return;
+      }
     }
     const extraMessage = extraFieldValidation?.(field.id, values);
     if (extraMessage) {
@@ -298,7 +430,9 @@ export function ConversationalStep({
                 className={`choice-card${value === opt.value ? " choice-card--selected" : ""}`}
                 onClick={() => {
                   setValue(field.id, opt.value);
-                  advance();
+                  if (!field.optionsRequiringFollowUp?.includes(opt.value)) {
+                    advance();
+                  }
                 }}
               >
                 {opt.label}
@@ -363,7 +497,7 @@ export function ConversationalStep({
           />
         );
       case "custom":
-        return field.render?.(value, (v) => setValue(field.id, v)) ?? null;
+        return field.render?.(value, (v) => setValue(field.id, v), relativeErrorsForField(errors, field.id)) ?? null;
       case "select":
         return (
           <select
@@ -406,6 +540,7 @@ export function ConversationalStep({
             aria-describedby={error ? errorId : undefined}
             min={field.kind === "date" ? field.min : undefined}
             max={field.kind === "date" ? field.max : undefined}
+            autoComplete={field.autoComplete}
           />
         );
     }
@@ -423,7 +558,18 @@ export function ConversationalStep({
     <div className="convo-step convo-step--question">
       <div className="recap-pill-list">
         {fields.map((f, i) => {
-          if (i < index) {
+          if (i === index) {
+            return (
+              <div key={f.id} className="recap-pill recap-pill--current" aria-current="true">
+                <span>{f.label}</span>
+              </div>
+            );
+          }
+          // Any question already reached — whether it sits before *or
+          // after* the one on screen right now (e.g. after going back to
+          // fix an earlier answer) — is safe to jump straight to instead
+          // of clicking "← Back"/"Next" through everything in between.
+          if (i < maxIndexReachedRef.current) {
             const display = formatValue(f, values[f.id]);
             return (
               <button
@@ -431,23 +577,16 @@ export function ConversationalStep({
                 type="button"
                 className={`recap-pill recap-pill--complete${display ? "" : " recap-pill--empty"}`}
                 onClick={() => jumpTo(i)}
-                aria-label={`Edit answer: ${f.label}`}
+                aria-label={t("convo.editAnswer", { label: f.label })}
               >
                 <span className="recap-pill__text">
                   <span className="recap-pill__label">{f.label}</span>
-                  <span className="recap-pill__value">{display || "Not provided"}</span>
+                  <span className="recap-pill__value">{display || t("convo.notProvided")}</span>
                 </span>
                 <span className="recap-pill__edit" aria-hidden="true">
                   ✎
                 </span>
               </button>
-            );
-          }
-          if (i === index) {
-            return (
-              <div key={f.id} className="recap-pill recap-pill--current" aria-current="true">
-                <span>{f.label}</span>
-              </div>
             );
           }
           return (
@@ -461,10 +600,16 @@ export function ConversationalStep({
       <div className="convo-question-panel">
         <div className="convo-question">
           <p className="convo-question__counter">
-            Question {index + 1} of {fields.length}
+            {t("convo.questionOf", { n: index + 1, total: fields.length })}
           </p>
           <div className="convo-question__head">
-            {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
+            {/* Always reserves the same slot whether or not this question
+                has an icon — otherwise the question text itself starts at a
+                different horizontal position depending on the field, which
+                reads as the whole question "jumping" from one to the next. */}
+            <span className="convo-question__icon-slot" aria-hidden="true">
+              {field.icon && <FieldIcon name={field.icon} className="convo-question__icon" />}
+            </span>
             {isGroupControl ? (
               <h2 id={labelId} className="convo-question__label" ref={questionHeadingRef as never} tabIndex={-1}>
                 {field.label}
@@ -493,7 +638,7 @@ export function ConversationalStep({
 
         <div className="step-form__actions">
           <button type="button" className="button button--text" onClick={goBack}>
-            ← Back
+            {t("common.back")}
           </button>
           {isCardChoice
             ? (!isEmptyValue(value) ? (
@@ -503,13 +648,19 @@ export function ConversationalStep({
                 // answer already counts, so a required question with no
                 // Skip button left the user with no forward button at all
                 // unless they thought to re-click their own answer.
-                <button type="button" className="button button--primary" onClick={advance}>
-                  Next →
+                // Routed through handleNextClick (not a bare `advance`) so a
+                // choice with a required alsoValidates follow-up (e.g. an
+                // "Other" selection needing its own description) is actually
+                // checked here — otherwise nothing catches a still-blank
+                // follow-up until the end-of-step review, several questions
+                // and a "why am I blocked" moment later.
+                <button type="button" className="button button--primary" onClick={handleNextClick}>
+                  {t("convo.next")}
                 </button>
               ) : (
                 canSkip && (
                   <button type="button" className="button button--text" onClick={advance}>
-                    Skip →
+                    {t("convo.skip")}
                   </button>
                 )
               ))
@@ -520,7 +671,7 @@ export function ConversationalStep({
                 onClick={handleNextClick}
                 disabled={!!field.required && isEmptyValue(value)}
               >
-                Next →
+                {t("convo.next")}
               </button>
             )}
         </div>

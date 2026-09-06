@@ -12,6 +12,7 @@ import {
   type ClientReport,
 } from "../api/client";
 import { firstIncompleteStep } from "../reportProgress";
+import { getDraftToken } from "../draftAuth";
 import { TextField, TextAreaField } from "../components/Field";
 import { Dropzone } from "../components/Dropzone";
 import { FieldIcon } from "../components/illustrations";
@@ -21,6 +22,7 @@ import { patientFieldSpecs } from "./report/PatientStep";
 import { vaccineFieldSpecs } from "./report/VaccineStep";
 import { adverseEventFieldSpecs } from "./report/AdverseEventStep";
 import { ERROR_DETAIL_FIELD_SPECS } from "./report/ErrorDetailStep";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const ACCEPTED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".docx"];
 
@@ -37,12 +39,13 @@ function formatDate(iso: string): string {
   });
 }
 
-type LookupState = "idle" | "loading" | "not-found" | "error";
+type LookupState = "idle" | "loading" | "not-found" | "error" | "draft-not-accessible";
 /** "email" / "code": the identity gate for a submitted report, before any
  * of its PHI reaches the browser. "verified": gate passed, full report loaded. */
 type GatePhase = "email" | "code" | "verified";
 
 export function FollowUp() {
+  const { t } = useLanguage();
   const [referenceInput, setReferenceInput] = useState("");
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [draftReport, setDraftReport] = useState<ClientReport | null>(null);
@@ -76,15 +79,21 @@ export function FollowUp() {
     try {
       const status = await getReportStatus(id);
       setReportId(status.id);
-      setLookupState("idle");
       if (status.status === "draft") {
-        setDraftReport(await getReport(id));
+        // Only succeeds if this is the same browser/device the draft was
+        // started on (it's the only place the token is ever stored) —
+        // otherwise this correctly 401s, same as anyone else guessing or
+        // being told the reference number of someone else's in-progress
+        // report, since a draft has no other identity check yet.
+        setDraftReport(await getReport(id, getDraftToken(id)));
+        setLookupState("idle");
       } else {
+        setLookupState("idle");
         setGatePhase("email");
       }
     } catch (err) {
       const status = (err as { status?: number }).status;
-      setLookupState(status === 404 ? "not-found" : "error");
+      setLookupState(status === 404 ? "not-found" : status === 401 ? "draft-not-accessible" : "error");
     }
   }
 
@@ -100,8 +109,8 @@ export function FollowUp() {
     } catch (err) {
       setEmailError(
         (err as { status?: number }).status === 403
-          ? "That email doesn't match our records for this report."
-          : "Something went wrong. Please try again."
+          ? t("followUp.emailMismatch")
+          : t("followUp.somethingWentWrong")
       );
     } finally {
       setEmailSubmitting(false);
@@ -120,7 +129,7 @@ export function FollowUp() {
       setReport(full);
       setGatePhase("verified");
     } catch {
-      setCodeError("That code is incorrect or has expired.");
+      setCodeError(t("followUp.codeIncorrect"));
     } finally {
       setCodeSubmitting(false);
     }
@@ -128,9 +137,7 @@ export function FollowUp() {
 
   async function handleFiles(accepted: File[], rejectedCount: number) {
     if (!report || !followUpToken) return;
-    setUploadError(
-      rejectedCount > 0 ? "Some files were skipped — only PDF, JPEG, PNG, or Word documents are accepted." : null
-    );
+    setUploadError(rejectedCount > 0 ? t("followUp.someFilesSkipped") : null);
     if (accepted.length === 0) return;
 
     setUploadingCount((n) => n + accepted.length);
@@ -139,7 +146,7 @@ export function FollowUp() {
         const meta = await uploadFollowUpAttachment(report.id, file, followUpToken);
         setReport((prev) => (prev ? { ...prev, attachments: [...prev.attachments, meta] } : prev));
       } catch (err) {
-        setUploadError(err instanceof Error ? err.message : "Upload failed");
+        setUploadError(err instanceof Error ? err.message : t("followUp.uploadFailed"));
       } finally {
         setUploadingCount((n) => n - 1);
       }
@@ -161,59 +168,66 @@ export function FollowUp() {
 
   return (
     <div className="page page--prose">
-      <h1>Provide follow-up information</h1>
-      <p>
-        Already submitted a report and have new documents or details to add — like a discharge
-        summary that arrived later, or an update on how the patient is doing? Look it up with the
-        reference number from your confirmation page.
-      </p>
+      <h1>{t("followUp.heading")}</h1>
+      <p>{t("followUp.lead")}</p>
 
       <form className="step-form" onSubmit={handleLookup}>
         <TextField
           id="reference-number"
-          label="Reference number"
-          hint="Shown on your confirmation page after you submitted the report."
+          label={t("followUp.referenceNumber")}
+          hint={t("followUp.referenceHint")}
           value={referenceInput}
           onChange={setReferenceInput}
+          // A shared/public browser must never offer to autofill someone
+          // else's report reference here — this is a lookup for another
+          // person's already-submitted data, not a returning-user
+          // convenience.
+          autoComplete="off"
         />
         <div className="step-form__actions">
           <button type="submit" className="button button--primary" disabled={lookupState === "loading"}>
-            {lookupState === "loading" ? "Looking up…" : "Find my report"}
+            {lookupState === "loading" ? t("followUp.lookingUp") : t("followUp.findReport")}
           </button>
         </div>
       </form>
 
       {lookupState === "not-found" && (
         <p role="alert" className="field__error">
-          We couldn't find a report with that reference number. Double-check it against your
-          confirmation page and try again.
+          {t("followUp.notFound")}
         </p>
       )}
       {lookupState === "error" && (
         <p role="alert" className="field__error">
-          Something went wrong looking up that report. Please try again in a moment.
+          {t("followUp.lookupError")}
+        </p>
+      )}
+      {lookupState === "draft-not-accessible" && (
+        <p role="alert" className="field__error">
+          {t("followUp.draftNotAccessible")}
         </p>
       )}
 
       {draftReport && (
         <p className="notice notice--info">
-          This report hasn't been submitted yet.{" "}
+          {t("followUp.draftNotice")}{" "}
           <Link to={`/report/${draftReport.id}/${firstIncompleteStep(draftReport)}`}>
-            Continue completing it
+            {t("followUp.continueCompleting")}
           </Link>{" "}
-          — you can add documents on the final steps before you submit.
+          {t("followUp.draftNoticeAfter")}
         </p>
       )}
 
       {gatePhase === "email" && (
         <form className="step-form identity-gate" onSubmit={handleRequestCode}>
-          <h2>Verify it's you</h2>
-          <p className="field__hint">
-            This report has already been submitted, so before we show anything from it we need to
-            confirm you're the person who filed it. Enter the email address you used when you
-            submitted.
-          </p>
-          <TextField id="verify-email" label="Email of record" value={emailInput} onChange={setEmailInput} />
+          <h2>{t("followUp.verifyItsYou")}</h2>
+          <p className="field__hint">{t("followUp.verifyItsYouHint")}</p>
+          <TextField
+            id="verify-email"
+            label={t("followUp.emailOfRecord")}
+            value={emailInput}
+            onChange={setEmailInput}
+            autoComplete="off"
+          />
           {emailError && (
             <p role="alert" className="field__error">
               {emailError}
@@ -221,7 +235,7 @@ export function FollowUp() {
           )}
           <div className="step-form__actions">
             <button type="submit" className="button button--primary" disabled={emailSubmitting}>
-              {emailSubmitting ? "Checking…" : "Send verification code"}
+              {emailSubmitting ? t("followUp.checking") : t("followUp.sendCode")}
             </button>
           </div>
         </form>
@@ -229,14 +243,19 @@ export function FollowUp() {
 
       {gatePhase === "code" && (
         <form className="step-form identity-gate" onSubmit={handleVerifyCode}>
-          <h2>Enter your verification code</h2>
+          <h2>{t("followUp.enterCode")}</h2>
           {devCode && (
             <p className="notice notice--info">
-              <strong>Prototype note:</strong> in production this code would be emailed to you. For
-              this demo, here it is directly: <strong>{devCode}</strong>
+              <strong>{t("followUp.prototypeNoteLabel")}</strong> {t("followUp.prototypeNoteBody")}{" "}
+              <strong>{devCode}</strong>
             </p>
           )}
-          <TextField id="verify-code" label="6-digit code" value={codeInput} onChange={setCodeInput} />
+          <TextField
+            id="verify-code"
+            label={t("followUp.sixDigitCode")}
+            value={codeInput}
+            onChange={setCodeInput}
+          />
           {codeError && (
             <p role="alert" className="field__error">
               {codeError}
@@ -244,7 +263,7 @@ export function FollowUp() {
           )}
           <div className="step-form__actions">
             <button type="submit" className="button button--primary" disabled={codeSubmitting}>
-              {codeSubmitting ? "Verifying…" : "Verify"}
+              {codeSubmitting ? t("followUp.verifying") : t("followUp.verify")}
             </button>
           </div>
         </form>
@@ -254,47 +273,93 @@ export function FollowUp() {
         <div className="follow-up__report">
           <dl className="review-list">
             <div className="review-list__row">
-              <dt>Reference number</dt>
+              <dt>{t("followUp.referenceNumberLabel")}</dt>
               <dd>{report.id}</dd>
             </div>
             {report.submittedAt && (
               <div className="review-list__row">
-                <dt>Submitted</dt>
+                <dt>{t("followUp.submitted")}</dt>
                 <dd>{formatDate(report.submittedAt)}</dd>
               </div>
             )}
           </dl>
 
-          <h2>What you submitted</h2>
+          <h2>{t("followUp.whatYouSubmitted")}</h2>
           <ReportSummarySection
-            title="About you"
-            fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
+            title={t("review.section.aboutYou")}
+            fields={aboutYouFieldSpecs(t, report.submitterType ?? "public", null, true, {
+              city: report.aboutYou?.mailingCity ?? "",
+              state: report.aboutYou?.mailingState ?? "",
+              zip: report.aboutYou?.mailingZip ?? "",
+            })}
             values={report.aboutYou}
           />
-          <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
           <ReportSummarySection
-            title="Vaccine information"
-            fields={vaccineFieldSpecs(report.submitterType === "hcp", undefined, report.vaccine?.vaccineType)}
+            title={t("review.section.aboutPatient")}
+            fields={patientFieldSpecs(
+              t,
+              undefined,
+              undefined,
+              report.patient?.patientRaceOther,
+              {
+                city: report.patient?.patientCity ?? "",
+                state: report.patient?.patientState ?? "",
+                county: report.patient?.patientCounty ?? "",
+                zip: report.patient?.patientZip ?? "",
+              },
+              report.aboutYou?.relationship === "self"
+            )}
+            values={report.patient}
+          />
+          <ReportSummarySection
+            title={t("review.section.vaccine")}
+            fields={vaccineFieldSpecs(
+              t,
+              report.submitterType === "hcp",
+              undefined,
+              report.vaccine?.vaccineType,
+              report.vaccine?.route,
+              report.vaccine?.bodySiteOther,
+              {
+                city: report.vaccine?.facilityCity ?? "",
+                state: report.vaccine?.facilityState ?? "",
+                zip: report.vaccine?.facilityZip ?? "",
+              }
+            )}
             values={report.vaccine}
           />
-          <ReportSummarySection
-            title="What happened"
-            fields={adverseEventFieldSpecs(report.submitterType === "hcp", report.aboutYou?.relationship === "self")}
-            values={report.adverseEvent}
-          />
-          <ReportSummarySection
-            title="Administration error details"
-            fields={ERROR_DETAIL_FIELD_SPECS}
-            values={report.errorDetail}
-          />
+          {/* Mirrors getApplicableSteps' own gating (branchingRules.ts) and
+              ReviewStep.tsx's matching guard — a second, independent check
+              against a stale adverseEvent/errorDetail record (e.g. from
+              before the server started clearing them on a "No" answer)
+              surfacing under a branch that's no longer selected. */}
+          {(report.submitterType !== "hcp" || report.adverseEventOccurred !== false) && (
+            <ReportSummarySection
+              title={t("review.section.whatHappened")}
+              fields={adverseEventFieldSpecs(
+                t,
+                report.submitterType === "hcp",
+                report.aboutYou?.relationship === "self",
+                report.adverseEvent?.symptomsOther
+              )}
+              values={report.adverseEvent}
+            />
+          )}
+          {report.submitterType === "hcp" && report.administrationError === true && (
+            <ReportSummarySection
+              title={t("review.section.errorDetail")}
+              fields={ERROR_DETAIL_FIELD_SPECS(t)}
+              values={report.errorDetail}
+            />
+          )}
           {report.documents.supplementalNotes && (
             <div className="review-section">
-              <h2>Additional context</h2>
+              <h2>{t("followUp.additionalContext")}</h2>
               <p>{report.documents.supplementalNotes}</p>
             </div>
           )}
 
-          <h2>Documents on file</h2>
+          <h2>{t("followUp.documentsOnFile")}</h2>
           {report.attachments.length > 0 ? (
             <ul className="attachment-list">
               {report.attachments.map((a: AttachmentMeta) => (
@@ -303,21 +368,21 @@ export function FollowUp() {
                     <FieldIcon name="document" size={18} className="attachment-list__icon" />
                     <span>
                       {a.originalFilename} ({formatSize(a.sizeBytes)})
-                      {a.isFollowUp && " — added as follow-up"}
+                      {a.isFollowUp && ` ${t("followUp.addedAsFollowUp")}`}
                     </span>
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="review-list__empty">No documents have been added to this report yet.</p>
+            <p className="review-list__empty">{t("followUp.noDocuments")}</p>
           )}
 
-          <h2>Add a document</h2>
+          <h2>{t("followUp.addDocument")}</h2>
           <Dropzone acceptedExtensions={ACCEPTED_EXTENSIONS} onFiles={handleFiles} />
           {uploadingCount > 0 && (
             <p role="status" className="dropzone__status">
-              Uploading {uploadingCount} file{uploadingCount === 1 ? "" : "s"}…
+              {t("followUp.uploadingFiles", { n: uploadingCount, plural: uploadingCount === 1 ? "" : "s" })}
             </p>
           )}
           {uploadError && (
@@ -326,7 +391,7 @@ export function FollowUp() {
             </p>
           )}
 
-          <h2>Follow-up notes</h2>
+          <h2>{t("followUp.followUpNotes")}</h2>
           {report.followUpNotes.length > 0 && (
             <ul className="attachment-list">
               {report.followUpNotes.map((n) => (
@@ -345,8 +410,8 @@ export function FollowUp() {
           <form className="step-form" onSubmit={handleAddNote}>
             <TextAreaField
               id="follow-up-note"
-              label="Add a note"
-              hint="For example, an update on recovery, or context for a document you just added."
+              label={t("followUp.addNote")}
+              hint={t("followUp.addNoteHint")}
               rows={3}
               value={noteText}
               onChange={setNoteText}
@@ -357,7 +422,7 @@ export function FollowUp() {
                 className="button button--primary"
                 disabled={noteSubmitting || !noteText.trim()}
               >
-                {noteSubmitting ? "Adding…" : "Add note"}
+                {noteSubmitting ? t("followUp.adding") : t("followUp.addNoteButton")}
               </button>
             </div>
           </form>

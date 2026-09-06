@@ -59,7 +59,8 @@ export function TextField({
   value,
   onChange,
   type = "text",
-}: BaseProps & { value: string; onChange: (v: string) => void; type?: string }) {
+  autoComplete,
+}: BaseProps & { value: string; onChange: (v: string) => void; type?: string; autoComplete?: string }) {
   return (
     <FieldWrapper id={id} label={label} hint={hint} error={error} required={required}>
       <input
@@ -71,6 +72,7 @@ export function TextField({
         aria-invalid={!!error}
         aria-required={required}
         className="field__input"
+        autoComplete={autoComplete}
       />
     </FieldWrapper>
   );

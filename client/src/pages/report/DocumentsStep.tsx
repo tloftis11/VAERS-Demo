@@ -5,9 +5,7 @@ import {
   deleteAttachment,
   downloadAttachment,
   getDocumentSuggestions,
-  suggestDocumentsFromNarrative,
   uploadAttachment,
-  type AiDocumentSuggestion,
   type AttachmentMeta,
   type DocumentSuggestion,
 } from "../../api/client";
@@ -15,6 +13,8 @@ import { useStepForm } from "../../hooks/useStepForm";
 import { TextAreaField } from "../../components/Field";
 import { FieldIcon } from "../../components/illustrations";
 import { Dropzone } from "../../components/Dropzone";
+import { getDraftToken } from "../../draftAuth";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 interface DocumentsStepProps {
   reportId: string;
@@ -40,6 +40,7 @@ export function DocumentsStep({
   onNext,
   onBack,
 }: DocumentsStepProps) {
+  const { t } = useLanguage();
   const { values, setValue, errors, validate } = useStepForm(documentsSchema, {
     supplementalNotes: initialSupplementalNotes,
   });
@@ -48,34 +49,28 @@ export function DocumentsStep({
   const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
-  const [aiSuggestions, setAiSuggestions] = useState<AiDocumentSuggestion[]>([]);
-  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (submitterType === "hcp") {
       getDocumentSuggestions(reportId).then(setSuggestions);
-      setAiSuggestionsLoading(true);
-      suggestDocumentsFromNarrative(reportId)
-        .then(({ suggestions }) => setAiSuggestions(suggestions))
-        .catch(() => setAiSuggestions([]))
-        .finally(() => setAiSuggestionsLoading(false));
     }
   }, [reportId, submitterType]);
 
   async function handleFiles(accepted: File[], rejectedCount: number) {
-    setUploadError(rejectedCount > 0 ? "Some files were skipped — only PDF, JPEG, PNG, or Word documents are accepted." : null);
+    setUploadError(rejectedCount > 0 ? t("documents.someFilesSkipped") : null);
     if (accepted.length === 0) return;
 
     setUploadingCount((n) => n + accepted.length);
     for (const file of accepted) {
       setUploadProgress(0);
       try {
-        const meta = await uploadAttachment(reportId, file, setUploadProgress);
+        const meta = await uploadAttachment(reportId, file, getDraftToken(reportId), setUploadProgress);
         setAttachments((prev) => [...prev, meta]);
       } catch (err) {
-        setUploadError(err instanceof Error ? err.message : "Upload failed");
+        setUploadError(err instanceof Error ? err.message : t("documents.uploadFailed"));
       } finally {
         setUploadingCount((n) => n - 1);
         setUploadProgress(null);
@@ -84,8 +79,17 @@ export function DocumentsStep({
   }
 
   async function handleDelete(id: string) {
-    await deleteAttachment(id);
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    if (deletingId) return;
+    setUploadError(null);
+    setDeletingId(id);
+    try {
+      await deleteAttachment(id, getDraftToken(reportId));
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t("documents.removeFailed"));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function handleReplaceClick(id: string) {
@@ -103,11 +107,11 @@ export function DocumentsStep({
     setUploadProgress(0);
     setUploadError(null);
     try {
-      const meta = await uploadAttachment(reportId, file, setUploadProgress);
-      await deleteAttachment(targetId);
+      const meta = await uploadAttachment(reportId, file, getDraftToken(reportId), setUploadProgress);
+      await deleteAttachment(targetId, getDraftToken(reportId));
       setAttachments((prev) => prev.map((a) => (a.id === targetId ? meta : a)));
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Replace failed");
+      setUploadError(err instanceof Error ? err.message : t("documents.replaceFailed"));
     } finally {
       setUploadProgress(null);
     }
@@ -121,15 +125,12 @@ export function DocumentsStep({
 
   return (
     <form className="step-form" onSubmit={handleSubmit}>
-      <h1>Supporting documents</h1>
-      <p>
-        Upload medical records or vaccine-administration documents (PDF, JPEG, PNG, or Word — 15 MB
-        max each). You can also add these later using the existing follow-up information tool.
-      </p>
+      <h1>{t("documents.heading")}</h1>
+      <p>{t("documents.lead")}</p>
 
       {submitterType === "hcp" && suggestions.length > 0 && (
         <div className="suggestion-box" role="note">
-          <h2>Suggested documents for this report</h2>
+          <h2>{t("documents.suggestedForReport")}</h2>
           <ul>
             {suggestions.map((s) => (
               <li key={s.documentType}>
@@ -137,29 +138,6 @@ export function DocumentsStep({
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {submitterType === "hcp" && (aiSuggestionsLoading || aiSuggestions.length > 0) && (
-        <div className="suggestion-box suggestion-box--ai" role="note">
-          <h2>Based on your description</h2>
-          {aiSuggestionsLoading ? (
-            <p role="status">Checking for anything specific to this case…</p>
-          ) : (
-            <>
-              <ul>
-                {aiSuggestions.map((s) => (
-                  <li key={s.documentType}>
-                    <span className="suggestion-box__ai-badge">AI suggested</span>
-                    <strong>{s.documentType}</strong> — {s.reason}
-                  </li>
-                ))}
-              </ul>
-              <p className="suggestion-box__ai-disclaimer">
-                AI-generated from the description you entered — review before relying on it.
-              </p>
-            </>
-          )}
         </div>
       )}
 
@@ -173,11 +151,11 @@ export function DocumentsStep({
       />
       {uploadingCount > 0 && (
         <p role="status" className="dropzone__status">
-          Uploading {uploadingCount} file{uploadingCount === 1 ? "" : "s"}…
+          {t("documents.uploadingFiles", { n: uploadingCount, plural: uploadingCount === 1 ? "" : "s" })}
         </p>
       )}
       {uploadProgress !== null && (
-        <div className="dropzone__progress" role="status" aria-label="Uploading">
+        <div className="dropzone__progress" role="status" aria-label={t("documents.uploadingAriaLabel")}>
           <div className="dropzone__progress-bar">
             <div className="dropzone__progress-fill" style={{ width: `${uploadProgress}%` }} />
           </div>
@@ -206,18 +184,23 @@ export function DocumentsStep({
                   className="button button--text"
                   onClick={() => downloadAttachment(a.id, a.originalFilename)}
                 >
-                  Download
+                  {t("documents.download")}
                 </button>
                 <button
                   type="button"
                   className="button button--text"
                   onClick={() => handleReplaceClick(a.id)}
-                  disabled={uploadProgress !== null}
+                  disabled={uploadProgress !== null || deletingId !== null}
                 >
-                  Replace
+                  {t("documents.replace")}
                 </button>
-                <button type="button" className="button button--text" onClick={() => handleDelete(a.id)}>
-                  Remove
+                <button
+                  type="button"
+                  className="button button--text"
+                  onClick={() => handleDelete(a.id)}
+                  disabled={deletingId !== null}
+                >
+                  {deletingId === a.id ? t("documents.removing") : t("documents.remove")}
                 </button>
               </span>
             </li>
@@ -227,7 +210,7 @@ export function DocumentsStep({
 
       <TextAreaField
         id="supplementalNotes"
-        label="Additional context (optional)"
+        label={t("documents.additionalContext")}
         rows={3}
         value={values.supplementalNotes}
         onChange={(v) => setValue("supplementalNotes", v)}
@@ -236,10 +219,10 @@ export function DocumentsStep({
 
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
-          ← Back
+          {t("common.back")}
         </button>
         <button type="submit" className="button button--primary">
-          Continue to review
+          {t("documents.continueToReview")}
         </button>
       </div>
     </form>

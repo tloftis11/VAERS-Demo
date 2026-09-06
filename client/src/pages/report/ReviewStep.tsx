@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { STEP_LABELS, type StepId } from "../../../../shared/src/branchingRules";
+import { type StepId } from "../../../../shared/src/branchingRules";
 import { checkCrossFieldRules, type ValidationFinding } from "../../../../shared/src/validationRules";
 import { missingRequiredSteps } from "../../reportProgress";
 import type { ClientReport } from "../../api/client";
@@ -10,6 +10,7 @@ import { vaccineFieldSpecs } from "./VaccineStep";
 import { adverseEventFieldSpecs } from "./AdverseEventStep";
 import { ERROR_DETAIL_FIELD_SPECS } from "./ErrorDetailStep";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { stepLabelKey } from "../../i18n/translations";
 
 interface ReviewStepProps {
   report: ClientReport;
@@ -36,12 +37,17 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
   const proactiveFindings = useMemo(
     () =>
       checkCrossFieldRules({
+        submitterType: report.submitterType,
+        administrationError: report.administrationError,
+        adverseEventOccurred: report.adverseEventOccurred,
         vaccine: report.vaccine ? { administrationDate: report.vaccine.administrationDate } : null,
+        patient: report.patient ? { dateOfBirth: report.patient.patientDateOfBirth } : null,
         adverseEvent: report.adverseEvent
           ? {
               onsetDate: report.adverseEvent.onsetDate,
               dateOfDeath: report.adverseEvent.dateOfDeath,
               outcomes: report.adverseEvent.outcomes,
+              hospitalizationDays: report.adverseEvent.hospitalizationDays,
             }
           : null,
         errorDetail: report.errorDetail
@@ -70,7 +76,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
         alertRef.current?.focus();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong submitting your report.");
+      setError(err instanceof Error ? err.message : t("review.submitError"));
       alertRef.current?.focus();
     } finally {
       setSubmitting(false);
@@ -79,19 +85,19 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
 
   return (
     <div className="step-form">
-      <h1>Review & submit</h1>
-      <p>Please review your report before submitting. You can go back to fix anything.</p>
+      <h1>{t("review.heading")}</h1>
+      <p>{t("review.lead")}</p>
 
       {hasBlockingIssues && (
         <div className="review-error" role="alert" tabIndex={-1} ref={alertRef}>
           {displayedMissingSteps.length > 0 && (
             <>
-              <p>Please complete these sections before submitting:</p>
+              <p>{t("review.completeTheseSections")}</p>
               <ul>
                 {displayedMissingSteps.map((step) => (
                   <li key={step}>
                     <button type="button" className="button button--text" onClick={() => onGoToStep(step)}>
-                      {STEP_LABELS[step]}
+                      {t(stepLabelKey(step))}
                     </button>
                   </li>
                 ))}
@@ -100,7 +106,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
           )}
           {displayedFindings.length > 0 && (
             <>
-              <p>Please fix the following before submitting:</p>
+              <p>{t("review.fixTheFollowing")}</p>
               <div className="review-findings">
                 {displayedFindings.map((finding, i) => (
                   <div className="review-finding" key={i}>
@@ -110,7 +116,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
                       className="button button--secondary"
                       onClick={() => onGoToStep(finding.step)}
                     >
-                      {finding.actionLabel ?? "Go fix this"} →
+                      {finding.actionLabel ?? t("review.goFixThis")} →
                     </button>
                   </div>
                 ))}
@@ -126,31 +132,75 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
       )}
 
       <ReportSummarySection
-        title="About you"
-        fields={aboutYouFieldSpecs(report.submitterType ?? "public")}
+        title={t("review.section.aboutYou")}
+        fields={aboutYouFieldSpecs(t, report.submitterType ?? "public", null, true, {
+          city: report.aboutYou?.mailingCity ?? "",
+          state: report.aboutYou?.mailingState ?? "",
+          zip: report.aboutYou?.mailingZip ?? "",
+        })}
         values={report.aboutYou}
       />
-      <ReportSummarySection title="About the patient" fields={patientFieldSpecs()} values={report.patient} />
       <ReportSummarySection
-        title="Vaccine information"
-        fields={vaccineFieldSpecs(isHcp, undefined, report.vaccine?.vaccineType)}
+        title={t("review.section.aboutPatient")}
+        fields={patientFieldSpecs(
+          t,
+          undefined,
+          undefined,
+          report.patient?.patientRaceOther,
+          {
+            city: report.patient?.patientCity ?? "",
+            state: report.patient?.patientState ?? "",
+            county: report.patient?.patientCounty ?? "",
+            zip: report.patient?.patientZip ?? "",
+          },
+          isSelfReport
+        )}
+        values={report.patient}
+      />
+      <ReportSummarySection
+        title={t("review.section.vaccine")}
+        fields={vaccineFieldSpecs(
+          t,
+          isHcp,
+          undefined,
+          report.vaccine?.vaccineType,
+          report.vaccine?.route,
+          report.vaccine?.bodySiteOther,
+          {
+            city: report.vaccine?.facilityCity ?? "",
+            state: report.vaccine?.facilityState ?? "",
+            zip: report.vaccine?.facilityZip ?? "",
+          }
+        )}
         values={report.vaccine}
       />
-      <ReportSummarySection
-        title="What happened"
-        fields={adverseEventFieldSpecs(isHcp, isSelfReport)}
-        values={report.adverseEvent}
-      />
-      <ReportSummarySection
-        title="Administration error details"
-        fields={ERROR_DETAIL_FIELD_SPECS}
-        values={report.errorDetail}
-      />
+      {/* Mirrors getApplicableSteps' own gating exactly (branchingRules.ts):
+          a public report is always adverse-event-shaped; an HCP report
+          only shows each section while its controlling question is
+          answered accordingly. `values` being non-null is *not* enough on
+          its own to gate this — the server clears each record the moment
+          its answer flips to "No", but this is a second, independent guard
+          against a stale record (e.g. from before that fix existed)
+          surfacing under a branch that's no longer selected. */}
+      {(!isHcp || report.adverseEventOccurred !== false) && (
+        <ReportSummarySection
+          title={t("review.section.whatHappened")}
+          fields={adverseEventFieldSpecs(t, isHcp, isSelfReport, report.adverseEvent?.symptomsOther)}
+          values={report.adverseEvent}
+        />
+      )}
+      {isHcp && report.administrationError === true && (
+        <ReportSummarySection
+          title={t("review.section.errorDetail")}
+          fields={ERROR_DETAIL_FIELD_SPECS(t)}
+          values={report.errorDetail}
+        />
+      )}
 
       <div className="review-section">
-        <h2>Supporting documents</h2>
+        <h2>{t("review.section.documents")}</h2>
         {report.attachments.length === 0 ? (
-          <p>No documents attached.</p>
+          <p>{t("review.noDocuments")}</p>
         ) : (
           <ul>
             {report.attachments.map((a) => (
@@ -169,7 +219,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
 
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
-          ← Back
+          {t("common.back")}
         </button>
         <button
           type="button"
@@ -177,7 +227,7 @@ export function ReviewStep({ report, onSubmit, onBack, onGoToStep }: ReviewStepP
           onClick={handleSubmit}
           disabled={submitting || !certified}
         >
-          {submitting ? "Submitting…" : "Submit report"}
+          {submitting ? t("review.submitting") : t("review.submitReport")}
         </button>
       </div>
     </div>

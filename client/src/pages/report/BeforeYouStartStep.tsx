@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useLanguage } from "../../i18n/LanguageContext";
 
@@ -9,6 +10,21 @@ interface BeforeYouStartStepProps {
 /** Informational screen before the form begins (FLOW-004): what the report is used for, and what's helpful to have on hand. Nothing here is required. */
 export function BeforeYouStartStep({ onNext, onBack }: BeforeYouStartStepProps) {
   const { t } = useLanguage();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleContinue() {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onNext();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="step-form">
@@ -46,12 +62,17 @@ export function BeforeYouStartStep({ onNext, onBack }: BeforeYouStartStepProps) 
       </ul>
       <p className="field__hint">{t("beforeYouStart.hint")}</p>
 
+      {error && (
+        <p role="alert" className="field__error">
+          {error}
+        </p>
+      )}
       <div className="step-form__actions">
         <button type="button" className="button button--text" onClick={onBack}>
           {t("common.back")}
         </button>
-        <button type="button" className="button button--primary" onClick={() => onNext()}>
-          {t("common.continue")}
+        <button type="button" className="button button--primary" onClick={handleContinue} disabled={submitting}>
+          {submitting ? "Saving…" : t("common.continue")}
         </button>
       </div>
     </div>

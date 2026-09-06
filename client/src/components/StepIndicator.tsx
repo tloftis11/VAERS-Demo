@@ -1,34 +1,97 @@
-import { STEP_LABELS, type StepId } from "../../../shared/src/branchingRules";
+import { type StepId } from "../../../shared/src/branchingRules";
+import { useLanguage } from "../i18n/LanguageContext";
+import { stepLabelKey } from "../i18n/translations";
 
 interface StepIndicatorProps {
   steps: StepId[];
   currentStep: StepId;
+  /** The furthest step with real saved data (see reportProgress.ts) — every
+   * step before this one is "complete" and jumpable, whether it sits before
+   * *or after* the step currently on screen. Defaults to currentStep (only
+   * the current step counts as reached) when omitted, matching the old
+   * behavior of never offering a forward jump. */
+  furthestCompletedStep?: StepId;
+  /** Jump directly to an already-completed step (forward or back) instead
+   * of clicking "← Back"/"Next" through every step in between. */
+  onStepClick?: (step: StepId) => void;
 }
 
 /** Persistent breadcrumb-style step indicator (design doc §4.2): gives users a clear sense of location and remaining effort. */
-export function StepIndicator({ steps, currentStep }: StepIndicatorProps) {
+export function StepIndicator({ steps, currentStep, furthestCompletedStep, onStepClick }: StepIndicatorProps) {
+  const { t } = useLanguage();
   const currentIndex = steps.indexOf(currentStep);
+  const completedIndex = steps.indexOf(furthestCompletedStep ?? currentStep);
+  const completedSteps = steps.filter((step, index) => index < completedIndex && step !== currentStep);
 
   return (
-    <nav aria-label="Report progress" className="step-indicator">
+    <nav aria-label={t("stepIndicator.ariaLabel")} className="step-indicator">
       <ol>
         {steps.map((step, index) => {
           const status =
-            index < currentIndex ? "complete" : index === currentIndex ? "current" : "upcoming";
+            step === currentStep ? "current" : index < completedIndex ? "complete" : "upcoming";
+          const label = t(stepLabelKey(step));
           return (
             <li key={step} className={`step-indicator__item step-indicator__item--${status}`}>
               <span
                 className="step-indicator__marker"
                 aria-current={status === "current" ? "step" : undefined}
               />
-              <span className="step-indicator__label">{STEP_LABELS[step]}</span>
+              {status === "complete" && onStepClick ? (
+                <button
+                  type="button"
+                  className="step-indicator__label step-indicator__label--link"
+                  onClick={() => onStepClick(step)}
+                >
+                  {label}
+                </button>
+              ) : status === "current" ? (
+                // Visible and un-clickable — the segments themselves gave
+                // no indication of *which one* was "you are here" (only
+                // completed steps had visible text), so the eye landed on
+                // whichever segment happened to have a label instead of the
+                // actual current position.
+                <span className="step-indicator__label step-indicator__label--current">{label}</span>
+              ) : (
+                <span className="step-indicator__label">{label}</span>
+              )}
             </li>
           );
         })}
       </ol>
       <p className="step-indicator__progress-text">
-        Step {currentIndex + 1} of {steps.length}: {STEP_LABELS[currentStep]}
+        {t("stepIndicator.progressText", {
+          n: currentIndex + 1,
+          total: steps.length,
+          label: t(stepLabelKey(currentStep)),
+        })}
       </p>
+      {/* Mobile counterpart to the desktop step-indicator__label--link jump
+          controls: those rely on real label text next to each segment,
+          which doesn't fit in a narrow flex column without wrapping and
+          overlapping the question below (see global.css) — a single select
+          gets the same "jump to a completed step" capability into the same
+          amount of horizontal space. Hidden at desktop widths, where the
+          per-segment labels already cover this. */}
+      {onStepClick && completedSteps.length > 0 && (
+        <label className="step-indicator__jump">
+          <span className="sr-only">{t("stepIndicator.jumpSrLabel")}</span>
+          <select
+            className="step-indicator__jump-select"
+            value=""
+            onChange={(e) => {
+              const target = e.target.value as StepId;
+              if (target) onStepClick(target);
+            }}
+          >
+            <option value="">{t("stepIndicator.jumpPlaceholder")}</option>
+            {completedSteps.map((step) => (
+              <option key={step} value={step}>
+                {t(stepLabelKey(step))}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </nav>
   );
 }

@@ -1,18 +1,21 @@
-export type { FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
-import type { FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
+export type { ResolvedFaqEntry as FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
+import type { ResolvedFaqEntry as FaqEntry, DocumentSuggestion, ValidationFinding } from "../../../shared/src";
 
 const API_ROOT = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
 
 export interface AboutYouData {
   contactName: string;
   contactEmail: string;
+  contactEmailConfirm: string;
   contactPhone: string;
   relationship: string;
+  relationshipOther: string;
   mailingStreet: string;
   mailingCity: string;
   mailingState: string;
   mailingZip: string;
-  bestContactInfo: string;
+  bestContactName: string;
+  bestContactPhone: string;
 }
 
 export interface PatientData {
@@ -23,7 +26,14 @@ export interface PatientData {
   patientSex: string;
   ageYears: number | string;
   ageMonths: number | string;
+  patientStreet: string;
+  patientCity: string;
   patientState: string;
+  patientCounty: string;
+  patientZip: string;
+  patientPhone: string;
+  patientEmail: string;
+  patientEmailConfirm: string;
   pregnant: string;
   pregnancyDetails: string;
   medicationsAtVaccination: string;
@@ -31,20 +41,30 @@ export interface PatientData {
   recentIllnesses: string;
   chronicConditions: string;
   patientRace: string[];
+  patientRaceOther: string;
   patientEthnicity: string;
 }
 
 export interface AdditionalVaccineRow {
   vaccineType: string;
+  vaccineTypeOther: string;
   manufacturer: string;
   lotNumber: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   doseNumber: string;
 }
 
 export interface PriorVaccineRow {
-  vaccineName: string;
+  vaccineType: string;
+  vaccineTypeOther: string;
+  manufacturer: string;
+  lotNumber: string;
+  route: string;
+  bodySite: string;
+  bodySiteOther: string;
+  doseNumber: string;
   administrationDate: string;
 }
 
@@ -58,8 +78,16 @@ export interface VaccineData {
   administrationTime: string;
   route: string;
   bodySite: string;
+  bodySiteOther: string;
   administeringFacility: string;
+  facilityStreet: string;
+  facilityCity: string;
+  facilityState: string;
+  facilityZip: string;
+  facilityPhone: string;
+  facilityFax: string;
   facilityType: string;
+  facilityTypeOther: string;
   otherVaccinesRecent: string;
   otherVaccinesSameVisit: string;
   additionalVaccines: AdditionalVaccineRow[];
@@ -88,6 +116,7 @@ export interface AdverseEventData {
 
 export interface ErrorDetailData {
   errorType: string;
+  errorTypeOther: string;
   errorDescription: string;
   errorDiscoveredDate: string;
   correctiveActionTaken: string;
@@ -111,6 +140,10 @@ export interface FollowUpNote {
 export interface ClientReport {
   id: string;
   status: "draft" | "submitted";
+  /** Present ONLY in the response to createReport() — never sent again by
+   * any other route (the server stores only its hash). Callers must save
+   * it (see draftAuth.ts) at that point or lose access to the draft. */
+  draftToken?: string;
   submitterType: "public" | "hcp" | null;
   administrationError: boolean | null;
   adverseEventOccurred: boolean | null;
@@ -153,8 +186,8 @@ export function createReport(): Promise<ClientReport> {
   return fetch(`${API_ROOT}/reports`, { method: "POST" }).then((r) => asJson(r));
 }
 
-export function getReport(id: string): Promise<ClientReport> {
-  return fetch(`${API_ROOT}/reports/${id}`).then((r) => asJson(r));
+export function getReport(id: string, draftToken: string): Promise<ClientReport> {
+  return fetch(`${API_ROOT}/reports/${id}`, { headers: { "X-Draft-Token": draftToken } }).then((r) => asJson(r));
 }
 
 /** PHI-free existence/status check — safe to call before identity is verified. */
@@ -165,24 +198,30 @@ export function getReportStatus(id: string): Promise<{ id: string; status: "draf
 export function patchReport(
   id: string,
   step: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  draftToken: string
 ): Promise<ClientReport> {
   return fetch(`${API_ROOT}/reports/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Draft-Token": draftToken },
     body: JSON.stringify({ step, data }),
   }).then((r) => asJson(r));
 }
 
 export function submitReport(
-  id: string
+  id: string,
+  draftToken: string
 ): Promise<{ id: string; status: string; duplicateFlag: boolean }> {
-  return fetch(`${API_ROOT}/reports/${id}/submit`, { method: "POST" }).then((r) => asJson(r));
+  return fetch(`${API_ROOT}/reports/${id}/submit`, {
+    method: "POST",
+    headers: { "X-Draft-Token": draftToken },
+  }).then((r) => asJson(r));
 }
 
 export function uploadAttachment(
   reportId: string,
   file: File,
+  draftToken: string,
   onProgress?: (percent: number) => void
 ): Promise<AttachmentMeta> {
   const formData = new FormData();
@@ -191,6 +230,7 @@ export function uploadAttachment(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_ROOT}/reports/${reportId}/attachments`);
+    xhr.setRequestHeader("X-Draft-Token", draftToken);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     };
@@ -213,8 +253,10 @@ export function uploadAttachment(
   });
 }
 
-export function listAttachments(reportId: string): Promise<AttachmentMeta[]> {
-  return fetch(`${API_ROOT}/reports/${reportId}/attachments`).then((r) => asJson(r));
+export function listAttachments(reportId: string, draftToken: string): Promise<AttachmentMeta[]> {
+  return fetch(`${API_ROOT}/reports/${reportId}/attachments`, {
+    headers: { "X-Draft-Token": draftToken },
+  }).then((r) => asJson(r));
 }
 
 export function uploadFollowUpAttachment(
@@ -272,8 +314,11 @@ export function getFollowUpReport(reportId: string, followUpToken: string): Prom
   }).then((r) => asJson(r));
 }
 
-export function deleteAttachment(attachmentId: string): Promise<void> {
-  return fetch(`${API_ROOT}/attachments/${attachmentId}`, { method: "DELETE" }).then((r) => {
+export function deleteAttachment(attachmentId: string, draftToken: string): Promise<void> {
+  return fetch(`${API_ROOT}/attachments/${attachmentId}`, {
+    method: "DELETE",
+    headers: { "X-Draft-Token": draftToken },
+  }).then((r) => {
     if (!r.ok) throw new Error("Failed to delete attachment");
   });
 }
@@ -297,10 +342,11 @@ export function getDocumentSuggestions(reportId: string): Promise<DocumentSugges
   return fetch(`${API_ROOT}/reports/${reportId}/document-suggestions`).then((r) => asJson(r));
 }
 
-export function searchFaq(query: string, step?: string): Promise<FaqEntry[]> {
+export function searchFaq(query: string, step?: string, lang?: string): Promise<FaqEntry[]> {
   const params = new URLSearchParams();
   if (query) params.set("query", query);
   if (step) params.set("step", step);
+  if (lang) params.set("lang", lang);
   return fetch(`${API_ROOT}/faq?${params.toString()}`).then((r) => asJson(r));
 }
 
@@ -321,14 +367,6 @@ export function postSubmissionSurvey(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rating, comment, reportId }),
-  }).then((r) => asJson(r));
-}
-
-export function askFaqAssistant(question: string, step?: string): Promise<{ answer: string }> {
-  return fetch(`${API_ROOT}/assistant/faq`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, step }),
   }).then((r) => asJson(r));
 }
 
@@ -381,36 +419,3 @@ export function adminUpdateVaccineOption(
   }).then((r) => asJson(r));
 }
 
-export interface ConsistencyIssue {
-  field: "description" | "outcomes" | "recoveryStatus";
-  issue: string;
-  suggestion: string;
-}
-
-export function checkDescriptionConsistency(input: {
-  description: string;
-  outcomes: string[];
-  recoveryStatus?: string;
-  submitterType: "public" | "hcp";
-}): Promise<{ issues: ConsistencyIssue[] }> {
-  return fetch(`${API_ROOT}/assistant/check-description`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  }).then((r) => asJson(r));
-}
-
-export interface AiDocumentSuggestion {
-  documentType: string;
-  reason: string;
-}
-
-export function suggestDocumentsFromNarrative(
-  reportId: string
-): Promise<{ suggestions: AiDocumentSuggestion[] }> {
-  return fetch(`${API_ROOT}/assistant/suggest-documents`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reportId }),
-  }).then((r) => asJson(r));
-}

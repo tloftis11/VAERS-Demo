@@ -4,3 +4,4 @@ export * from "./documentSuggestions";
 export * from "./faqData";
 export * from "./validationRules";
 export * from "./liveChecks";
+export * from "./contactValidation";

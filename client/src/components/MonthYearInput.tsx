@@ -96,7 +96,16 @@ export function MonthYearInput({ id, value, onChange, labelledBy, max }: MonthYe
         aria-label="Year"
         min={1900}
         max={maxYear ? Number(maxYear) : undefined}
-        onChange={(e) => emit(month, e.target.value)}
+        onChange={(e) => {
+          // A number input's max attribute doesn't stop someone from typing
+          // a bigger value — the browser only flags it as :invalid. Clamp
+          // once a full 4-digit year is entered so a future year can't just
+          // sit there unflagged until the question is submitted.
+          const typed = e.target.value;
+          const clamped =
+            maxYear && typed.length === 4 && Number(typed) > Number(maxYear) ? maxYear : typed;
+          emit(month, clamped);
+        }}
       />
     </div>
   );

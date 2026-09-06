@@ -4,8 +4,7 @@ import { getReport, postSubmissionSurvey, type ClientReport } from "../../api/cl
 import { SurveyForm } from "../../components/SurveyForm";
 import { CheckBadge } from "../../components/illustrations";
 import { useLanguage } from "../../i18n/LanguageContext";
-
-const DRAFT_KEY = "vaers_draft_report_id";
+import { getDraftToken, clearDraftToken, isDraftReportId, clearDraftReportId } from "../../draftAuth";
 
 export function Confirmation() {
   const { t } = useLanguage();
@@ -14,10 +13,16 @@ export function Confirmation() {
 
   useEffect(() => {
     if (!reportId) return;
-    getReport(reportId).then(setReport);
-    if (localStorage.getItem(DRAFT_KEY) === reportId) {
-      localStorage.removeItem(DRAFT_KEY);
-    }
+    // The report is already submitted by the time this page is reached, so
+    // the draft token is no longer checked server-side either way — but
+    // only clear it (and the "continue your report" pointer) once this
+    // confirmation load has actually succeeded, so a failed request here
+    // doesn't strand a still-draft report with its access already discarded.
+    getReport(reportId, getDraftToken(reportId)).then((r) => {
+      setReport(r);
+      if (isDraftReportId(reportId)) clearDraftReportId();
+      clearDraftToken(reportId);
+    });
   }, [reportId]);
 
   return (

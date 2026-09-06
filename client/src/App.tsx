@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { NavBar } from "./components/NavBar";
 import { FeedbackButton } from "./components/FeedbackButton";
+import { PrototypeFooter } from "./components/PrototypeFooter";
 import { Landing } from "./pages/Landing";
 import { LanguageProvider } from "./i18n/LanguageContext";
 import { ReportEntry } from "./pages/report/ReportEntry";
@@ -46,6 +47,7 @@ export function App() {
           </Routes>
         </Suspense>
       </main>
+      <PrototypeFooter />
       {/* Persistent on every page, including mid-wizard — a small button doesn't
           compete for attention the way the old timed auto-popup did. */}
       <FeedbackButton />

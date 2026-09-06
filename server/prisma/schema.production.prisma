@@ -24,6 +24,7 @@ model Report {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   submittedAt          DateTime?
+  draftTokenHash       String?
 
   submitter       Submitter?
   patient         Patient?
@@ -43,11 +44,13 @@ model Submitter {
   contactEmail    String?
   contactPhone    String?
   relationship    String?
+  relationshipOther String? // free-text detail when relationship is "other"
   mailingStreet   String?
   mailingCity     String?
   mailingState    String?
   mailingZip      String?
-  bestContactInfo String?
+  bestContactName  String?
+  bestContactPhone String?
 }
 
 model Patient {
@@ -61,7 +64,13 @@ model Patient {
   sex                      String?
   ageYears                 Int?
   ageMonths                Int?
-  state                    String? // public-path only (PUB-002): patient's state of residence
+  street                   String?
+  city                     String?
+  state                    String? // "foreign" is a valid value here, not just a US code — see STATE_OR_FOREIGN_OPTIONS
+  county                   String?
+  zip                      String?
+  phone                    String?
+  email                    String?
   pregnant                 String?
   pregnancyDetails         String?
   medicationsAtVaccination String?
@@ -69,6 +78,7 @@ model Patient {
   recentIllnesses          String?
   chronicConditions        String?
   race                     String? // JSON-encoded string array (SQLite has no native array type)
+  raceOther                String? // free-text detail when "other" is among the selected races
   ethnicity                String?
 }
 
@@ -85,8 +95,16 @@ model VaccineAdministration {
   administrationTime    String?
   route                 String?
   bodySite              String?
+  bodySiteOther         String? // free-text detail when bodySite is "other"
   administeringFacility String?
+  facilityStreet        String?
+  facilityCity          String?
+  facilityState         String? // "foreign" is a valid value here — see STATE_OR_FOREIGN_OPTIONS
+  facilityZip           String?
+  facilityPhone         String?
+  facilityFax           String?
   facilityType          String?
+  facilityTypeOther     String? // free-text detail when facilityType is "other"
   otherVaccinesRecent   String?
   otherVaccinesSameVisit String?
   additionalVaccines    AdditionalVaccine[]
@@ -99,19 +117,28 @@ model AdditionalVaccine {
   vaccine      VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
   sortOrder    Int                   @default(0)
   vaccineType  String?
+  vaccineTypeOther String?
   manufacturer String?
   lotNumber    String?
   route        String?
   bodySite     String?
+  bodySiteOther String?
   doseNumber   String?
 }
 
 model PriorVaccine {
-  id                 String                @id @default(cuid())
-  vaccineId          String
-  vaccine            VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
-  sortOrder          Int                   @default(0)
-  vaccineName        String?
+  id               String                @id @default(cuid())
+  vaccineId        String
+  vaccine          VaccineAdministration @relation(fields: [vaccineId], references: [id], onDelete: Cascade)
+  sortOrder        Int                   @default(0)
+  vaccineType      String?
+  vaccineTypeOther String?
+  manufacturer     String?
+  lotNumber        String?
+  route            String?
+  bodySite         String?
+  bodySiteOther    String?
+  doseNumber       String?
   administrationDate String?
 }
 
@@ -143,6 +170,7 @@ model ErrorDetail {
   reportId              String  @unique
   report                Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   errorType             String?
+  errorTypeOther        String? // free-text detail when errorType is "other"
   errorDescription      String?
   errorDiscoveredDate   String?
   correctiveActionTaken String?

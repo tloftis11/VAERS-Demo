@@ -19,6 +19,13 @@ export function Landing() {
             <Link to="/about" className="button button--secondary button--large">
               {t("landing.learnMore")}
             </Link>
+            {/* A plain text link, not a button — this is a real path (someone
+                who already filed a report and has an update) but a distant
+                third next to the primary "Report an Event" CTA, so it stays
+                a lightweight text action rather than a third co-equal button. */}
+            <Link to="/follow-up" className="hero__tertiary-action">
+              {t("landing.followUp")}
+            </Link>
           </div>
           <dl className="hero__stats">
             <div>
@@ -65,13 +72,6 @@ export function Landing() {
           <h2>{t("landing.tile.data.title")}</h2>
           <p>{t("landing.tile.data.body")}</p>
         </a>
-        <Link to="/follow-up" className="tile card-surface">
-          <span className="icon-chip">
-            <FieldIcon name="document" size={22} />
-          </span>
-          <h2>{t("landing.tile.followUp.title")}</h2>
-          <p>{t("landing.tile.followUp.body")}</p>
-        </Link>
       </section>
     </div>
   );

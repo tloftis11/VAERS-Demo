@@ -8,8 +8,11 @@ interface LanguageContextValue {
   language: Language;
   setLanguage: (lang: Language) => void;
   /** Falls back to the English string for any key not yet translated —
-   * missing Spanish content should never leave a blank on screen. */
-  t: (key: TranslationKey) => string;
+   * missing Spanish content should never leave a blank on screen. `params`
+   * substitutes `{name}` placeholders (e.g. "Question {n} of {total}") —
+   * only a handful of strings need it, so this stays a plain find/replace
+   * rather than a full ICU-message-format dependency. */
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -39,7 +42,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     () => ({
       language,
       setLanguage,
-      t: (key) => translations[key]?.[language] ?? translations[key]?.en ?? key,
+      t: (key, params) => {
+        const raw = translations[key]?.[language] ?? translations[key]?.en ?? key;
+        if (!params) return raw;
+        return Object.entries(params).reduce(
+          (str, [name, val]) => str.replaceAll(`{${name}}`, String(val)),
+          raw
+        );
+      },
     }),
     [language]
   );

@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { saveFile, readFileStream, fileExists } from "../services/storage.js";
 import { createDownloadToken, verifyDownloadToken } from "../services/downloadTokens.js";
 import { verifyFollowUpAccessToken } from "../services/followUpAccess.js";
+import { requireDraftToken } from "../services/draftTokens.js";
 import { suggestDocuments } from "../rules.js";
 
 export const attachmentsRouter = Router();
@@ -47,6 +48,7 @@ attachmentsRouter.post("/reports/:reportId/attachments", (req, res) => {
     if (report.status === "submitted") {
       return res.status(409).json({ error: "Report has already been submitted" });
     }
+    if (!requireDraftToken(req, res, report)) return;
 
     const storedFilename = await saveFile(req.file.buffer, req.file.originalname);
     const attachment = await prisma.attachment.create({
@@ -122,6 +124,10 @@ attachmentsRouter.post("/reports/:reportId/follow-up-attachments", (req, res) =>
 });
 
 attachmentsRouter.get("/reports/:reportId/attachments", async (req, res) => {
+  const report = await prisma.report.findUnique({ where: { id: req.params.reportId } });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  if (!requireDraftToken(req, res, report)) return;
+
   const attachments = await prisma.attachment.findMany({
     where: { reportId: req.params.reportId },
     orderBy: { uploadedAt: "asc" },
@@ -141,6 +147,9 @@ attachmentsRouter.get("/reports/:reportId/attachments", async (req, res) => {
 attachmentsRouter.delete("/attachments/:attachmentId", async (req, res) => {
   const attachment = await prisma.attachment.findUnique({ where: { id: req.params.attachmentId } });
   if (!attachment) return res.status(404).json({ error: "Attachment not found" });
+  const report = await prisma.report.findUnique({ where: { id: attachment.reportId } });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+  if (!requireDraftToken(req, res, report)) return;
   await prisma.attachment.delete({ where: { id: attachment.id } });
   res.status(204).end();
 });

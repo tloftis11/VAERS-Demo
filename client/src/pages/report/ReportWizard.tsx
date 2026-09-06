@@ -19,8 +19,12 @@ import {
   applyOptimisticUpdate,
   branchingStateFromReport,
   firstIncompleteStep,
+  furthestCompletedStep,
   mergeServerUpdate,
 } from "../../reportProgress";
+import { getDraftToken } from "../../draftAuth";
+import { useLanguage } from "../../i18n/LanguageContext";
+import { stepLabelKey } from "../../i18n/translations";
 import { StepIndicator } from "../../components/StepIndicator";
 import { FaqWidget } from "../../components/FaqWidget";
 import { MilestoneBanner } from "../../components/MilestoneBanner";
@@ -34,6 +38,14 @@ import { AdverseEventStep } from "./AdverseEventStep";
 import { ErrorDetailStep } from "./ErrorDetailStep";
 import { DocumentsStep } from "./DocumentsStep";
 import { ReviewStep } from "./ReviewStep";
+
+/** A report needs at least one of these two things to be true — an HCP
+ * reporter answering "No" to both would otherwise submit a report with
+ * neither an administration error nor an adverse event to actually report,
+ * which both questions' own applicable-steps branching quietly allows by
+ * skipping the sections that would normally ask for either one's details. */
+const HCP_BOTH_NO_MESSAGE =
+  "A report needs at least one of these to be true — you already answered \"No\" to the other question. Go back and change that answer first if this one should really be \"No\" too.";
 
 /** Only administration-error and adverse-event-occurred (both HCP-only)
  * ever cause the wizard to jump past a whole section, and both only take
@@ -60,6 +72,7 @@ function skipNoticeForVaccineExit(state: {
 }
 
 export function ReportWizard() {
+  const { t } = useLanguage();
   const { reportId, step: stepParam } = useParams<{ reportId: string; step: string }>();
   const navigate = useNavigate();
   const [report, setReport] = useState<ClientReport | null>(null);
@@ -73,15 +86,32 @@ export function ReportWizard() {
   // over a whole section, so the jump reads as deliberate rather than a
   // glitch — cleared on any other navigation.
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  // Set when the reporter jumps to an already-completed step via the step
+  // indicator (rather than clicking "← Back" through everything in
+  // between) — the next successful save from there returns here instead of
+  // just advancing one step forward, so editing an earlier answer doesn't
+  // force re-clicking through every step back to where they actually were.
+  const [returnToStep, setReturnToStep] = useState<StepId | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
     if (!reportId) return;
     setLoading(true);
-    getReport(reportId).then((r) => {
-      setReport(r);
-      setLoading(false);
-    });
+    getReport(reportId, getDraftToken(reportId))
+      .then((r) => {
+        setReport(r);
+        setLoading(false);
+      })
+      .catch((err) => {
+        // Wrong/missing token for someone else's still-in-progress draft —
+        // this browser never had (or has lost) legitimate access to it.
+        if ((err as { status?: number }).status === 401) {
+          setAccessDenied(true);
+        }
+        setLoading(false);
+      });
   }, [reportId]);
 
   useEffect(() => {
@@ -91,6 +121,16 @@ export function ReportWizard() {
   }, [saveStatus]);
 
   if (!reportId) return <Navigate to="/report" replace />;
+  if (accessDenied) {
+    return (
+      <div className="page">
+        <p>
+          This report can't be accessed from this browser/device. If it's yours, use the link in your
+          confirmation email or the follow-up lookup instead.
+        </p>
+      </div>
+    );
+  }
   if (loading || !report) {
     return (
       <div className="page">
@@ -118,45 +158,73 @@ export function ReportWizard() {
     if (target) navigate(`/report/${reportId}/${target}`);
   }
 
-  // Navigates on the client-validated data immediately instead of waiting on
-  // the PATCH round-trip first — the round-trip still happens, just in the
-  // background, reconciling `report` when it resolves. Every field the
-  // branching/next-step logic reads (submitterType, administrationError,
-  // adverseEventOccurred) is already known here, so there's nothing the
-  // server response could tell us that changes where we navigate to.
+  // Draft saving is authoritative: the PATCH must actually succeed before
+  // the route changes, so a failed save never leaves the reporter thinking
+  // their answer was recorded when it wasn't. `onNext` callers (via
+  // ConversationalStep's handleReviewContinue) already await this and
+  // disable their own "Continue" control while it's pending, show the
+  // thrown error, and leave the entered data in place for a retry — this
+  // just has to actually reject on failure instead of resolving instantly
+  // and navigating on optimistic data regardless of what the server says.
   async function handleNext(data: Record<string, unknown>) {
-    const optimisticReport = applyOptimisticUpdate(report!, currentStep, data);
-    setReport(optimisticReport);
     setSaveError(false);
-    const nextState = branchingStateFromReport(optimisticReport);
-    setSkipNotice(currentStep === "vaccine" ? skipNoticeForVaccineExit(nextState) : null);
-    goTo(nextStep(currentStep, nextState));
-
     setSaveStatus("saving");
-    patchReport(reportId!, currentStep, data)
-      .then((server) => {
-        setReport((prev) => (prev ? mergeServerUpdate(prev, currentStep, server) : server));
-        setSaveStatus("saved");
-      })
-      .catch((err) => {
-        console.error("Failed to save step", currentStep, err);
-        setSaveError(true);
-        setSaveStatus("idle");
-      });
+    try {
+      const server = await patchReport(reportId!, currentStep, data, getDraftToken(reportId!));
+      const optimisticReport = applyOptimisticUpdate(report!, currentStep, data);
+      const merged = mergeServerUpdate(optimisticReport, currentStep, server);
+      setReport(merged);
+      setSaveStatus("saved");
+      const nextState = branchingStateFromReport(merged);
+      setSkipNotice(currentStep === "vaccine" ? skipNoticeForVaccineExit(nextState) : null);
+      if (returnToStep) {
+        const target = returnToStep;
+        setReturnToStep(null);
+        goTo(target);
+      } else {
+        goTo(nextStep(currentStep, nextState));
+      }
+    } catch (err) {
+      console.error("Failed to save step", currentStep, err);
+      setSaveError(true);
+      setSaveStatus("idle");
+      throw err;
+    }
   }
 
   async function handleSelectAndAdvance(data: Record<string, unknown>) {
     await handleNext(data);
   }
 
+  // Jump straight to an already-completed step (from the step indicator)
+  // instead of clicking "← Back"/"Next" through every step in between.
+  // Direction changes what happens after: jumping *back* to review/fix an
+  // earlier answer is a detour — the next successful save from there
+  // returns here. Jumping *forward* to a step already completed (e.g.
+  // after going back a few steps and now wanting to skip ahead again)
+  // isn't a detour at all — it's resuming the normal forward flow, so
+  // continuing from there should keep going forward as usual, not snap
+  // back to the step being left now.
+  function handleStepClick(target: StepId) {
+    if (target === currentStep) return;
+    setSkipNotice(null);
+    const isBackward = steps.indexOf(target) < steps.indexOf(currentStep);
+    setReturnToStep(isBackward ? currentStep : null);
+    goTo(target);
+  }
+
   function handleBack() {
     setSkipNotice(null);
+    // A plain Back click is normal forward/backward navigation, not a
+    // detour — don't let a stale returnToStep redirect a later save
+    // somewhere the reporter no longer expects.
+    setReturnToStep(null);
     goTo(prevStep(currentStep, state));
   }
 
   async function handleSubmitReport() {
     try {
-      await submitReport(reportId!);
+      await submitReport(reportId!, getDraftToken(reportId!));
       navigate(`/report/${reportId}/confirmation`);
     } catch (err) {
       const e = err as Error & { incompleteSteps?: StepId[]; findings?: ValidationFinding[] };
@@ -191,6 +259,9 @@ export function ReportWizard() {
           value={report.administrationError}
           onSelect={(v) => handleSelectAndAdvance({ administrationError: v })}
           onBack={handleBack}
+          blockAnswer={(v) =>
+            v === false && report.adverseEventOccurred === false ? HCP_BOTH_NO_MESSAGE : null
+          }
         />
       );
       break;
@@ -202,6 +273,9 @@ export function ReportWizard() {
           value={report.adverseEventOccurred}
           onSelect={(v) => handleSelectAndAdvance({ adverseEventOccurred: v })}
           onBack={handleBack}
+          blockAnswer={(v) =>
+            v === false && report.administrationError === false ? HCP_BOTH_NO_MESSAGE : null
+          }
         />
       );
       break;
@@ -221,6 +295,7 @@ export function ReportWizard() {
         <PatientStep
           submitterType={report.submitterType!}
           isSelfReport={report.aboutYou?.relationship === "self"}
+          reporterEmail={report.aboutYou?.contactEmail}
           initialData={report.patient}
           onNext={handleNext}
           onBack={handleBack}
@@ -280,7 +355,7 @@ export function ReportWizard() {
           report={report}
           onSubmit={handleSubmitReport}
           onBack={handleBack}
-          onGoToStep={(s) => goTo(s)}
+          onGoToStep={handleStepClick}
         />
       );
       break;
@@ -297,7 +372,12 @@ export function ReportWizard() {
     // (including old validation errors) into the new one.
     <div className="page page--wizard" key={reportId}>
       <div className="wizard-header">
-        <StepIndicator steps={steps} currentStep={currentStep} />
+        <StepIndicator
+          steps={steps}
+          currentStep={currentStep}
+          furthestCompletedStep={furthestCompletedStep(report)}
+          onStepClick={handleStepClick}
+        />
         {saveStatus !== "idle" && (
           <span className={`autosave-indicator${saveStatus === "saved" ? " autosave-indicator--saved" : ""}`} role="status">
             {saveStatus === "saving" ? "Saving…" : "✓ Saved"}
@@ -314,6 +394,14 @@ export function ReportWizard() {
       {skipNotice && (
         <p role="status" className="notice notice--info">
           {skipNotice}
+        </p>
+      )}
+      {returnToStep && (
+        <p role="status" className="notice notice--info">
+          {t("step.editingBanner", {
+            current: t(stepLabelKey(currentStep)),
+            returnTo: t(stepLabelKey(returnToStep)),
+          })}
         </p>
       )}
       {stepContent}

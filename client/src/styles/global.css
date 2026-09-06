@@ -22,6 +22,23 @@
   box-sizing: border-box;
 }
 
+/* Reserves the vertical scrollbar's width on every page, whether or not
+   that page's content actually overflows — otherwise the centered layout
+   (the nav bar, the conversational question panel) visibly shifts sideways
+   whenever the scrollbar appears or disappears, e.g. moving between a short
+   question and a tall one. The `overflow-y: scroll` fallback covers
+   browsers without `scrollbar-gutter` support. */
+html {
+  overflow-y: scroll;
+}
+
+@supports (scrollbar-gutter: stable) {
+  html {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
 /* Browsers give native form controls their own default UI font instead of
    inheriting the page's — without this, any button/input/select/table
    introduced without its own explicit font-family override silently renders
@@ -57,19 +74,17 @@ body {
   padding: 0;
 }
 
-/* Reserves the vertical scrollbar's width on every page, whether or not
-   that page's content actually overflows — otherwise the nav bar (centered
-   via margin:auto) visibly shifts sideways when navigating between a page
-   tall enough to scroll and one that isn't. */
-html {
-  scrollbar-gutter: stable;
-}
-
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
   line-height: 1.5;
+  /* Reserves room at the very bottom of every page for the fixed-position
+     FAQ/feedback buttons (anchored to the viewport's bottom corners) so
+     they never sit on top of the last bit of real content on a short
+     page — as plain body background, not colored padding tacked onto
+     whichever element happens to render last (see .prototype-footer). */
+  padding-bottom: 56px;
 }
 
 h1,
@@ -120,7 +135,10 @@ a {
 .nav-bar__links {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  /* Wider than a typical flex gap — at --space-2 the plain-text links
+     (FAQ, About VAERS, Accessibility, Provide Follow-up Info) read as one
+     run-together phrase rather than distinct destinations. */
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
@@ -149,6 +167,20 @@ a {
 .nav-bar__language select:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+/* Prototype/demo disclaimer banner — the opposite of the admin row above:
+   deliberately loud and shown on every viewport size (mobile included),
+   since the whole point is that no visitor mistakes this for the real
+   CDC VAERS system. Sits above everything else in the header, so it's the
+   first thing anyone sees regardless of screen size. */
+.nav-bar__prototype-banner {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: var(--space-2) var(--space-4);
 }
 
 /* Staff-only entry point to the admin portal — a thin strip of its own
@@ -192,16 +224,12 @@ a {
   color: var(--color-primary-contrast);
 }
 
-.nav-bar__links a.button--secondary.nav-bar__cta {
-  color: var(--color-primary);
-}
-
-/* Tighter horizontal padding than a normal .button — the two CTA pills are
-   the single biggest contributor to how wide this row gets, and the
-   Spanish translations are both longer than their English counterparts;
-   without this, the whole nav-bar__links row crossed the wrap threshold in
-   Spanish at viewport widths where English still fit on one line, changing
-   the header's height when the language was switched. */
+/* Tighter horizontal padding than a normal .button — the CTA pill is a
+   sizable contributor to how wide this row gets, and the Spanish
+   translation is longer than the English one; without this, the whole
+   nav-bar__links row crossed the wrap threshold in Spanish at viewport
+   widths where English still fit on one line, changing the header's
+   height when the language was switched. */
 .nav-bar__links a.button.nav-bar__cta {
   padding: var(--space-2) var(--space-3);
 }
@@ -436,11 +464,26 @@ a {
   .hero__actions {
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: center;
   }
 
   .hero__actions .button {
     flex: none;
   }
+}
+
+/* A plain text link, not a button — sits beside the primary/secondary hero
+   CTAs but reads as a distant third, lower-emphasis path (see Landing.tsx). */
+.hero__tertiary-action {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hero__tertiary-action:hover {
+  color: var(--color-primary);
 }
 
 .hero__stats {
@@ -556,8 +599,18 @@ a {
 
 /* Choice steps (submitter type / report characteristic) */
 
+/* These screens (submitter type, admin-error/adverse-event yes/no,
+   "Continue your report?") sit between ConversationalStep questions in the
+   same flow but don't share its layout system, so without a floor here
+   they visibly changed height at the transition in a way the questions
+   themselves (see .convo-question's own min-height) no longer do. */
+.choice-step {
+  min-height: 420px;
+}
+
 .choice-step h1 {
-  margin-bottom: var(--space-2);
+  margin: 0 0 var(--space-2);
+  line-height: 1.2;
 }
 
 /* Single-column, full-width rows — a horizontal icon+text card reads better
@@ -730,6 +783,23 @@ a {
   margin-bottom: 0;
 }
 
+.address-group__row {
+  margin-bottom: var(--space-3);
+}
+
+.address-group__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 500px) {
+  .address-group__grid {
+    /* city, state, zip — city gets the most room, zip the least. */
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+}
+
 .wizard-header {
   display: flex;
   align-items: flex-start;
@@ -798,11 +868,97 @@ a {
   border: 0;
 }
 
+/* A completed step's label is a real jump-back-to-this-section control, not
+   just an accessibility-tree-only caption — but only at desktop widths,
+   where the step indicator has room for it: at narrower widths, up to 8
+   short flex columns don't have room for real label text without wrapping
+   and overlapping the content below, so it stays the same sr-only-but-still-
+   in-the-DOM control as every other step there (still functionally
+   reachable, e.g. by a screen reader, just not a visible tap target). */
+@media (min-width: 1000px) {
+  .step-indicator__label--link {
+    position: static;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    margin: var(--space-1) 0 0;
+    padding: 0;
+    overflow: hidden;
+    clip: auto;
+    display: block;
+    background: none;
+    border: 0;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-primary-dark);
+    text-decoration: underline;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .step-indicator__label--link:hover,
+  .step-indicator__label--link:focus-visible {
+    color: var(--color-primary);
+  }
+
+  /* "You are here" — visible but never a link (nothing to jump to on the
+     step you're already on). No underline, unlike the clickable completed-
+     step labels, so the two read as distinctly different affordances at a
+     glance, not just two blue labels. */
+  .step-indicator__label--current {
+    position: static;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    margin: var(--space-1) 0 0;
+    padding: 0;
+    overflow: hidden;
+    clip: auto;
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+}
+
 .step-indicator__progress-text {
   margin: 0;
   font-weight: 700;
   color: var(--color-primary-dark);
   font-size: 0.9rem;
+}
+
+.step-indicator__jump {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.step-indicator__jump-select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-primary-dark);
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+/* The desktop label-links (see .step-indicator__label--link above) cover
+   this same "jump to a completed step" need there, with more room to show
+   real label text next to each segment — so this mobile/tablet-only select
+   steps aside once that space is available. */
+@media (min-width: 1000px) {
+  .step-indicator__jump {
+    display: none;
+  }
 }
 
 /* Milestone banner */
@@ -880,6 +1036,16 @@ a {
      and pushed the buttons down into a large gap below a short question. */
   .convo-step--question .convo-question-panel {
     grid-area: panel;
+  }
+
+  /* A question with no icon/hint/error is noticeably shorter than one with
+     them (label + single-line input vs. label + hint + input + error), so
+     the Back/Next row visibly jumped up and down between adjacent
+     questions in the same step. A floor here absorbs that jump for the
+     common case without capping genuinely tall questions (checkbox
+     groups, multi-row vaccine editors), which already exceed it. */
+  .convo-step--question .convo-question {
+    min-height: 200px;
   }
 }
 
@@ -1016,9 +1182,20 @@ a {
 
 .convo-question__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+/* Fixed width regardless of whether this question has an icon, so the
+   label text after it always starts at the same horizontal position —
+   see the comment at its usage in ConversationalStep.tsx. */
+.convo-question__icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
 }
 
 .convo-question__icon {
@@ -1057,6 +1234,10 @@ a {
 
 .convo-input:focus {
   border-color: var(--color-primary);
+  /* The border color change above is already a clear, visible focus
+     indicator — the browser's own default focus ring on top of our own
+     2px border read as a distracting double outline. */
+  outline: none;
 }
 
 .convo-input--textarea,
@@ -1245,6 +1426,15 @@ a {
   margin-bottom: var(--space-5);
 }
 
+/* A field rendered inline under another question (e.g. a conditional
+ * "Other, please specify" input under a checkbox group) via ConversationalStep's
+ * `extras` — needs separation from what's above it, not below (that's
+ * already the surrounding layout's job). */
+.field--nested {
+  margin-top: var(--space-3);
+  margin-bottom: 0;
+}
+
 .field__label {
   display: block;
   font-weight: 600;
@@ -1297,6 +1487,15 @@ a {
   border-color: var(--color-error);
 }
 
+/* Placeholder examples (e.g. the address fields' "e.g. 123 Main St...")
+   read as instructional text, not a value already typed in — a smaller,
+   more muted size than the real input text helps that distinction land,
+   and keeps a longer example from crowding a narrow field. */
+.field__input::placeholder {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
 .field__error {
   color: var(--color-error);
   margin: var(--space-1) 0 0;
@@ -1331,40 +1530,6 @@ a {
   margin-top: var(--space-6);
 }
 
-/* Consistency check (AI-assisted) */
-
-.consistency-check {
-  margin: var(--space-3) 0 var(--space-2);
-}
-
-.consistency-check__clear {
-  color: var(--color-success-text);
-  margin-top: var(--space-2);
-}
-
-.consistency-check__list {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-3) 0 0;
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
-}
-
-.consistency-check__list li {
-  padding: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.consistency-check__list li:last-child {
-  border-bottom: none;
-}
-
-.consistency-check__list p {
-  margin: var(--space-1) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-}
-
 /* Documents step */
 
 .suggestion-box {
@@ -1378,31 +1543,6 @@ a {
 .suggestion-box h2 {
   margin-top: 0;
   font-size: 1rem;
-}
-
-.suggestion-box--ai {
-  border-style: dashed;
-  border-color: var(--color-primary);
-}
-
-.suggestion-box__ai-badge {
-  display: inline-block;
-  background: var(--color-accent);
-  color: var(--color-accent-dark);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  margin-right: var(--space-2);
-  vertical-align: middle;
-}
-
-.suggestion-box__ai-disclaimer {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
 }
 
 .dropzone {
@@ -1690,6 +1830,26 @@ a {
   margin: calc(-1 * var(--space-3)) 0 var(--space-5);
 }
 
+/* Persistent prototype/demo disclaimer at the bottom of every page — see
+   the matching, shorter banner at the very top in .nav-bar__prototype-banner.
+   Kept in normal document flow (not fixed) so it never overlaps the
+   fixed-position FAQ/feedback buttons in the bottom corners — clearance for
+   that lives on <body> (below), not as extra padding here, so this stays a
+   normal, tight banner instead of a big colored block with dead space in it. */
+.prototype-footer {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.prototype-footer p {
+  max-width: 800px;
+  margin: 0 auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 /* Notices */
 
 .notice {
@@ -1966,26 +2126,6 @@ a {
 
 .faq-widget__empty {
   color: var(--color-text-muted);
-}
-
-.faq-widget__ask {
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-}
-
-.faq-widget__ai-answer {
-  margin-top: var(--space-3);
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  font-size: 0.9rem;
-}
-
-.faq-widget__ai-disclaimer {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
 }
 
 /* FAQ page */

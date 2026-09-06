@@ -3,6 +3,8 @@ import { isDateBefore, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { ErrorDetailData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
+import { useLanguage } from "../../i18n/LanguageContext";
+import type { TranslationKey } from "../../i18n/translations";
 
 interface ErrorDetailStepProps {
   initialData: ErrorDetailData | null;
@@ -14,31 +16,41 @@ interface ErrorDetailStepProps {
 
 const EMPTY: ErrorDetailData = {
   errorType: "",
+  errorTypeOther: "",
   errorDescription: "",
   errorDiscoveredDate: "",
   correctiveActionTaken: "",
 };
 
-/** Exported so the final review and the read-only follow-up lookup can show the same labels. */
-export const ERROR_DETAIL_FIELD_SPECS: ConversationalFieldSpec[] = [
-  { id: "errorType", label: "Type of error", required: true, kind: "choice", options: ERROR_TYPES },
-  { id: "errorDescription", label: "Describe the error", required: true, kind: "textarea", rows: 4 },
-  {
-    id: "errorDiscoveredDate",
-    label: "Date the error was discovered",
-    required: true,
-    kind: "date",
-    icon: "calendar",
-    max: todayIsoDate(),
-  },
-  {
-    id: "correctiveActionTaken",
-    label: "Corrective action taken (optional)",
-    required: false,
-    kind: "textarea",
-    rows: 3,
-  },
-];
+/** Exported so the final review and the read-only follow-up lookup can show
+ * the same labels — a function (not a plain constant) for the same reason
+ * every other `*FieldSpecs` builder in the wizard is: it needs `t` from
+ * whichever caller's own `useLanguage()` call, since this itself is a
+ * plain function, not a component/hook. */
+export function ERROR_DETAIL_FIELD_SPECS(
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string
+): ConversationalFieldSpec[] {
+  return [
+    { id: "errorType", label: t("errorDetail.type"), required: true, kind: "choice", options: ERROR_TYPES },
+    { id: "errorTypeOther", label: t("errorDetail.typeOther"), required: false, kind: "text" },
+    { id: "errorDescription", label: t("errorDetail.description"), required: true, kind: "textarea", rows: 4 },
+    {
+      id: "errorDiscoveredDate",
+      label: t("errorDetail.discoveredDate"),
+      required: true,
+      kind: "date",
+      icon: "calendar",
+      max: todayIsoDate(),
+    },
+    {
+      id: "correctiveActionTaken",
+      label: t("errorDetail.correctiveAction"),
+      required: false,
+      kind: "textarea",
+      rows: 3,
+    },
+  ];
+}
 
 export function ErrorDetailStep({
   initialData,
@@ -46,26 +58,35 @@ export function ErrorDetailStep({
   onNext,
   onBack,
 }: ErrorDetailStepProps) {
+  const { t } = useLanguage();
   const initial = initialData ?? EMPTY;
   const { values, setValue, errors, validate } = useStepForm(errorDetailSchema, initial);
-  const fields = ERROR_DETAIL_FIELD_SPECS;
+  const fields = ERROR_DETAIL_FIELD_SPECS(t).filter((f) => {
+    if (f.id === "errorTypeOther") return values.errorType === "other";
+    return true;
+  });
 
   function checkFieldLogic(fieldId: string, liveValues: Record<string, unknown>): string | null {
     if (fieldId === "errorDiscoveredDate" && vaccineAdministrationDate) {
       const discovered = String(liveValues.errorDiscoveredDate ?? "");
       if (discovered && isDateBefore(discovered, vaccineAdministrationDate)) {
-        return "The error-discovered date can't be before the vaccination date.";
+        return t("errorDetail.discoveredBeforeVaccination");
       }
     }
     return null;
   }
 
+  function handleSetValue(id: string, value: unknown) {
+    setValue(id as keyof ErrorDetailData, value as any);
+    if (id === "errorType" && value !== "other") setValue("errorTypeOther", "");
+  }
+
   return (
     <ConversationalStep
-      stepTitle="Administration error details"
+      stepTitle={t("step.error-detail")}
       fields={fields}
       values={values as unknown as Record<string, unknown>}
-      setValue={(id, value) => setValue(id as keyof ErrorDetailData, value as any)}
+      setValue={handleSetValue}
       errors={errors}
       validate={validate}
       onNext={onNext}
