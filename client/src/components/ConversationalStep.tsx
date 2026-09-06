@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { FieldIcon, type FieldIconName } from "./illustrations";
 import { Combobox } from "./Combobox";
@@ -220,24 +220,18 @@ export function ConversationalStep({
   // the control itself (which varies too much by field kind to target
   // uniformly).
   //
-  // `.focus()` alone also scrolls — but only via the browser's own "scroll
-  // the minimum distance needed" heuristic, which lands the heading at a
-  // different point in the viewport depending on where the *previous*
-  // question's scroll position happened to be (a short question after a
-  // tall one lands high; the reverse lands low). That read as the question
-  // text "bouncing" between screens even though its position in the
-  // document never actually changed. `preventScroll` stops that default
-  // scroll so the explicit `scrollIntoView` below is the only thing
-  // deciding where the page lands — always the panel's top edge, every
-  // question, every time, with no min-height/scroll-region trickery needed.
+  // `useLayoutEffect`, not `useEffect` — it runs before the browser paints,
+  // so the scroll position is already correct in the very first frame the
+  // user sees for this question, instead of visibly jumping a frame after
+  // the old position was already on screen.
   const questionHeadingRef = useRef<HTMLElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const heading = questionHeadingRef.current;
     heading?.focus({ preventScroll: true });
     const panel = heading?.closest(".convo-question-panel") ?? heading;
     // Optional call, not just optional chaining on `panel` — jsdom (this
     // app's test environment) doesn't implement scrollIntoView at all.
-    panel?.scrollIntoView?.({ block: "start" });
+    panel?.scrollIntoView?.({ block: "start", behavior: "auto" });
   }, [index]);
 
   function goBack() {

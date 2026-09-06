@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   adverseEventSchema,
   OUTCOME_OPTIONS,
@@ -9,7 +8,7 @@ import {
 } from "../../../../shared/src/schemas";
 import { isDateBefore, hospitalizationExceedsElapsed, todayIsoDate } from "../../../../shared/src/liveChecks";
 import type { SubmitterType } from "../../../../shared/src/branchingRules";
-import { checkDescriptionConsistency, type AdverseEventData, type ConsistencyIssue } from "../../api/client";
+import type { AdverseEventData } from "../../api/client";
 import { useStepForm } from "../../hooks/useStepForm";
 import { ConversationalStep, type ConversationalFieldSpec } from "../../components/ConversationalStep";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -237,13 +236,8 @@ export function AdverseEventStep({
     return null;
   }
 
-  const [checking, setChecking] = useState(false);
-  const [checkIssues, setCheckIssues] = useState<ConsistencyIssue[] | null>(null);
-  const [checkError, setCheckError] = useState<string | null>(null);
-
   function handleSetValue(id: string, value: unknown) {
     setValue(id as keyof AdverseEventData, value as any);
-    if (id === "description" || id === "outcomes" || id === "recoveryStatus") setCheckIssues(null);
 
     // A field hidden because its trigger changed shouldn't leave stale data
     // behind to be silently submitted once it's no longer visible.
@@ -277,26 +271,6 @@ export function AdverseEventStep({
     }
     if (id === "symptoms" && !(value as string[]).includes("other")) {
       setValue("symptomsOther", "");
-    }
-  }
-
-  async function handleCheckDescription() {
-    if (!values.description.trim()) return;
-    setChecking(true);
-    setCheckError(null);
-    setCheckIssues(null);
-    try {
-      const { issues } = await checkDescriptionConsistency({
-        description: values.description,
-        outcomes: values.outcomes,
-        recoveryStatus: values.recoveryStatus,
-        submitterType,
-      });
-      setCheckIssues(issues);
-    } catch {
-      setCheckError(t("adverseEvent.checkErrorGeneric"));
-    } finally {
-      setChecking(false);
     }
   }
 
@@ -365,49 +339,6 @@ export function AdverseEventStep({
               </button>
             </div>
           ) : null,
-        // Deliberately attached here, not to "description" — this compares
-        // the narrative against outcomes/recovery status, and both of those
-        // questions come *after* description in the sequence. Running the
-        // check right after description meant those fields were always
-        // still blank, so the AI routinely (and correctly, given what it
-        // was told) flagged "no recovery status selected" as if something
-        // had been skipped, when the reporter simply hadn't reached that
-        // question yet. previousAdverseEvent is the first field after both
-        // outcomes and recoveryStatus that's always shown regardless of
-        // branch (recoveryStatus itself is hidden when death is recorded).
-        previousAdverseEvent: () => (
-          <div className="consistency-check">
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={handleCheckDescription}
-              disabled={checking || !values.description.trim()}
-            >
-              {checking ? t("adverseEvent.checking") : t("adverseEvent.checkInconsistencies")}
-            </button>
-            <p className="field__hint">{t("adverseEvent.checkHint")}</p>
-            {checkError && (
-              <p role="alert" className="field__error">
-                {checkError}
-              </p>
-            )}
-            {checkIssues && checkIssues.length === 0 && (
-              <p role="status" className="consistency-check__clear">
-                {t("adverseEvent.noInconsistencies")}
-              </p>
-            )}
-            {checkIssues && checkIssues.length > 0 && (
-              <ul className="consistency-check__list" role="status">
-                {checkIssues.map((issue, i) => (
-                  <li key={i}>
-                    <strong>{issue.issue}</strong>
-                    <p>{issue.suggestion}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ),
       }}
     />
   );

@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import type { StepId } from "../../../shared/src/branchingRules";
-import { askFaqAssistant, searchFaq, type FaqEntry } from "../api/client";
+import { searchFaq, type FaqEntry } from "../api/client";
 import { Mascot } from "./Mascot";
 import { useLanguage } from "../i18n/LanguageContext";
 
@@ -10,9 +10,10 @@ interface FaqWidgetProps {
 
 /**
  * Embedded, searchable FAQ (design doc §4.5): keyword-matched to the
- * current step, plus a general search reachable from anywhere. Also offers
- * a natural-language "ask in your own words" option backed by Claude,
- * grounded in this same FAQ dataset, for questions the keyword match misses.
+ * current step, plus a general search reachable from anywhere. Deterministic
+ * only — no generative-AI free-text assistant, per the AI Compliance and
+ * Risk Management Plan (production VAERS FAQs use CDC-approved rules and
+ * content, not a model reading reporter-submitted text).
  */
 export function FaqWidget({ step }: FaqWidgetProps) {
   const { t, language } = useLanguage();
@@ -20,10 +21,6 @@ export function FaqWidget({ step }: FaqWidgetProps) {
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<FaqEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [askText, setAskText] = useState("");
-  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
   const panelId = useId();
 
   useEffect(() => {
@@ -33,22 +30,6 @@ export function FaqWidget({ step }: FaqWidgetProps) {
 
   const quickReplies = entries.slice(0, 4);
   const selectedEntry = entries.find((e) => e.id === selectedId) ?? null;
-
-  async function handleAsk(e: React.FormEvent) {
-    e.preventDefault();
-    if (!askText.trim()) return;
-    setAsking(true);
-    setAskError(null);
-    setAiAnswer(null);
-    try {
-      const { answer } = await askFaqAssistant(askText.trim(), step);
-      setAiAnswer(answer);
-    } catch {
-      setAskError(t("faqWidget.askErrorGeneric"));
-    } finally {
-      setAsking(false);
-    }
-  }
 
   return (
     <div className="faq-widget">
@@ -116,34 +97,6 @@ export function FaqWidget({ step }: FaqWidgetProps) {
               </ul>
             )
           )}
-
-          <form className="faq-widget__ask" onSubmit={handleAsk}>
-            <label htmlFor="faq-ask" className="field__label">
-              {t("faqWidget.askLabel")}
-            </label>
-            <textarea
-              id="faq-ask"
-              className="field__textarea"
-              rows={2}
-              value={askText}
-              onChange={(e) => setAskText(e.target.value)}
-              placeholder={t("faqWidget.askPlaceholder")}
-            />
-            <button type="submit" className="button button--secondary" disabled={asking || !askText.trim()}>
-              {asking ? t("faqWidget.asking") : t("faqWidget.ask")}
-            </button>
-            {askError && (
-              <p role="alert" className="field__error">
-                {askError}
-              </p>
-            )}
-            {aiAnswer && (
-              <div className="faq-widget__ai-answer" role="status">
-                <p>{aiAnswer}</p>
-                <p className="faq-widget__ai-disclaimer">{t("faqWidget.aiAnswerDisclaimer")}</p>
-              </div>
-            )}
-          </form>
         </div>
       )}
     </div>

@@ -5,9 +5,7 @@ import {
   deleteAttachment,
   downloadAttachment,
   getDocumentSuggestions,
-  suggestDocumentsFromNarrative,
   uploadAttachment,
-  type AiDocumentSuggestion,
   type AttachmentMeta,
   type DocumentSuggestion,
 } from "../../api/client";
@@ -53,18 +51,11 @@ export function DocumentsStep({
   const [replacingId, setReplacingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<DocumentSuggestion[]>([]);
-  const [aiSuggestions, setAiSuggestions] = useState<AiDocumentSuggestion[]>([]);
-  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (submitterType === "hcp") {
       getDocumentSuggestions(reportId).then(setSuggestions);
-      setAiSuggestionsLoading(true);
-      suggestDocumentsFromNarrative(reportId)
-        .then(({ suggestions }) => setAiSuggestions(suggestions))
-        .catch(() => setAiSuggestions([]))
-        .finally(() => setAiSuggestionsLoading(false));
     }
   }, [reportId, submitterType]);
 
@@ -147,27 +138,6 @@ export function DocumentsStep({
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {submitterType === "hcp" && (aiSuggestionsLoading || aiSuggestions.length > 0) && (
-        <div className="suggestion-box suggestion-box--ai" role="note">
-          <h2>{t("documents.basedOnDescription")}</h2>
-          {aiSuggestionsLoading ? (
-            <p role="status">{t("documents.checkingForCase")}</p>
-          ) : (
-            <>
-              <ul>
-                {aiSuggestions.map((s) => (
-                  <li key={s.documentType}>
-                    <span className="suggestion-box__ai-badge">{t("documents.aiSuggested")}</span>
-                    <strong>{s.documentType}</strong> — {s.reason}
-                  </li>
-                ))}
-              </ul>
-              <p className="suggestion-box__ai-disclaimer">{t("documents.aiDisclaimer")}</p>
-            </>
-          )}
         </div>
       )}
 

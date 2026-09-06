@@ -561,17 +561,6 @@ export const translations = {
     en: "A report submitted by the patient themselves can't also report that the patient died.",
     es: "Un reporte enviado por el propio paciente no puede también reportar que el paciente falleció.",
   },
-  "adverseEvent.checkInconsistencies": { en: "Double-check for inconsistencies", es: "Verificar inconsistencias" },
-  "adverseEvent.checking": { en: "Checking…", es: "Verificando…" },
-  "adverseEvent.checkHint": {
-    en: 'Optional — compares what you described in "What happened?" against the outcomes and recovery status you selected, in case anything doesn\'t quite line up.',
-    es: 'Opcional — compara lo que describió en "¿Qué sucedió?" con los resultados y el estado de recuperación que seleccionó, en caso de que algo no coincida.',
-  },
-  "adverseEvent.checkErrorGeneric": {
-    en: "Couldn't run the check right now — you can still continue.",
-    es: "No se pudo ejecutar la verificación en este momento — aún puede continuar.",
-  },
-  "adverseEvent.noInconsistencies": { en: "No inconsistencies found.", es: "No se encontraron inconsistencias." },
 
   // Supporting documents step
   "documents.heading": { en: "Supporting documents", es: "Documentos de respaldo" },
@@ -580,16 +569,6 @@ export const translations = {
     es: "Suba registros médicos o documentos de administración de vacunas (PDF, JPEG, PNG o Word — máximo 15 MB cada uno). También puede agregarlos más tarde usando la herramienta de información de seguimiento existente.",
   },
   "documents.suggestedForReport": { en: "Suggested documents for this report", es: "Documentos sugeridos para este reporte" },
-  "documents.basedOnDescription": { en: "Based on your description", es: "Según su descripción" },
-  "documents.checkingForCase": {
-    en: "Checking for anything specific to this case…",
-    es: "Buscando algo específico para este caso…",
-  },
-  "documents.aiSuggested": { en: "AI suggested", es: "Sugerido por IA" },
-  "documents.aiDisclaimer": {
-    en: "AI-generated from the description you entered — review before relying on it.",
-    es: "Generado por IA a partir de la descripción que ingresó — revise antes de confiar en él.",
-  },
   "documents.someFilesSkipped": {
     en: "Some files were skipped — only PDF, JPEG, PNG, or Word documents are accepted.",
     es: "Se omitieron algunos archivos — solo se aceptan documentos PDF, JPEG, PNG o Word.",
@@ -630,21 +609,6 @@ export const translations = {
   },
   "faqWidget.suggestedQuestionsAriaLabel": { en: "Suggested questions", es: "Preguntas sugeridas" },
   "faqWidget.noMatches": { en: "No matching questions found.", es: "No se encontraron preguntas coincidentes." },
-  "faqWidget.askLabel": { en: "Or ask in your own words", es: "O pregunte con sus propias palabras" },
-  "faqWidget.askPlaceholder": {
-    en: "e.g. do I have to know exactly when symptoms started?",
-    es: "p. ej. ¿tengo que saber exactamente cuándo comenzaron los síntomas?",
-  },
-  "faqWidget.asking": { en: "Asking…", es: "Preguntando…" },
-  "faqWidget.ask": { en: "Ask", es: "Preguntar" },
-  "faqWidget.askErrorGeneric": {
-    en: "Couldn't reach the assistant right now — try the FAQ list above instead.",
-    es: "No se pudo comunicar con el asistente en este momento — intente con la lista de preguntas frecuentes de arriba.",
-  },
-  "faqWidget.aiAnswerDisclaimer": {
-    en: "AI-generated answer — not a substitute for medical advice.",
-    es: "Respuesta generada por IA — no sustituye el consejo médico.",
-  },
 
   // FAQ page
   "faqPage.heading": { en: "Frequently Asked Questions", es: "Preguntas Frecuentes" },
